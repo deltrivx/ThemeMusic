@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.3",
-  "latest_version": "v1.0.3",
+  "default": "v1.0.4",
+  "latest_version": "v1.0.4",
   "versions": [
+    {
+      "id": "v1.0.4",
+      "label": "正式版 v1.0.4：拒绝错配侧车歌词；加强 lrclib/网易云匹配并隔离坏 LRC",
+      "channel": "stable",
+      "released_at": "2026-07-30",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.3",
       "label": "正式版 v1.0.3：歌词时钟对齐主题特效 beta（去固定 lead）",
