@@ -1,5 +1,15 @@
 # Theme Music Changelog
 
+## v1.0.0-Beta4 — 2026-07-30 (`2026.07.30d`)
+
+### 设置页
+- select / 路径框 / 音量条统一为同一控制列宽（`--tm-ctrl-w`），消除长短不一与错位
+
+### 全站播放
+- Loader 写入独立 `window.__UCWC_MUSIC__`，并在 DOM 就绪后重申，避免 ThemeEffects 将 `music.enable=false` 覆盖
+- `ucwc-music.js` 优先读 `__UCWC_MUSIC__`
+- chip 样式去掉 `all: unset`，保证非仪表盘页可见
+
 ## v1.0.0-Beta3 — 2026-07-30 (`2026.07.30c`)
 
 ### 设置页布局
