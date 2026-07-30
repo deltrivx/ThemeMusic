@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "2026.07.30h">
+<!ENTITY version   "2026.07.30i">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-		<!ENTITY ver       "v1.0.0-Beta8">
+		<!ENTITY ver       "v1.0.0-Beta9">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 		
@@ -17,6 +17,8 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+			###2026.07.30i
+			- v1.0.0-Beta9: PC/mobile separate run mode + playback defaults; pause on tab hide
 			###2026.07.30h
 			- v1.0.0-Beta8: run mode card/chip/both; remove play-range; SERVICE master switch
 			###2026.07.30g
@@ -55,25 +57,20 @@ exit 0
 <INLINE>
 <![CDATA[
 **主题音乐（Theme Music）**
-				## v1.0.0-Beta8 - 2026-07-30
+				## v1.0.0-Beta9 - 2026-07-30
 				
 				### 概述
 				
 				**主题音乐**独立插件。从 ThemeEffects 抽取音乐组件，以 `theme.music` 发布；路径、配置、缓存与主题特效完全分离。
 				
+				### Beta9 变更
+				
+				- 电脑/手机分设运行模式与音量、自动播放、随机、循环
+				- 手机默认「和电脑端配置相同」；划掉标签页暂停播放
+				
 				### Beta8 变更
 				
-				- 运行模式三选项：音乐卡片（仅仪表盘）/ 音乐胶囊（全站）/ 卡片+胶囊（全站）
-				- 取消「播放范围」；标题后总开关关闭注入
-				
-				### Beta7 变更
-				
-				- 跨页/移动端：卡片进度不再卡 0:00；DOM 脱节自动重建
-				- FLAC/SMB 假播放卡死时硬重置恢复
-				
-				### Beta6 变更
-				
-				- 仪表盘卡片：左右栏固定宽度；曲目/歌词区加宽并向左靠拢
+				- 运行模式三选项；取消播放范围；标题后总开关
 			]]>
 </INLINE>
 </FILE>

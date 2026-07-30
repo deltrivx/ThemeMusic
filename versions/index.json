@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.0-Beta8",
-  "latest_version": "v1.0.0-Beta8",
+  "default": "v1.0.0-Beta9",
+  "latest_version": "v1.0.0-Beta9",
   "versions": [
+    {
+      "id": "v1.0.0-Beta9",
+      "label": "Beta9：电脑/手机分设运行模式与播放项；划掉标签暂停",
+      "channel": "beta",
+      "released_at": "2026-07-30",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.0-Beta8",
       "label": "Beta8：运行模式三选项（卡片/胶囊/卡片+胶囊）；取消播放范围",
