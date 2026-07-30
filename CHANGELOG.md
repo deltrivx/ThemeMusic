@@ -1,5 +1,12 @@
 # Theme Music Changelog
 
+## v1.0.3 — 2026-07-30 (`2026.07.30d`)
+
+### 歌词同步
+- 对齐 **ThemeEffects beta 内置音乐** 时钟：`Math.floor(currentTime*1000) - offsetMs`
+- **去掉固定 +160ms lead**（此前人工提前量导致高亮长期偏离 LRC 时间戳）
+- 保留 rAF 跟拍与 `driftMs` 可选微调（默认 0）
+
 ## v1.0.2 — 2026-07-30 (`2026.07.30c`)
 
 ### 布局

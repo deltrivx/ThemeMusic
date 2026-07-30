@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.2",
-  "latest_version": "v1.0.2",
+  "default": "v1.0.3",
+  "latest_version": "v1.0.3",
   "versions": [
+    {
+      "id": "v1.0.3",
+      "label": "正式版 v1.0.3：歌词时钟对齐主题特效 beta（去固定 lead）",
+      "channel": "stable",
+      "released_at": "2026-07-30",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.2",
       "label": "正式版 v1.0.2：切换钮防遮挡；歌词 rAF 同步与 offset 修正",
