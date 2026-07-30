@@ -354,9 +354,35 @@ install_version() {
       [ -n "$k" ] || continue
       case "$k" in \#*) continue ;; esac
       if ! grep -q "^${k}=" "$MUSIC_CFG" 2>/dev/null; then
+        # MUSIC_RUN_MODE: do not seed package default "card" over legacy sitewide.
+        # Derive from existing ENABLE + DASH_ONLY when missing.
+        if [ "$k" = "MUSIC_RUN_MODE" ]; then
+          _en=$(grep -E '^MUSIC_ENABLE=' "$MUSIC_CFG" 2>/dev/null | head -1 | sed 's/^MUSIC_ENABLE=//;s/^"//;s/"$//')
+          _dash=$(grep -E '^MUSIC_DASH_ONLY=' "$MUSIC_CFG" 2>/dev/null | head -1 | sed 's/^MUSIC_DASH_ONLY=//;s/^"//;s/"$//')
+          if [ "$_en" = "yes" ] && [ "$_dash" = "no" ]; then
+            v='"both"'
+          elif [ "$_en" = "yes" ]; then
+            v='"card"'
+          else
+            v='"card"'
+          fi
+        fi
         printf '%s=%s\n' "$k" "$v" >> "$MUSIC_CFG"
       fi
     done < "$tmp/theme-music.cfg"
+    # If RUN_MODE was already wrongly seeded as card while DASH_ONLY=no (Beta8 first OTA), heal once.
+    if grep -q '^MUSIC_RUN_MODE="card"' "$MUSIC_CFG" 2>/dev/null \
+      && grep -q '^MUSIC_DASH_ONLY="no"' "$MUSIC_CFG" 2>/dev/null \
+      && grep -q '^MUSIC_ENABLE="yes"' "$MUSIC_CFG" 2>/dev/null; then
+      # Prefer explicit both when user had legacy sitewide and never saved a run mode intentionally.
+      # Only heal when UI is still card (package/legacy default), not chip.
+      _ui=$(grep -E '^MUSIC_UI=' "$MUSIC_CFG" 2>/dev/null | head -1 | sed 's/^MUSIC_UI=//;s/^"//;s/"$//')
+      if [ "$_ui" = "card" ] || [ "$_ui" = "both" ] || [ -z "$_ui" ]; then
+        sed -i 's/^MUSIC_RUN_MODE="card"/MUSIC_RUN_MODE="both"/' "$MUSIC_CFG" 2>/dev/null || true
+        sed -i 's/^MUSIC_UI="card"/MUSIC_UI="both"/' "$MUSIC_CFG" 2>/dev/null || true
+        ucwc_log "已将遗留全站配置对齐为 MUSIC_RUN_MODE=both"
+      fi
+    fi
   fi
   if [ ! -f "$SERVICE_CFG" ]; then
     install -m 0644 "$tmp/theme.music.cfg" "$SERVICE_CFG"
