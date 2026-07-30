@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.0-Beta4",
-  "latest_version": "v1.0.0-Beta4",
+  "default": "v1.0.0-Beta5",
+  "latest_version": "v1.0.0-Beta5",
   "versions": [
+    {
+      "id": "v1.0.0-Beta5",
+      "label": "Beta5：标题主题音乐+标题运行开关；去双装/子标题；控件统一列宽",
+      "channel": "beta",
+      "released_at": "2026-07-30",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.0-Beta4",
       "label": "Beta4：设置页控件统一列宽 + 全站播放独立于 ThemeEffects",

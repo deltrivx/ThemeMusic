@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "2026.07.30d">
+<!ENTITY version   "2026.07.30e">
 	<!ENTITY launch    "Settings/ThemeMusic">
 	<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 	<!ENTITY flash     "/boot/config/plugins/&name;">
 	<!ENTITY github    "deltrivx/ThemeMusic">
 	<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 	<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-	<!ENTITY ver       "v1.0.0-Beta4">
+	<!ENTITY ver       "v1.0.0-Beta5">
 	]>
 	<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 	
@@ -17,6 +17,8 @@
 	<CHANGES>
 	<![CDATA[
 	## Theme Music
+	###2026.07.30e
+	- v1.0.0-Beta5: title 主题音乐 + title runtime switch; remove dual-install warn/music subtitle; uniform control column
 	###2026.07.30d
 	- v1.0.0-Beta4: uniform settings control column; sitewide chip vs ThemeEffects cfg isolation
 	###2026.07.30c
@@ -46,42 +48,23 @@ exit 0
 <FILE Name="&plugdir;/README.md">
 <INLINE>
 <![CDATA[
-**Theme Music**
-## v1.0.0-Beta4 - 2026-07-30
-
-### 概述
-
-**Theme Music** 独立插件。从 ThemeEffects 抽取音乐组件，以 `theme.music` 发布；路径、配置、缓存与主题特效完全分离。
-
-### Beta4 变更
-
-- 设置页控件统一列宽（select/路径/音量）
-- 全站播放：`__UCWC_MUSIC__` 独立配置，不被 ThemeEffects 覆盖；chip 可见性修复
-
-### Beta3 变更
-
-- 右侧控件内容宽度 + 文件选择框对齐 ThemeEffects
-- 标题栏独立检查更新 / 更新日志 / 版本号（theme-music-update.php）
-- 取消标题下保存成功提示
-
-### Beta2 变更
-
-- 设置页：Unraid `form markdown="1"`（Label: / : control → dt/dd），对齐主题特效音乐区布局
-- 应用按钮：变更后解锁并 POST 保存（兼容 BodyInlineJS 对 `class=lock` 的处理）
-- 新增 `assets/theme-music-settings.css`（路径框宽度跟随 select）
-
-### Beta1 能力
-
-- 新建插件 `theme.music`（设置页 **Theme Music**，Loader `Buttons:101`）
-- 播放器：`assets/ucwc-music.js` / `ucwc-music.css`（apiBase → `/plugins/theme.music/…`）
-- API：`ucwc-music-api.php`（list / stream / lyrics / cover；缓存于 flash `theme.music`）
-- 设置保存：`theme-music-save.php` + 页内 POST；配置 `theme-music.cfg` + `theme.music.cfg`
-- OTA：`versions/` + `files.manifest`；`scripts/install.sh` / `theme.music.plg`
-- 文档：与 ThemeEffects 双装避让说明（勿两边同时开音乐；配置不自动迁移）
-
-### 注意
-
-请勿与 ThemeEffects **同时开启音乐**。配置独立，不会自动迁移。
+**主题音乐（Theme Music）**
+	## v1.0.0-Beta5 - 2026-07-30
+	
+	### 概述
+	
+	**主题音乐**独立插件。从 ThemeEffects 抽取音乐组件，以 `theme.music` 发布；路径、配置、缓存与主题特效完全分离。
+	
+	### Beta5 变更
+	
+	- 标题「主题音乐」；运行开关置于标题后（仿主题特效）
+	- 移除双装提示与「音乐」子标题
+	- 设置页 select/路径统一列宽
+	
+	### Beta4 变更
+	
+	- 设置页控件统一列宽（select/路径/音量）
+	- 全站播放：`__UCWC_MUSIC__` 独立配置；chip 可见性修复
 ]]>
 </INLINE>
 </FILE>
