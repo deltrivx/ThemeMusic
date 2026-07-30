@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "2026.07.31b">
+<!ENTITY version   "2026.07.31c">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
@@ -105,10 +105,10 @@ restore_from_flash() {
   [ -f "$FLASH/ucwc-music-api.php" ] || return 1
   echo "Theme Music: restoring runtime from flash…"
   for f in ThemeMusic.page ThemeMusic_Loader.page ucwc-music-api.php theme-music-save.php theme-music-update.php; do
-    [ -f "$FLASH/$f" ] && install -m 0644 "$FLASH/$f" "$PLUG/$f"
+    [ -f "$FLASH/$f" ] &amp;&amp; install -m 0644 "$FLASH/$f" "$PLUG/$f"
   done
   for f in ucwc-music.js ucwc-music.css theme-music-settings.js theme-music-settings.css; do
-    [ -f "$FLASH/assets/$f" ] && install -m 0644 "$FLASH/assets/$f" "$PLUG/assets/$f"
+    [ -f "$FLASH/assets/$f" ] &amp;&amp; install -m 0644 "$FLASH/assets/$f" "$PLUG/assets/$f"
   done
   return 0
 }
@@ -136,7 +136,7 @@ else
   done
 fi
 
-if [ "$ok" = "1" ] && [ -s "$OUT" ]; then
+if [ "$ok" = "1" ] &amp;&amp; [ -s "$OUT" ]; then
   chmod +x "$OUT"
   export UCWC_PLUGIN_INSTALL=1
   # Prefer line-buffered progress for plugin manager
@@ -156,7 +156,7 @@ else
   echo "Theme Music: cannot download install.sh (network)"
 fi
 
-if [ -f "$PLUG/ThemeMusic.page" ] && [ -f "$PLUG/ucwc-music-api.php" ]; then
+if [ -f "$PLUG/ThemeMusic.page" ] &amp;&amp; [ -f "$PLUG/ucwc-music-api.php" ]; then
   echo "Theme Music: runtime present after offline/OTA path — boot OK"
   exit 0
 fi
