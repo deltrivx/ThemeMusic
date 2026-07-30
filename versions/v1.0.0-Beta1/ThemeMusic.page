@@ -1,0 +1,313 @@
+Menu="UserPreferences"
+Title="Theme Music"
+Icon="music"
+Tag="music"
+---
+<?php
+/**
+ * ThemeMusic settings page
+ * Plugin id: theme.music — independent music player for Unraid WebGUI.
+ */
+$persist = "/boot/config/plugins/theme.music";
+$fx_path = "$persist/theme-music.cfg";
+$svc_cfg = "$persist/theme.music.cfg";
+$log_path = "/tmp/theme-music-save.log";
+$msg = "";
+$force_reload = false;
+
+if (function_exists("session_status") && session_status() === PHP_SESSION_ACTIVE) {
+    @session_write_close();
+}
+
+function tm_log($path, $line) {
+    @file_put_contents($path, date("c") . " " . $line . "\n", FILE_APPEND);
+}
+
+function tm_defaults() {
+    return [
+        "MUSIC_ENABLE" => "no",
+        "MUSIC_UI" => "card",
+        "MUSIC_SOURCE" => "local",
+        "MUSIC_LOCAL_DIR" => "",
+        "MUSIC_VOLUME" => "70",
+        "MUSIC_AUTOPLAY" => "no",
+        "MUSIC_SHUFFLE" => "no",
+        "MUSIC_REPEAT" => "off",
+        "MUSIC_DASH_ONLY" => "yes",
+    ];
+}
+
+function tm_music_dir_ok($v) {
+    $v = trim(str_replace("\\", "/", (string)$v));
+    $v = rtrim($v, "/");
+    if ($v === "") return "";
+    if ($v[0] !== "/") return "";
+    if (strpos($v, "..") !== false) return "";
+    if (strpos($v . "/", "/mnt/") !== 0 && strpos($v . "/", "/boot/config/plugins/theme.music/") !== 0) {
+        return "";
+    }
+    if (strlen($v) > 512) $v = substr($v, 0, 512);
+    return $v;
+}
+
+function tm_normalize(&$d) {
+    $d["MUSIC_ENABLE"] = (($d["MUSIC_ENABLE"] ?? "no") === "yes") ? "yes" : "no";
+    $ui = strtolower(trim((string)($d["MUSIC_UI"] ?? "card")));
+    $d["MUSIC_UI"] = in_array($ui, ["card", "float", "statusbar"], true) ? $ui : "card";
+    if ($d["MUSIC_UI"] !== "card") $d["MUSIC_UI"] = "card";
+    $src = strtolower(trim((string)($d["MUSIC_SOURCE"] ?? "local")));
+    $d["MUSIC_SOURCE"] = in_array($src, ["local", "navidrome", "emby", "jellyfin"], true) ? $src : "local";
+    if ($d["MUSIC_SOURCE"] !== "local") $d["MUSIC_SOURCE"] = "local";
+    $d["MUSIC_LOCAL_DIR"] = tm_music_dir_ok($d["MUSIC_LOCAL_DIR"] ?? "");
+    $vol = intval($d["MUSIC_VOLUME"] ?? 70);
+    if ($vol < 0) $vol = 0;
+    if ($vol > 100) $vol = 100;
+    $d["MUSIC_VOLUME"] = (string)$vol;
+    $d["MUSIC_AUTOPLAY"] = (($d["MUSIC_AUTOPLAY"] ?? "no") === "yes") ? "yes" : "no";
+    $d["MUSIC_SHUFFLE"] = (($d["MUSIC_SHUFFLE"] ?? "no") === "yes") ? "yes" : "no";
+    $rp = strtolower(trim((string)($d["MUSIC_REPEAT"] ?? "off")));
+    $d["MUSIC_REPEAT"] = in_array($rp, ["off", "one", "all"], true) ? $rp : "off";
+    $d["MUSIC_DASH_ONLY"] = (($d["MUSIC_DASH_ONLY"] ?? "yes") === "no") ? "no" : "yes";
+}
+
+function tm_load($path) {
+    $d = tm_defaults();
+    if (is_file($path)) {
+        $raw = @parse_ini_file($path);
+        if (is_array($raw)) {
+            foreach ($d as $k => $v) {
+                if (isset($raw[$k]) && $raw[$k] !== "") $d[$k] = (string)$raw[$k];
+            }
+        }
+    }
+    tm_normalize($d);
+    return $d;
+}
+
+function tm_save($path, $fx) {
+    tm_normalize($fx);
+    $lines = [];
+    foreach (tm_defaults() as $k => $_) {
+        $val = (string)($fx[$k] ?? "");
+        $val = str_replace(['"', "\r", "\n"], ['', '', ''], $val);
+        $lines[] = $k . '="' . $val . '"';
+    }
+    @mkdir(dirname($path), 0755, true);
+    $ok = @file_put_contents($path, implode("\n", $lines) . "\n") !== false;
+    if ($ok) @chmod($path, 0644);
+    return $ok;
+}
+
+$ucwc_service = "enabled";
+if (is_file($svc_cfg)) {
+    $ucwc_svc_raw = @parse_ini_file($svc_cfg);
+    if (is_array($ucwc_svc_raw) && isset($ucwc_svc_raw["SERVICE"]) && $ucwc_svc_raw["SERVICE"] !== "") {
+        $ucwc_service = strtolower(trim((string)$ucwc_svc_raw["SERVICE"]));
+    }
+}
+if (!in_array($ucwc_service, ["enabled", "enable", "1", "yes"], true)) {
+    $ucwc_service = "disabled";
+} else {
+    $ucwc_service = "enabled";
+}
+
+// Form POST save (Unraid injects csrf)
+if (!empty($_POST) && isset($_POST["SAVE_THEME_MUSIC"])) {
+    if (function_exists("session_status") && session_status() === PHP_SESSION_ACTIVE) {
+        @session_write_close();
+    }
+    $fx = tm_load($fx_path);
+    if (isset($_POST["SERVICE"])) {
+        $svc = strtolower(trim((string)$_POST["SERVICE"]));
+        $ucwc_service = in_array($svc, ["enabled", "enable", "1", "yes"], true) ? "enabled" : "disabled";
+        @mkdir($persist, 0755, true);
+        @file_put_contents($svc_cfg, 'SERVICE="' . $ucwc_service . "\"\n");
+        @chmod($svc_cfg, 0644);
+    }
+    if (isset($_POST["MUSIC_ENABLE"])) {
+        $fx["MUSIC_ENABLE"] = (($_POST["MUSIC_ENABLE"] ?? "no") === "yes") ? "yes" : "no";
+    }
+    if (isset($_POST["MUSIC_UI"])) {
+        $ui = strtolower(trim((string)($_POST["MUSIC_UI"] ?? "card")));
+        $fx["MUSIC_UI"] = in_array($ui, ["card", "float", "statusbar"], true) ? $ui : "card";
+    }
+    if (isset($_POST["MUSIC_SOURCE"])) {
+        $src = strtolower(trim((string)($_POST["MUSIC_SOURCE"] ?? "local")));
+        $fx["MUSIC_SOURCE"] = in_array($src, ["local", "navidrome", "emby", "jellyfin"], true) ? $src : "local";
+    }
+    if (isset($_POST["MUSIC_LOCAL_DIR"])) {
+        $fx["MUSIC_LOCAL_DIR"] = tm_music_dir_ok($_POST["MUSIC_LOCAL_DIR"] ?? "");
+    }
+    if (isset($_POST["MUSIC_VOLUME_COMMIT"]) || isset($_POST["MUSIC_VOLUME"])) {
+        $vol = intval($_POST["MUSIC_VOLUME_COMMIT"] ?? ($_POST["MUSIC_VOLUME"] ?? ($fx["MUSIC_VOLUME"] ?? 70)));
+        if ($vol < 0) $vol = 0;
+        if ($vol > 100) $vol = 100;
+        $fx["MUSIC_VOLUME"] = (string)$vol;
+    }
+    if (isset($_POST["MUSIC_AUTOPLAY"])) {
+        $fx["MUSIC_AUTOPLAY"] = (($_POST["MUSIC_AUTOPLAY"] ?? "no") === "yes") ? "yes" : "no";
+    }
+    if (isset($_POST["MUSIC_SHUFFLE"])) {
+        $fx["MUSIC_SHUFFLE"] = (($_POST["MUSIC_SHUFFLE"] ?? "no") === "yes") ? "yes" : "no";
+    }
+    if (isset($_POST["MUSIC_REPEAT"])) {
+        $rp = strtolower(trim((string)($_POST["MUSIC_REPEAT"] ?? "off")));
+        $fx["MUSIC_REPEAT"] = in_array($rp, ["off", "one", "all"], true) ? $rp : "off";
+    }
+    if (isset($_POST["MUSIC_DASH_ONLY"])) {
+        $fx["MUSIC_DASH_ONLY"] = (($_POST["MUSIC_DASH_ONLY"] ?? "yes") === "no") ? "no" : "yes";
+    }
+    tm_normalize($fx);
+    if (tm_save($fx_path, $fx)) {
+        $msg = "已保存 Theme Music 设置。请强制刷新 WebGUI（Ctrl+F5）后生效。";
+        $force_reload = true;
+        tm_log($log_path, "page-save ok enable=" . $fx["MUSIC_ENABLE"] . " dir=" . $fx["MUSIC_LOCAL_DIR"]);
+    } else {
+        $msg = "保存失败：无法写入配置文件。";
+        tm_log($log_path, "page-save FAIL");
+    }
+}
+
+$fx = tm_load($fx_path);
+$te_music_warn = is_file("/boot/config/plugins/theme.effects/theme-effects.cfg");
+$ucwc_pickroot = is_dir("/mnt/user") ? "/mnt/user" : "/mnt";
+$ucwc_ft_css = "/usr/local/emhttp/webGui/styles/jquery.filetree.css";
+$ucwc_ft_js = "/usr/local/emhttp/webGui/javascript/jquery.filetree.js";
+$ucwc_ft_css_v = is_file($ucwc_ft_css) ? filemtime($ucwc_ft_css) : time();
+$ucwc_ft_js_v = is_file($ucwc_ft_js) ? filemtime($ucwc_ft_js) : time();
+?>
+<link rel="stylesheet" href="/webGui/styles/jquery.filetree.css?v=<?=$ucwc_ft_css_v?>">
+<script src="/webGui/javascript/jquery.filetree.js?v=<?=$ucwc_ft_js_v?>" charset="utf-8"></script>
+<style>
+.tm-warn{background:rgba(255,180,0,.12);border:1px solid rgba(255,180,0,.35);border-radius:8px;padding:10px 12px;margin:8px 0 14px;line-height:1.45}
+.tm-path{display:inline-flex;align-items:center;gap:6px;max-width:520px;width:100%}
+.tm-path input{flex:1;min-width:180px}
+.tm-msg{color:var(--green-800,#3c6);margin:6px 0 12px}
+.tm-vol{display:inline-flex;align-items:center;gap:10px;max-width:420px;width:100%}
+.tm-vol input[type=range]{flex:1;min-width:160px}
+</style>
+<?if ($force_reload):?>
+<script>
+(function () {
+  var u = "/Settings/ThemeMusic?applied=1&_ts=" + Date.now();
+  try { window.location.replace(u); } catch (e) { window.location.href = u; }
+})();
+</script>
+<?endif;?>
+<?if ($msg !== ""):?>
+<div class="tm-msg"><?= htmlspecialchars($msg) ?></div>
+<?endif;?>
+
+<?if ($te_music_warn):?>
+<div class="tm-warn">
+  <b>双装提示：</b>检测到已安装 <b>ThemeEffects</b>。请勿在两边同时开启音乐，否则可能出现双播放器。
+  建议只在本页（Theme Music）开启音乐，并在主题特效里关闭「音乐组件」。
+  配置独立，不会自动从 ThemeEffects 迁移目录设置。
+</div>
+<?endif;?>
+
+<form method="POST" id="theme-music-form">
+<input type="hidden" name="SAVE_THEME_MUSIC" value="1">
+
+<div class="title"><span class="left">运行</span><span class="right"></span></div>
+
+插件运行:
+: <select name="SERVICE" size="1">
+  <?=mk_option($ucwc_service, "enabled", "启用")?>
+  <?=mk_option($ucwc_service, "disabled", "停用（不注入播放器）")?>
+  </select>
+
+<div class="title"><span class="left">音乐</span><span class="right"></span></div>
+
+音乐组件:
+: <select name="MUSIC_ENABLE" size="1">
+  <?=mk_option($fx["MUSIC_ENABLE"] ?? "no", "no", "关闭")?>
+  <?=mk_option($fx["MUSIC_ENABLE"] ?? "no", "yes", "开启")?>
+  </select>
+<input type="hidden" name="MUSIC_UI" value="card">
+
+音源:
+: <select name="MUSIC_SOURCE" size="1">
+  <?=mk_option($fx["MUSIC_SOURCE"] ?? "local", "local", "本地目录（V1）")?>
+  </select>
+
+本地音乐目录:
+: <span class="tm-path">
+    <input type="text" class="tm-local-path" id="tm-music-local-dir" name="MUSIC_LOCAL_DIR" maxlength="512" value="<?=htmlspecialchars($fx["MUSIC_LOCAL_DIR"] ?? "")?>" placeholder="点击浏览选择音乐目录（如 /mnt/user/Music）" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickcloseonfile="false" data-pickroot="<?= htmlspecialchars($ucwc_pickroot) ?>" data-picktop="<?= htmlspecialchars($ucwc_pickroot) ?>" data-pickmatch=".*">
+    <button type="button" class="tm-path-browse" title="浏览目录" aria-label="浏览目录"><i class="fa fa-folder-open-o" aria-hidden="true"></i></button>
+  </span>
+
+默认音量:
+: <span class="tm-vol">
+    <input type="range" name="MUSIC_VOLUME" min="0" max="100" step="1" value="<?=intval($fx["MUSIC_VOLUME"] ?? 70)?>" id="tm-music-volume">
+    <span class="mono" id="tm-music-volume-val"><?=intval($fx["MUSIC_VOLUME"] ?? 70)?></span>
+  </span>
+
+自动播放:
+: <select name="MUSIC_AUTOPLAY" size="1">
+  <?=mk_option($fx["MUSIC_AUTOPLAY"] ?? "no", "no", "关闭")?>
+  <?=mk_option($fx["MUSIC_AUTOPLAY"] ?? "no", "yes", "开启（浏览器可能拦截）")?>
+  </select>
+
+默认随机:
+: <select name="MUSIC_SHUFFLE" size="1">
+  <?=mk_option($fx["MUSIC_SHUFFLE"] ?? "no", "no", "关闭")?>
+  <?=mk_option($fx["MUSIC_SHUFFLE"] ?? "no", "yes", "开启")?>
+  </select>
+
+默认循环:
+: <select name="MUSIC_REPEAT" size="1">
+  <?=mk_option($fx["MUSIC_REPEAT"] ?? "off", "off", "关闭")?>
+  <?=mk_option($fx["MUSIC_REPEAT"] ?? "off", "all", "列表循环")?>
+  <?=mk_option($fx["MUSIC_REPEAT"] ?? "off", "one", "单曲循环")?>
+  </select>
+
+播放范围:
+: <select name="MUSIC_DASH_ONLY" size="1">
+  <?=mk_option($fx["MUSIC_DASH_ONLY"] ?? "yes", "yes", "仅仪表盘播放（推荐）")?>
+  <?=mk_option($fx["MUSIC_DASH_ONLY"] ?? "yes", "no", "全站播放")?>
+  </select>
+
+> **Theme Music v1.0.0-Beta1**：独立 Unraid 音乐插件。仪表盘显示播放卡片；全站播放时其它页为可拖动 mini chip。目录需在 `/mnt/` 下。支持 mp3/flac/m4a 等；同目录 `.lrc` 或自动下载歌词。跨页续播为尽力而为。
+>
+> 与 **ThemeEffects** 并存时：路径与配置完全独立；**请只开一侧音乐**。
+
+&nbsp;
+: <span class="buttons-spaced">
+    <input type="submit" name="SAVE_THEME_MUSIC" value="应用">
+    <input type="button" value="完成" onclick="done()">
+  </span>
+</form>
+
+<script>
+(function () {
+  var vol = document.getElementById("tm-music-volume");
+  var lab = document.getElementById("tm-music-volume-val");
+  if (vol && lab) {
+    vol.addEventListener("input", function () { lab.textContent = String(vol.value); });
+  }
+  function attachTree() {
+    if (typeof window.jQuery === "undefined" || !jQuery.fn || !jQuery.fn.fileTreeAttach) return;
+    var $el = jQuery("#tm-music-local-dir");
+    if (!$el.length || $el.data("tm-tree")) return;
+    $el.attr("data-pickfolders", "true");
+    $el.attr("data-pickcloseonfile", "false");
+    try { $el.fileTreeAttach(); $el.data("tm-tree", 1); } catch (e) {}
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", attachTree);
+  } else {
+    attachTree();
+  }
+  setTimeout(attachTree, 400);
+  var btn = document.querySelector(".tm-path-browse");
+  if (btn) {
+    btn.addEventListener("click", function () {
+      var el = document.getElementById("tm-music-local-dir");
+      if (!el) return;
+      el.focus();
+      try { el.click(); } catch (e) {}
+    });
+  }
+})();
+</script>

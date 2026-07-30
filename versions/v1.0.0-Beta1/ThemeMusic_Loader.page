@@ -1,0 +1,93 @@
+Menu="Buttons:101"
+Link="nav-user"
+---
+<?php
+/**
+ * ThemeMusic global loader — injects music config + CSS/JS when enabled.
+ * Plugin id: theme.music
+ */
+require_once "$docroot/plugins/dynamix/include/Wrappers.php";
+
+$persist = '/boot/config/plugins/theme.music';
+$runtime = '/usr/local/emhttp/plugins/theme.music';
+$svc_cfg = "$persist/theme.music.cfg";
+$fx_path = "$persist/theme-music.cfg";
+
+$ucwc_service = 'enabled';
+if (is_file($svc_cfg)) {
+    $raw = @parse_ini_file($svc_cfg);
+    if (is_array($raw) && isset($raw['SERVICE']) && $raw['SERVICE'] !== '') {
+        $ucwc_service = strtolower(trim((string)$raw['SERVICE']));
+    }
+}
+if (!in_array($ucwc_service, ['enabled', 'enable', '1', 'yes'], true)) {
+    echo '<!-- ThemeMusic:runtime-disabled -->';
+    return;
+}
+
+$fx = [
+    'MUSIC_ENABLE' => 'no',
+    'MUSIC_UI' => 'card',
+    'MUSIC_SOURCE' => 'local',
+    'MUSIC_LOCAL_DIR' => '',
+    'MUSIC_VOLUME' => '70',
+    'MUSIC_AUTOPLAY' => 'no',
+    'MUSIC_SHUFFLE' => 'no',
+    'MUSIC_REPEAT' => 'off',
+    'MUSIC_DASH_ONLY' => 'yes',
+];
+if (is_file($fx_path)) {
+    $raw = @parse_ini_file($fx_path);
+    if (is_array($raw)) {
+        foreach ($fx as $k => $v) {
+            if (isset($raw[$k]) && $raw[$k] !== '') $fx[$k] = (string)$raw[$k];
+        }
+    }
+}
+
+$fx_music = (($fx['MUSIC_ENABLE'] ?? 'no') === 'yes');
+$fx_music_ui = 'card';
+$fx_music_source = 'local';
+$fx_music_dir = trim((string)($fx['MUSIC_LOCAL_DIR'] ?? ''));
+$fx_music_vol = intval($fx['MUSIC_VOLUME'] ?? 70);
+if ($fx_music_vol < 0) $fx_music_vol = 0;
+if ($fx_music_vol > 100) $fx_music_vol = 100;
+$fx_music_autoplay = (($fx['MUSIC_AUTOPLAY'] ?? 'no') === 'yes');
+$fx_music_shuffle = (($fx['MUSIC_SHUFFLE'] ?? 'no') === 'yes');
+$fx_music_repeat = in_array(($fx['MUSIC_REPEAT'] ?? 'off'), ['off', 'one', 'all'], true) ? $fx['MUSIC_REPEAT'] : 'off';
+$fx_music_dash_only = (($fx['MUSIC_DASH_ONLY'] ?? 'yes') !== 'no');
+
+if (!$fx_music) {
+    echo '<!-- ThemeMusic:music-disabled -->';
+    return;
+}
+
+/* Compat shape for ucwc-music.js cfg(): window.__UCWC_THEME__.music */
+?>
+<script>
+window.__UCWC_THEME__ = window.__UCWC_THEME__ || {};
+window.__UCWC_THEME__.music = {
+  enable: true,
+  ui: <?= json_encode($fx_music_ui) ?>,
+  source: <?= json_encode($fx_music_source) ?>,
+  local_dir: <?= json_encode($fx_music_dir) ?>,
+  volume: <?= (int)$fx_music_vol ?>,
+  autoplay: <?= $fx_music_autoplay ? 'true' : 'false' ?>,
+  shuffle: <?= $fx_music_shuffle ? 'true' : 'false' ?>,
+  repeat: <?= json_encode($fx_music_repeat) ?>,
+  dash_only: <?= $fx_music_dash_only ? 'true' : 'false' ?>
+};
+</script>
+<?php
+$music_css = "$runtime/assets/ucwc-music.css";
+$music_js = "$runtime/assets/ucwc-music.js";
+if (is_file($music_css)):
+  $mcssv = filemtime($music_css);
+?>
+<link rel="stylesheet" id="ucwc-music-css" href="/plugins/theme.music/assets/ucwc-music.css?v=<?=$mcssv?>">
+<?php endif;
+if (is_file($music_js)):
+  $mjsv = filemtime($music_js);
+?>
+<script src="/plugins/theme.music/assets/ucwc-music.js?v=<?=$mjsv?>"></script>
+<?php endif; ?>

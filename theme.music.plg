@@ -1,0 +1,134 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+<!ENTITY name      "theme.music">
+<!ENTITY author    "deltrivx">
+<!ENTITY version   "2026.07.30a">
+<!ENTITY launch    "Settings/ThemeMusic">
+<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
+<!ENTITY flash     "/boot/config/plugins/&name;">
+<!ENTITY github    "deltrivx/ThemeMusic">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
+<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
+<!ENTITY ver       "v1.0.0-Beta1">
+]>
+<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
+
+<!-- CHANGES in CDATA: bare & in notes must not break simplexml_load_file -->
+<CHANGES>
+<![CDATA[
+## Theme Music
+###2026.07.30a
+- v1.0.0-Beta1: standalone Unraid music plugin (dashboard card + sitewide chip)
+- Local library (mp3/flac/m4a…), LRC lyrics, cover cache, cross-page resume (best-effort)
+- Independent of ThemeEffects; do not enable music on both plugins at once
+]]>
+</CHANGES>
+
+<!-- Prepare dirs -->
+<FILE Run="/bin/bash">
+<INLINE>
+mkdir -p &flash;/assets &plugdir;/assets
+echo "Theme Music: preparing &name;…"
+exit 0
+</INLINE>
+</FILE>
+
+<!-- README shown in plugin manager -->
+<FILE Name="&plugdir;/README.md">
+<INLINE>
+<![CDATA[
+**Theme Music**
+
+Standalone Unraid WebGUI music player (dashboard card + optional sitewide mini chip).
+Local media directory under `/mnt/…`. Independent of ThemeEffects.
+
+Settings: **Settings → User Preferences → Theme Music**
+
+If ThemeEffects is also installed, enable music on **only one** side.
+
+Repo: https://github.com/deltrivx/ThemeMusic
+]]>
+</INLINE>
+</FILE>
+
+<!-- Install / upgrade package via install.sh
+     Plugin manager popen() only reads stdout. Merge + line-buffer here. -->
+<FILE Run="/bin/bash">
+<INLINE>
+set -e
+export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
+export UCWC_PLUGIN_INSTALL=1
+export UCWC_INSTALL_MODE="${UCWC_INSTALL_MODE:-ota}"
+
+echo "===================================================="
+echo " Theme Music plugin install"
+echo " package: &ver;  mode: $UCWC_INSTALL_MODE"
+echo "===================================================="
+
+if ! command -v curl >/dev/null 2>&amp;1; then
+  echo "ERROR: curl required" &gt;&amp;2
+  exit 1
+fi
+if ! command -v jq >/dev/null 2>&amp;1; then
+  echo "ERROR: jq required" &gt;&amp;2
+  exit 1
+fi
+
+echo "[1/4] downloading install.sh…"
+TMP=$(mktemp /tmp/theme.music.install.XXXXXX)
+if ! curl -4 -fsSL --connect-timeout 15 --max-time 120 --retry 3 \
+    -o "$TMP" "&installSH;?_ts=$(date +%s)"; then
+  echo "ERROR: failed to download install.sh from GitHub" &gt;&amp;2
+  rm -f "$TMP"
+  exit 1
+fi
+chmod +x "$TMP"
+echo "[1/4] install.sh ready ($(wc -c &lt; "$TMP" | tr -d ' ') bytes)"
+
+echo "[2/4] running install &ver; (progress below)…"
+if command -v stdbuf >/dev/null 2>&amp;1; then
+  stdbuf -oL -eL sh "$TMP" install "&ver;" 2&gt;&amp;1
+else
+  sh "$TMP" install "&ver;" 2&gt;&amp;1
+fi
+rm -f "$TMP"
+
+echo "[3/4] verifying runtime files…"
+if [ ! -f "&plugdir;/ThemeMusic.page" ] &amp;&amp; [ ! -f "&flash;/ThemeMusic.page" ]; then
+  echo "WARNING: ThemeMusic.page not found after install (check network / logs)"
+fi
+
+echo "[4/4] done."
+echo "----------------------------------------------------"
+echo " theme.music &ver; installed."
+echo " Open Settings → User Preferences → Theme Music"
+echo "----------------------------------------------------"
+exit 0
+</INLINE>
+</FILE>
+
+<!-- Remove -->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+set +e
+export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
+export UCWC_PLUGIN_INSTALL=1
+echo "Theme Music: uninstalling…"
+TMP=$(mktemp /tmp/theme.music.uninstall.XXXXXX)
+if curl -4 -fsSL --connect-timeout 10 --max-time 60 -o "$TMP" "&installSH;?_ts=$(date +%s)" 2>/dev/null; then
+  chmod +x "$TMP"
+  if command -v stdbuf >/dev/null 2>&amp;1; then
+    stdbuf -oL -eL sh "$TMP" uninstall 2&gt;&amp;1 || true
+  else
+    sh "$TMP" uninstall 2&gt;&amp;1 || true
+  fi
+fi
+rm -f "$TMP"
+rm -rf &plugdir;
+# Keep &flash; user cfg/caches by default
+echo "theme.music removed (flash config retained under &flash;)."
+exit 0
+</INLINE>
+</FILE>
+
+</PLUGIN>
