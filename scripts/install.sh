@@ -311,7 +311,8 @@ install_version() {
     ucwc-music-api.php \
     theme-music-save.php \
     assets/ucwc-music.js \
-    assets/ucwc-music.css
+    assets/ucwc-music.css \
+    assets/theme-music-settings.css
   do
     bn=$(basename "$f")
     dir=$(dirname "$f")
@@ -338,6 +339,7 @@ install_version() {
   install_pair "$tmp/theme-music-save.php" "$PERSIST_DIR/theme-music-save.php" "$RUNTIME_DIR/theme-music-save.php"
   install_pair "$tmp/assets/ucwc-music.js" "$PERSIST_DIR/assets/ucwc-music.js" "$RUNTIME_DIR/assets/ucwc-music.js"
   install_pair "$tmp/assets/ucwc-music.css" "$PERSIST_DIR/assets/ucwc-music.css" "$RUNTIME_DIR/assets/ucwc-music.css"
+  install_pair "$tmp/assets/theme-music-settings.css" "$PERSIST_DIR/assets/theme-music-settings.css" "$RUNTIME_DIR/assets/theme-music-settings.css"
 
   # Preserve user cfg; seed defaults on first install; fill missing keys
   if [ ! -f "$MUSIC_CFG" ]; then
@@ -383,6 +385,7 @@ uninstall_plugin() {
     "$PERSIST_DIR/theme-music-save.php" "$RUNTIME_DIR/theme-music-save.php" \
     "$PERSIST_DIR/assets/ucwc-music.js" "$RUNTIME_DIR/assets/ucwc-music.js" \
     "$PERSIST_DIR/assets/ucwc-music.css" "$RUNTIME_DIR/assets/ucwc-music.css" \
+    "$PERSIST_DIR/assets/theme-music-settings.css" "$RUNTIME_DIR/assets/theme-music-settings.css" \
     "$OPTIONS_FILE"
   # Keep flash cfg/caches; mark service disabled
   printf 'SERVICE="disabled"\n' > "$SERVICE_CFG" 2>/dev/null || true

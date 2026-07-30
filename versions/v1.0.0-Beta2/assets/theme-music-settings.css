@@ -1,0 +1,165 @@
+/* Theme Music settings — align with ThemeEffects music section layout */
+
+.tm-warn {
+  background: rgba(255, 180, 0, 0.12);
+  border: 1px solid rgba(255, 180, 0, 0.35);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0 14px;
+  line-height: 1.45;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.tm-msg {
+  color: var(--green-800, #3c6);
+  margin: 6px 0 12px;
+}
+
+/* Control column width (content-sized selects, not full row) */
+form#theme-music-form,
+form[action*="ThemeMusic"] {
+  --tm-ctrl-w: 12.5rem;
+}
+
+form#theme-music-form select,
+form[action*="ThemeMusic"] select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  width: auto !important;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23c8c8c8' d='M1 1.5L6 6.5L11 1.5L12 2.5L6 8.5L0 2.5z'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 10px center !important;
+  background-size: 11px 7px !important;
+  padding-right: 28px !important;
+  cursor: pointer;
+}
+
+form#theme-music-form select::-ms-expand,
+form[action*="ThemeMusic"] select::-ms-expand {
+  display: none;
+}
+
+/* Path field: same width as neighboring content-sized select */
+.tm-path-field,
+.ucwc-path-field {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 0;
+  width: var(--tm-ctrl-w, 12.5rem) !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  vertical-align: middle;
+}
+
+form#theme-music-form .tm-path-field,
+form#theme-music-form .ucwc-path-field,
+form[action*="ThemeMusic"] .tm-path-field,
+form[action*="ThemeMusic"] .ucwc-path-field,
+form#theme-music-form dd > .tm-path-field,
+form#theme-music-form dd > .ucwc-path-field {
+  width: var(--tm-ctrl-w, 12.5rem) !important;
+  max-width: min(100%, var(--tm-ctrl-w, 12.5rem)) !important;
+}
+
+.tm-path-field > .tm-local-path,
+.tm-path-field > .ucwc-local-path,
+.ucwc-path-field > .tm-local-path,
+.ucwc-path-field > .ucwc-local-path {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  padding-right: 36px !important;
+  box-sizing: border-box !important;
+}
+
+.tm-path-browse,
+.ucwc-path-browse {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(200, 220, 255, 0.88);
+  cursor: pointer;
+  line-height: 1;
+  font-size: 14px;
+}
+
+.tm-path-browse:hover,
+.tm-path-browse:focus,
+.ucwc-path-browse:hover,
+.ucwc-path-browse:focus {
+  color: #7dd3fc;
+  background: rgba(125, 211, 252, 0.12);
+  outline: none;
+}
+
+.tm-path-browse .fa,
+.ucwc-path-browse .fa {
+  pointer-events: none;
+}
+
+.tm-vol {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 420px;
+  width: var(--tm-ctrl-w, 12.5rem);
+  min-width: min(280px, 100%);
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+.tm-vol input[type="range"] {
+  flex: 1;
+  min-width: 120px;
+}
+
+/* fileTree under path */
+.tm-path-field .fileTree,
+.ucwc-path-field .fileTree,
+.tm-path-field + .fileTree,
+.ucwc-path-field + .fileTree {
+  max-width: min(420px, 100%);
+}
+
+@media (max-width: 720px) {
+  form#theme-music-form dt,
+  form[action*="ThemeMusic"] dt {
+    white-space: normal;
+    max-width: 100%;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  form#theme-music-form dd,
+  form[action*="ThemeMusic"] dd {
+    max-width: 100%;
+  }
+  form#theme-music-form dd > select,
+  form[action*="ThemeMusic"] dd > select,
+  form#theme-music-form .tm-path-field,
+  form#theme-music-form .ucwc-path-field,
+  form#theme-music-form .tm-vol {
+    max-width: 100% !important;
+    width: min(100%, var(--tm-ctrl-w, 12.5rem)) !important;
+  }
+}

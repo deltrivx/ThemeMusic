@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "2026.07.30a">
+<!ENTITY version   "2026.07.30b">
 <!ENTITY launch    "Settings/ThemeMusic">
 <!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 <!ENTITY flash     "/boot/config/plugins/&name;">
 <!ENTITY github    "deltrivx/ThemeMusic">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 <!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-<!ENTITY ver       "v1.0.0-Beta1">
+<!ENTITY ver       "v1.0.0-Beta2">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 
@@ -17,6 +17,10 @@
 <CHANGES>
 <![CDATA[
 ## Theme Music
+###2026.07.30b
+- v1.0.0-Beta2: settings page Unraid markdown form (dt/dd) aligned with ThemeEffects
+- Apply button unlock on form change (BodyInlineJS + class=lock)
+- theme-music-settings.css path-field widths; install.sh OTA includes settings CSS
 ###2026.07.30a
 - v1.0.0-Beta1: standalone Unraid music plugin (dashboard card + sitewide chip)
 - Local library (mp3/flac/m4a…), LRC lyrics, cover cache, cross-page resume (best-effort)
@@ -38,95 +42,76 @@ exit 0
 <INLINE>
 <![CDATA[
 **Theme Music**
+## v1.0.0-Beta2 - 2026-07-30
 
-Standalone Unraid WebGUI music player (dashboard card + optional sitewide mini chip).
-Local media directory under `/mnt/…`. Independent of ThemeEffects.
+### 概述
 
-Settings: **Settings → User Preferences → Theme Music**
+**Theme Music** 独立插件。从 ThemeEffects 抽取音乐组件，以 `theme.music` 发布；路径、配置、缓存与主题特效完全分离。
 
-If ThemeEffects is also installed, enable music on **only one** side.
+### Beta2 变更
 
-Repo: https://github.com/deltrivx/ThemeMusic
+- 设置页：Unraid `form markdown="1"`（Label: / : control → dt/dd），对齐主题特效音乐区布局
+- 应用按钮：变更后解锁并 POST 保存（兼容 BodyInlineJS 对 `class=lock` 的处理）
+- 新增 `assets/theme-music-settings.css`（路径框宽度跟随 select）
+
+### Beta1 能力
+
+- 新建插件 `theme.music`（设置页 **Theme Music**，Loader `Buttons:101`）
+- 播放器：`assets/ucwc-music.js` / `ucwc-music.css`（apiBase → `/plugins/theme.music/…`）
+- API：`ucwc-music-api.php`（list / stream / lyrics / cover；缓存于 flash `theme.music`）
+- 设置保存：`theme-music-save.php` + 页内 POST；配置 `theme-music.cfg` + `theme.music.cfg`
+- OTA：`versions/` + `files.manifest`；`scripts/install.sh` / `theme.music.plg`
+- 文档：与 ThemeEffects 双装避让说明（勿两边同时开音乐；配置不自动迁移）
+
+### 注意
+
+请勿与 ThemeEffects **同时开启音乐**。配置独立，不会自动迁移。
 ]]>
 </INLINE>
 </FILE>
 
-<!-- Install / upgrade package via install.sh
-     Plugin manager popen() only reads stdout. Merge + line-buffer here. -->
-<FILE Run="/bin/bash">
+<!-- Download install helper then run OTA install for default ver -->
+<FILE Name="/tmp/theme-music-install.sh" Run="/bin/bash">
 <INLINE>
+#!/bin/bash
 set -e
-export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
+URL="&installSH;"
+OUT="/tmp/theme-music-install-run.sh"
+echo "Theme Music: fetching install.sh…"
+if ! curl -4 -fsSL --http1.1 --connect-timeout 20 --retry 3 -o "$OUT" "$URL"; then
+  echo "Theme Music: primary raw failed, trying mirrors…"
+  ok=0
+  for m in \
+    "https://cdn.jsdelivr.net/gh/&github;@main/scripts/install.sh" \
+    "https://fastly.jsdelivr.net/gh/&github;@main/scripts/install.sh" \
+    "https://raw.gitmirror.com/&github;/main/scripts/install.sh" \
+    "https://ghfast.top/https://raw.githubusercontent.com/&github;/main/scripts/install.sh"
+  do
+    if curl -4 -fsSL --http1.1 --connect-timeout 20 --retry 2 -o "$OUT" "$m"; then ok=1; break; fi
+  done
+  [ "$ok" = "1" ] || { echo "Theme Music: cannot download install.sh"; exit 1; }
+fi
+chmod +x "$OUT"
 export UCWC_PLUGIN_INSTALL=1
-export UCWC_INSTALL_MODE="${UCWC_INSTALL_MODE:-ota}"
-
-echo "===================================================="
-echo " Theme Music plugin install"
-echo " package: &ver;  mode: $UCWC_INSTALL_MODE"
-echo "===================================================="
-
-if ! command -v curl >/dev/null 2>&amp;1; then
-  echo "ERROR: curl required" &gt;&amp;2
-  exit 1
-fi
-if ! command -v jq >/dev/null 2>&amp;1; then
-  echo "ERROR: jq required" &gt;&amp;2
-  exit 1
-fi
-
-echo "[1/4] downloading install.sh…"
-TMP=$(mktemp /tmp/theme.music.install.XXXXXX)
-if ! curl -4 -fsSL --connect-timeout 15 --max-time 120 --retry 3 \
-    -o "$TMP" "&installSH;?_ts=$(date +%s)"; then
-  echo "ERROR: failed to download install.sh from GitHub" &gt;&amp;2
-  rm -f "$TMP"
-  exit 1
-fi
-chmod +x "$TMP"
-echo "[1/4] install.sh ready ($(wc -c &lt; "$TMP" | tr -d ' ') bytes)"
-
-echo "[2/4] running install &ver; (progress below)…"
-if command -v stdbuf >/dev/null 2>&amp;1; then
-  stdbuf -oL -eL sh "$TMP" install "&ver;" 2&gt;&amp;1
-else
-  sh "$TMP" install "&ver;" 2&gt;&amp;1
-fi
-rm -f "$TMP"
-
-echo "[3/4] verifying runtime files…"
-if [ ! -f "&plugdir;/ThemeMusic.page" ] &amp;&amp; [ ! -f "&flash;/ThemeMusic.page" ]; then
-  echo "WARNING: ThemeMusic.page not found after install (check network / logs)"
-fi
-
-echo "[4/4] done."
-echo "----------------------------------------------------"
-echo " theme.music &ver; installed."
-echo " Open Settings → User Preferences → Theme Music"
-echo "----------------------------------------------------"
+# bash -c keeps progress on stdout for plugin manager
+bash -c "source '$OUT'; install_plugin '&ver;' ota"
 exit 0
 </INLINE>
 </FILE>
 
-<!-- Remove -->
+<!-- remove -->
 <FILE Run="/bin/bash" Method="remove">
 <INLINE>
-set +e
-export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
-export UCWC_PLUGIN_INSTALL=1
-echo "Theme Music: uninstalling…"
-TMP=$(mktemp /tmp/theme.music.uninstall.XXXXXX)
-if curl -4 -fsSL --connect-timeout 10 --max-time 60 -o "$TMP" "&installSH;?_ts=$(date +%s)" 2>/dev/null; then
-  chmod +x "$TMP"
-  if command -v stdbuf >/dev/null 2>&amp;1; then
-    stdbuf -oL -eL sh "$TMP" uninstall 2&gt;&amp;1 || true
-  else
-    sh "$TMP" uninstall 2&gt;&amp;1 || true
-  fi
+#!/bin/bash
+SH="/tmp/theme-music-install-run.sh"
+if [ ! -f "$SH" ]; then
+  curl -4 -fsSL --http1.1 -o "$SH" "&installSH;" 2>/dev/null || true
 fi
-rm -f "$TMP"
-rm -rf &plugdir;
-# Keep &flash; user cfg/caches by default
-echo "theme.music removed (flash config retained under &flash;)."
+if [ -f "$SH" ]; then
+  chmod +x "$SH" 2>/dev/null || true
+  bash -c "source '$SH'; uninstall_plugin" 2>/dev/null || true
+fi
+rm -f /tmp/theme-music-install.sh /tmp/theme-music-install-run.sh
 exit 0
 </INLINE>
 </FILE>

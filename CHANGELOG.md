@@ -1,18 +1,21 @@
-## v1.0.0-Beta1 - 2026-07-30
+# Theme Music Changelog
 
-### 概述
+## v1.0.0-Beta2 — 2026-07-30 (`2026.07.30b`)
 
-**Theme Music** 独立插件首发。从 ThemeEffects 抽取音乐组件，以 `theme.music` 发布；路径、配置、缓存与主题特效完全分离。
+### 设置页 / 应用
 
-### 变更
+- Unraid `form markdown="1"`：`Label:` / `: control` → 标准 `dt`/`dd` 行（对齐 ThemeEffects 音乐区，修复整行铺满）
+- 应用按钮：监听 change/input，在 BodyInlineJS 将 `input[value=应用]` 禁用且跳过 `input.lock` 时自行解锁并允许原生 POST 保存
+- 新增 `assets/theme-music-settings.css`：`--tm-ctrl-w` 路径框宽度、select 样式
+- 保存后 `?applied=1` 展示成功提示；`install.sh` OTA/卸载纳入 settings CSS
 
-- 新建插件 `theme.music`（设置页 **Theme Music**，Loader `Buttons:101`）
-- 播放器：`assets/ucwc-music.js` / `ucwc-music.css`（apiBase → `/plugins/theme.music/…`）
-- API：`ucwc-music-api.php`（list / stream / lyrics / cover；缓存于 flash `theme.music`）
-- 设置保存：`theme-music-save.php` + 页内 POST；配置 `theme-music.cfg` + `theme.music.cfg`
-- OTA：`versions/v1.0.0-Beta1` + `files.manifest`；`scripts/install.sh` / `theme.music.plg`
-- 文档：与 ThemeEffects 双装避让说明（勿两边同时开音乐；配置不自动迁移）
+## v1.0.0-Beta1 — 2026-07-30 (`2026.07.30a`)
 
-### 来源能力（对齐 ThemeEffects 音乐 Beta 线）
+### 首发
 
-- 仪表盘卡片 + 全站 chip、歌词、封面、跨页续播 / 手势同步 play、FLAC demuxer hard-reset 等
+- 独立插件 `theme.music`：从 ThemeEffects 抽取音乐组件
+- 仪表盘卡片 + 全站 mini chip；本地目录音源；LRC / 封面缓存；跨页续播尽力而为
+- 设置：`ThemeMusic.page`；注入：`ThemeMusic_Loader.page`（Buttons:101）
+- API：`ucwc-music-api.php`；可选 AJAX：`theme-music-save.php`
+- OTA：`versions/v1.0.0-Beta1` + `files.manifest`
+- 与 ThemeEffects 路径/配置/缓存完全独立；文档提示勿双开音乐

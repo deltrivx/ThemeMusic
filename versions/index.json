@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.0-Beta1",
-  "latest_version": "v1.0.0-Beta1",
+  "default": "v1.0.0-Beta2",
+  "latest_version": "v1.0.0-Beta2",
   "versions": [
+    {
+      "id": "v1.0.0-Beta2",
+      "label": "Beta2：设置页 markdown 布局对齐 + 应用按钮解锁保存",
+      "channel": "beta",
+      "released_at": "2026-07-30",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.0-Beta1",
       "label": "Beta1：独立音乐插件首发（仪表盘卡片+全站chip；本地库/歌词/封面）",
