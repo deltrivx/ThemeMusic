@@ -1,61 +1,11 @@
-{
-  "schema": 1,
-  "version": "v1.0.0-Beta4",
-  "files": [
-    {
-      "path": "ThemeMusic.page",
-      "sha256": "ff46c3b0601f1db6676ffd0b36369df2e926427dce3a4ec6fe33dc9486f306da",
-      "size": 13694
-    },
-    {
-      "path": "ThemeMusic_Loader.page",
-      "sha256": "cd14925105732f0ac66669e11ed245001c945e5c2c04d8d001520469325c4213",
-      "size": 3780
-    },
-    {
-      "path": "theme-music.cfg",
-      "sha256": "59a12f72db41305c942a8b14a4832cd016cf3f0c1b7456e54a8eda99f516ac7c",
-      "size": 172
-    },
-    {
-      "path": "theme.music.cfg",
-      "sha256": "a8d50b0be1851e5c622a783c8fc31b0695bac37dbef70283093f5b074dad6e69",
-      "size": 18
-    },
-    {
-      "path": "ucwc-music-api.php",
-      "sha256": "fad1f2d684dbc743757c24a06feddb5572b9d4f1e7b73ca9069b3c206f539b0a",
-      "size": 62750
-    },
-    {
-      "path": "theme-music-save.php",
-      "sha256": "4067c03ecf20673507187173d35b56ee0ae87728de4b1e915c37eabfe23fd388",
-      "size": 6595
-    },
-    {
-      "path": "theme-music-update.php",
-      "sha256": "600c8f9e6b0dcf4d31062fa7896264823904d0dc93651c7f73e44e4139625efc",
-      "size": 43341
-    },
-    {
-      "path": "assets/ucwc-music.js",
-      "sha256": "e88494bc02bd91075a0c416762005e43180ac4ed817a499771a13b514a3d0f3c",
-      "size": 113548
-    },
-    {
-      "path": "assets/ucwc-music.css",
-      "sha256": "f633a597ecbd73a7f4ba4a288960d3d618a4808b463c1ea7e19480bd628a5d48",
-      "size": 26781
-    },
-    {
-      "path": "assets/theme-music-settings.css",
-      "sha256": "1d5cc257ce901628a73c11add8b2347d3e523af6cb00ad07bcf7041b4e41687a",
-      "size": 11557
-    },
-    {
-      "path": "assets/theme-music-settings.js",
-      "sha256": "bdd586bcf3a164686a8803316ca041f42c0dec94ec0e65b2d89c73d9abd54d12",
-      "size": 45497
-    }
-  ]
-}
+347f6deada58d0ad980404ddb5ceedbf3627cf215038d96f4930ae1a4b18a44a  assets/theme-music-settings.css  12026
+9a41d58cea735d9804bb8ea0d60780a6c389e1ad740c1ffcb74d96a316dea0f0  assets/theme-music-settings.js  46106
+f633a597ecbd73a7f4ba4a288960d3d618a4808b463c1ea7e19480bd628a5d48  assets/ucwc-music.css  26781
+ed5d98477f3f2f53eab2c946c0e85cf4aa61ccd09dfa3a41792c0fc7c8faf658  assets/ucwc-music.js  115321
+4067c03ecf20673507187173d35b56ee0ae87728de4b1e915c37eabfe23fd388  theme-music-save.php  6595
+600c8f9e6b0dcf4d31062fa7896264823904d0dc93651c7f73e44e4139625efc  theme-music-update.php  43341
+59a12f72db41305c942a8b14a4832cd016cf3f0c1b7456e54a8eda99f516ac7c  theme-music.cfg  172
+a8d50b0be1851e5c622a783c8fc31b0695bac37dbef70283093f5b074dad6e69  theme.music.cfg  18
+ff46c3b0601f1db6676ffd0b36369df2e926427dce3a4ec6fe33dc9486f306da  ThemeMusic.page  13694
+cd14925105732f0ac66669e11ed245001c945e5c2c04d8d001520469325c4213  ThemeMusic_Loader.page  3780
+fad1f2d684dbc743757c24a06feddb5572b9d4f1e7b73ca9069b3c206f539b0a  ucwc-music-api.php  62750

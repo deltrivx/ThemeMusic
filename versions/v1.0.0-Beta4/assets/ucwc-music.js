@@ -519,6 +519,21 @@
 
   function clearChipXY() {
     if (!chip) return;
+    // Prefer transform-space default (bottom-right) so fixed positioning
+    // is independent of Unraid/theme right/bottom quirks and IAB viewports.
+    try {
+      var w = chip.offsetWidth || 300;
+      var h = chip.offsetHeight || 56;
+      var vw = window.innerWidth || document.documentElement.clientWidth || 800;
+      var vh = window.innerHeight || document.documentElement.clientHeight || 600;
+      var x = Math.max(8, vw - w - 18);
+      var y = Math.max(8, vh - h - 18);
+      setChipXY(x, y);
+      // Do not persist default — only user-dragged positions are saved.
+      chip.removeAttribute("data-ucwc-x");
+      chip.removeAttribute("data-ucwc-y");
+      return;
+    } catch (eDef) {}
     try {
       chip.style.removeProperty("transform");
       chip.style.removeProperty("will-change");
@@ -541,7 +556,7 @@
     if (!chip) return;
     var pos = loadChipPos();
     if (!pos) {
-      // default: bottom-right via CSS; no transform
+      // default: bottom-right via transform (not CSS right/bottom alone)
       clearChipXY();
       return;
     }
@@ -775,16 +790,37 @@
       chip.style.setProperty("pointer-events", "auto", "important");
       chip.style.setProperty("width", "min(340px, calc(100vw - 24px))", "important");
       chip.style.setProperty("min-width", "min(260px, calc(100vw - 24px))", "important");
+      chip.style.setProperty("max-width", "min(340px, calc(100vw - 24px))", "important");
       chip.style.setProperty("min-height", "52px", "important");
+      chip.style.setProperty("height", "auto", "important");
       chip.style.setProperty("box-sizing", "border-box", "important");
       chip.style.setProperty("padding", "10px 12px", "important");
+      chip.style.setProperty("margin", "0", "important");
       chip.style.setProperty("border-radius", "16px", "important");
-      chip.style.setProperty("border", "1px solid rgba(0, 243, 255, 0.45)", "important");
-      chip.style.setProperty("background", "rgba(12, 16, 24, 0.94)", "important");
+      chip.style.setProperty("border", "1px solid rgba(0, 243, 255, 0.55)", "important");
+      chip.style.setProperty("background", "rgba(12, 16, 24, 0.96)", "important");
       chip.style.setProperty("color", "#eef6ff", "important");
-      chip.style.setProperty("box-shadow", "0 10px 32px rgba(0,0,0,0.5)", "important");
+      chip.style.setProperty("box-shadow", "0 10px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,243,255,0.12)", "important");
+      chip.style.setProperty("overflow", "visible", "important");
+      chip.style.setProperty("clip", "auto", "important");
+      chip.style.setProperty("clip-path", "none", "important");
+      chip.style.setProperty("filter", "none", "important");
+      chip.style.setProperty("mix-blend-mode", "normal", "important");
+      chip.style.setProperty("isolation", "isolate", "important");
+      chip.style.setProperty("contain", "none", "important");
+      chip.style.setProperty("inset", "auto", "important");
     } catch (eStyle) {}
     applyChipPos();
+    // Re-apply default/saved pos after layout so width/height are known.
+    try {
+      if (window.requestAnimationFrame) {
+        window.requestAnimationFrame(function () {
+          applyChipPos();
+        });
+      } else {
+        setTimeout(applyChipPos, 0);
+      }
+    } catch (ePos) {}
     updateChipUi();
     if (label && chipEls.lrc && !(audio && !audio.paused)) {
       // soft hint only when not already playing

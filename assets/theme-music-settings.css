@@ -239,7 +239,7 @@ div.title .tm-title-ver .tm-pill-btn {
  */
 form#theme-music-form,
 form[action*="ThemeMusic"] {
-  --tm-ctrl-w: 12.5rem;
+  --tm-ctrl-w: 16.25rem;
 }
 
 form#theme-music-form select,
@@ -252,8 +252,8 @@ form[action*="ThemeMusic"] select:where(:not(.unapi *)) {
   -moz-appearance: none !important;
   appearance: none !important;
   /* One shared control column (JS sets --tm-ctrl-w from longest row). */
-  width: var(--tm-ctrl-w, 12.5rem) !important;
-  min-width: var(--tm-ctrl-w, 12.5rem) !important;
+  width: var(--tm-ctrl-w, 16.25rem) !important;
+  min-width: var(--tm-ctrl-w, 16.25rem) !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
   background-color: rgba(0, 0, 0, 0.5) !important;
@@ -279,7 +279,7 @@ form[action*="ThemeMusic"] select::-ms-expand {
   align-items: center;
   flex: 0 0 auto !important;
   min-width: 0;
-  width: var(--tm-ctrl-w, 12.5rem) !important;
+  width: var(--tm-ctrl-w, 16.25rem) !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
   vertical-align: middle;
@@ -293,8 +293,8 @@ form#theme-music-form dd > .tm-path-field,
 form#theme-music-form dd > .ucwc-path-field,
 form[action*="ThemeMusic"] dd > .tm-path-field,
 form[action*="ThemeMusic"] dd > .ucwc-path-field {
-  width: var(--tm-ctrl-w, 12.5rem) !important;
-  max-width: min(100%, var(--tm-ctrl-w, 12.5rem)) !important;
+  width: var(--tm-ctrl-w, 16.25rem) !important;
+  max-width: min(100%, var(--tm-ctrl-w, 16.25rem)) !important;
 }
 
 .tm-path-field > .tm-local-path,
@@ -351,7 +351,7 @@ form[action*="ThemeMusic"] dd > .ucwc-path-field {
   align-items: center;
   gap: 10px;
   max-width: 420px;
-  width: var(--tm-ctrl-w, 12.5rem);
+  width: var(--tm-ctrl-w, 16.25rem);
   min-width: min(280px, 100%);
   box-sizing: border-box;
   vertical-align: middle;
@@ -375,7 +375,7 @@ ul.jqueryFileTree,
   z-index: 10050;
   max-height: 260px;
   overflow: auto;
-  width: var(--tm-ctrl-w, 12.5rem);
+  width: var(--tm-ctrl-w, 16.25rem);
   max-width: min(92vw, 100%);
   box-sizing: border-box;
   background: rgba(0, 0, 0, 0.5) !important;
@@ -446,7 +446,7 @@ ul.jqueryFileTree a:hover,
   form#theme-music-form .tm-vol {
     max-width: 100% !important;
     min-width: 0 !important;
-    width: min(100%, var(--tm-ctrl-w, 12.5rem)) !important;
+    width: min(100%, var(--tm-ctrl-w, 16.25rem)) !important;
   }
   div.title .tm-title-ver {
     justify-content: center;

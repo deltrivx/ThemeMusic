@@ -106,24 +106,37 @@
     }
     if (!probes.length) return;
 
-    // Measure natural content width (clear leftover inline width first).
-    w = 0;
+    // Measure natural content width. CSS still pins width via --tm-ctrl-w
+    // (e.g. 12.5rem≈200px), so temporarily force max-content for a true
+    // content measure — otherwise every row reports the same CSS width and
+    // long labels stay clipped / path field looks misaligned.
     for (i = 0; i < probes.length; i++) {
       try {
         if (probes[i].style) {
-          probes[i].style.removeProperty("width");
-          probes[i].style.removeProperty("min-width");
-          probes[i].style.removeProperty("max-width");
+          probes[i].style.setProperty("width", "max-content", "important");
+          probes[i].style.setProperty("min-width", "max-content", "important");
+          probes[i].style.setProperty("max-width", "none", "important");
         }
+      } catch (ePrep) {}
+    }
+    try {
+      void form.offsetWidth; // reflow before measure
+    } catch (eReflow) {}
+    w = 0;
+    for (i = 0; i < probes.length; i++) {
+      try {
         var r = probes[i].getBoundingClientRect();
         n = r && r.width ? r.width : probes[i].offsetWidth || 0;
+        // Also consider scrollWidth (option text may overflow visual box).
+        var sw = probes[i].scrollWidth || 0;
+        if (sw > n) n = sw;
         if (n > w) w = n;
       } catch (e0) {}
     }
-    if (!(w > 40)) return;
+    if (!(w > 40)) w = 260;
     w = Math.round(w);
     // Keep a usable column: fit long labels like「开启（浏览器可能拦截）」/「仅仪表盘播放（推荐）」.
-    if (w < 240) w = 240;
+    if (w < 260) w = 260;
     if (w > 420) w = 420;
     var px = w + "px";
     form.style.setProperty("--tm-ctrl-w", px);
