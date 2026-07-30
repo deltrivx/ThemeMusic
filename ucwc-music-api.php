@@ -1297,7 +1297,7 @@ if ($action === "list") {
     if ($root === "") {
         mjson([
             "ok" => false,
-            "error" => "本地音乐目录无效或不可访问。请在「主题特效 → 音乐」中设置如 /mnt/user/Music",
+            "error" => "本地音乐目录无效或不可访问。请在「Theme Music」设置中配置如 /mnt/user/Music",
             "tracks" => [],
             "dir" => $cfg["MUSIC_LOCAL_DIR"] ?? "",
         ], 400);
