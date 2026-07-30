@@ -2,42 +2,44 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "2026.07.30g">
-	<!ENTITY launch    "Settings/ThemeMusic">
-	<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
-	<!ENTITY flash     "/boot/config/plugins/&name;">
-	<!ENTITY github    "deltrivx/ThemeMusic">
-	<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
-	<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-	<!ENTITY ver       "v1.0.0-Beta7">
-	]>
-	<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
-	
-	<!-- CHANGES in CDATA: bare & in notes must not break simplexml_load_file -->
-	<CHANGES>
-	<![CDATA[
-## Theme Music
-		###2026.07.30g
-		- v1.0.0-Beta7: cross-page resume/mobile progress recovery; FLAC stall hard-reset
-		###2026.07.30f
-		- v1.0.0-Beta6: card dual-pane fixed widths; wider list/lyrics rail; tighter L-R gap
-		###2026.07.30e
-	- v1.0.0-Beta5: title 主题音乐 + title runtime switch; remove dual-install warn/music subtitle; uniform control column
-	###2026.07.30d
-	- v1.0.0-Beta4: uniform settings control column; sitewide chip vs ThemeEffects cfg isolation
-	###2026.07.30c
-	- v1.0.0-Beta3: content-sized selects, fileTree path align, independent update UI
-	- remove save tip under title; theme-music-update.php + settings.js
-	###2026.07.30b
-	- v1.0.0-Beta2: settings page Unraid markdown form (dt/dd) aligned with ThemeEffects
-	- Apply button unlock on form change (BodyInlineJS + class=lock)
-	- theme-music-settings.css path-field widths; install.sh OTA includes settings CSS
-	###2026.07.30a
-	- v1.0.0-Beta1: standalone Unraid music plugin (dashboard card + sitewide chip)
-	- Local library (mp3/flac/m4a…), LRC lyrics, cover cache, cross-page resume (best-effort)
-	- Independent of ThemeEffects; do not enable music on both plugins at once
-	]]>
-	</CHANGES>
+<!ENTITY version   "2026.07.30h">
+		<!ENTITY launch    "Settings/ThemeMusic">
+		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
+		<!ENTITY flash     "/boot/config/plugins/&name;">
+		<!ENTITY github    "deltrivx/ThemeMusic">
+		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
+		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
+		<!ENTITY ver       "v1.0.0-Beta8">
+		]>
+		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
+		
+		<!-- CHANGES in CDATA: bare & in notes must not break simplexml_load_file -->
+		<CHANGES>
+		<![CDATA[
+		## Theme Music
+			###2026.07.30h
+			- v1.0.0-Beta8: run mode card/chip/both; remove play-range; SERVICE master switch
+			###2026.07.30g
+			- v1.0.0-Beta7: cross-page resume/mobile progress recovery; FLAC stall hard-reset
+			###2026.07.30f
+			- v1.0.0-Beta6: card dual-pane fixed widths; wider list/lyrics rail; tighter L-R gap
+			###2026.07.30e
+		- v1.0.0-Beta5: title 主题音乐 + title runtime switch; remove dual-install warn/music subtitle; uniform control column
+		###2026.07.30d
+		- v1.0.0-Beta4: uniform settings control column; sitewide chip vs ThemeEffects cfg isolation
+		###2026.07.30c
+		- v1.0.0-Beta3: content-sized selects, fileTree path align, independent update UI
+		- remove save tip under title; theme-music-update.php + settings.js
+		###2026.07.30b
+		- v1.0.0-Beta2: settings page Unraid markdown form (dt/dd) aligned with ThemeEffects
+		- Apply button unlock on form change (BodyInlineJS + class=lock)
+		- theme-music-settings.css path-field widths; install.sh OTA includes settings CSS
+		###2026.07.30a
+		- v1.0.0-Beta1: standalone Unraid music plugin (dashboard card + sitewide chip)
+		- Local library (mp3/flac/m4a…), LRC lyrics, cover cache, cross-page resume (best-effort)
+		- Independent of ThemeEffects; do not enable music on both plugins at once
+		]]>
+		</CHANGES>
 
 <!-- Prepare dirs -->
 <FILE Run="/bin/bash">
@@ -53,28 +55,26 @@ exit 0
 <INLINE>
 <![CDATA[
 **主题音乐（Theme Music）**
-			## v1.0.0-Beta7 - 2026-07-30
-			
-			### 概述
-			
-			**主题音乐**独立插件。从 ThemeEffects 抽取音乐组件，以 `theme.music` 发布；路径、配置、缓存与主题特效完全分离。
-			
-			### Beta7 变更
-			
-			- 跨页/移动端：卡片进度不再卡 0:00；DOM 脱节自动重建
-			- FLAC/SMB 假播放卡死时硬重置恢复
-			
-			### Beta6 变更
-			
-			- 仪表盘卡片：左右栏固定宽度；曲目/歌词区加宽并向左靠拢（缩小间隔）
-			- 长曲名/歌词跑马灯不再拉宽整卡
-			
-			### Beta5 变更
-			
-			- 标题「主题音乐」；运行开关置于标题后（仿主题特效）
-			- 移除双装提示与「音乐」子标题
-			- 设置页 select/路径统一列宽
-		]]>
+				## v1.0.0-Beta8 - 2026-07-30
+				
+				### 概述
+				
+				**主题音乐**独立插件。从 ThemeEffects 抽取音乐组件，以 `theme.music` 发布；路径、配置、缓存与主题特效完全分离。
+				
+				### Beta8 变更
+				
+				- 运行模式三选项：音乐卡片（仅仪表盘）/ 音乐胶囊（全站）/ 卡片+胶囊（全站）
+				- 取消「播放范围」；标题后总开关关闭注入
+				
+				### Beta7 变更
+				
+				- 跨页/移动端：卡片进度不再卡 0:00；DOM 脱节自动重建
+				- FLAC/SMB 假播放卡死时硬重置恢复
+				
+				### Beta6 变更
+				
+				- 仪表盘卡片：左右栏固定宽度；曲目/歌词区加宽并向左靠拢
+			]]>
 </INLINE>
 </FILE>
 

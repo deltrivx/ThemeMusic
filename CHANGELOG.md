@@ -1,5 +1,19 @@
 # Theme Music Changelog
 
+## v1.0.0-Beta8 — 2026-07-30 (`2026.07.30h`)
+
+### 设置
+- 「音乐组件」改为 **运行模式**：音乐卡片（仅仪表盘）/ 音乐胶囊（全站）/ 卡片+胶囊（全站）
+- 取消「播放范围」；关闭播放器用标题后总开关（`SERVICE`）
+- 配置键 `MUSIC_RUN_MODE=card|chip|both`，并派生 `MUSIC_ENABLE` / `MUSIC_DASH_ONLY` / `MUSIC_UI`
+- 旧「全站」(`DASH_ONLY=no`) 迁移为 `both`；无 `RUN_MODE` 时按 ENABLE+DASH_ONLY 推导
+
+### 运行时
+- `chip` 模式仪表盘不挂卡片，仅胶囊；`card`/`both` 卡片逻辑不变
+- Loader / API 注入 `run_mode`；`shouldShowCard` 增加 `wantCardUi()`
+
+---
+
 ## v1.0.0-Beta7 — 2026-07-30 (`2026.07.30g`)
 
 ### 跨页续播 / 移动端

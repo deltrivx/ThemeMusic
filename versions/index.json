@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.0-Beta7",
-  "latest_version": "v1.0.0-Beta7",
+  "default": "v1.0.0-Beta8",
+  "latest_version": "v1.0.0-Beta8",
   "versions": [
+    {
+      "id": "v1.0.0-Beta8",
+      "label": "Beta8：运行模式三选项（卡片/胶囊/卡片+胶囊）；取消播放范围",
+      "channel": "beta",
+      "released_at": "2026-07-30",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.0-Beta7",
       "label": "Beta7：跨页续播/移动端进度恢复；FLAC seek 卡死自动重建",
