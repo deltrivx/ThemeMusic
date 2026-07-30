@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.0",
-  "latest_version": "v1.0.0",
+  "default": "v1.0.1",
+  "latest_version": "v1.0.1",
   "versions": [
+    {
+      "id": "v1.0.1",
+      "label": "正式版 v1.0.1：双栏防重叠；歌词仅当前行滑动；仪表盘位置持久；移动端按钮居中",
+      "channel": "stable",
+      "released_at": "2026-07-30",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.0",
       "label": "正式版 v1.0.0：音乐音源置顶；PC/手机分设；运行模式；划掉标签暂停",
