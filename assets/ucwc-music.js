@@ -780,27 +780,32 @@
       return;
     }
     // Inline critical geometry so theme/Unraid CSS cannot zero-size or un-fix the chip.
+    // z-index above ThemeEffects mouse canvas (2147483000) so chip stays on top.
     try {
       chip.style.setProperty("position", "fixed", "important");
-      chip.style.setProperty("z-index", "2147483000", "important");
+      chip.style.setProperty("z-index", "2147483646", "important");
       chip.style.setProperty("display", "flex", "important");
       chip.style.setProperty("flex-direction", "column", "important");
       chip.style.setProperty("visibility", "visible", "important");
       chip.style.setProperty("opacity", "1", "important");
       chip.style.setProperty("pointer-events", "auto", "important");
       chip.style.setProperty("width", "min(340px, calc(100vw - 24px))", "important");
-      chip.style.setProperty("min-width", "min(260px, calc(100vw - 24px))", "important");
+      chip.style.setProperty("min-width", "min(280px, calc(100vw - 24px))", "important");
       chip.style.setProperty("max-width", "min(340px, calc(100vw - 24px))", "important");
-      chip.style.setProperty("min-height", "52px", "important");
+      chip.style.setProperty("min-height", "56px", "important");
       chip.style.setProperty("height", "auto", "important");
       chip.style.setProperty("box-sizing", "border-box", "important");
       chip.style.setProperty("padding", "10px 12px", "important");
       chip.style.setProperty("margin", "0", "important");
       chip.style.setProperty("border-radius", "16px", "important");
-      chip.style.setProperty("border", "1px solid rgba(0, 243, 255, 0.55)", "important");
-      chip.style.setProperty("background", "rgba(12, 16, 24, 0.96)", "important");
+      chip.style.setProperty("border", "2px solid rgba(0, 243, 255, 0.85)", "important");
+      chip.style.setProperty("background", "rgba(8, 14, 28, 0.98)", "important");
       chip.style.setProperty("color", "#eef6ff", "important");
-      chip.style.setProperty("box-shadow", "0 10px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,243,255,0.12)", "important");
+      chip.style.setProperty(
+        "box-shadow",
+        "0 12px 36px rgba(0,0,0,0.65), 0 0 0 1px rgba(0,243,255,0.25), 0 0 24px rgba(0,243,255,0.35)",
+        "important"
+      );
       chip.style.setProperty("overflow", "visible", "important");
       chip.style.setProperty("clip", "auto", "important");
       chip.style.setProperty("clip-path", "none", "important");
@@ -809,17 +814,41 @@
       chip.style.setProperty("isolation", "isolate", "important");
       chip.style.setProperty("contain", "none", "important");
       chip.style.setProperty("inset", "auto", "important");
+      chip.style.setProperty("backdrop-filter", "blur(12px)", "important");
+      chip.style.setProperty("-webkit-backdrop-filter", "blur(12px)", "important");
     } catch (eStyle) {}
+    // Keep chip as last child of body so equal z-index overlays (TE mouse) cannot cover it.
+    try {
+      var hostNow = document.body || document.documentElement;
+      if (hostNow && chip.parentNode === hostNow) hostNow.appendChild(chip);
+    } catch (eRe) {}
     applyChipPos();
     // Re-apply default/saved pos after layout so width/height are known.
     try {
       if (window.requestAnimationFrame) {
         window.requestAnimationFrame(function () {
+          try {
+            var h2 = document.body || document.documentElement;
+            if (h2 && chip && chip.parentNode === h2) h2.appendChild(chip);
+          } catch (eR2) {}
           applyChipPos();
         });
       } else {
-        setTimeout(applyChipPos, 0);
+        setTimeout(function () {
+          applyChipPos();
+        }, 0);
       }
+      // Late reassert after ThemeEffects loaders/canvas mount.
+      setTimeout(function () {
+        if (!chip || !chip.parentNode) return;
+        try {
+          var h3 = document.body || document.documentElement;
+          if (h3) h3.appendChild(chip);
+          chip.style.setProperty("z-index", "2147483646", "important");
+        } catch (eR3) {}
+        applyChipPos();
+        updateChipUi();
+      }, 400);
     } catch (ePos) {}
     updateChipUi();
     if (label && chipEls.lrc && !(audio && !audio.paused)) {

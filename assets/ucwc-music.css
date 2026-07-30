@@ -728,7 +728,8 @@ body.ucwc-reduce-motion #ucwc-music-card .ucwc-music-lyrics-scroll {
 #ucwc-music-resume-chip,
 .ucwc-music-resume-chip {
   position: fixed !important;
-  z-index: 2147483000 !important;
+  /* Above ThemeEffects mouse canvas (2147483000) */
+  z-index: 2147483646 !important;
   left: auto !important;
   top: auto !important;
   right: 18px !important;
@@ -744,14 +745,17 @@ body.ucwc-reduce-motion #ucwc-music-card .ucwc-music-lyrics-scroll {
   width: min(340px, calc(100vw - 24px)) !important;
   min-width: min(280px, calc(100vw - 24px)) !important;
   max-width: min(340px, calc(100vw - 24px)) !important;
-  min-height: 52px !important;
+  min-height: 56px !important;
   padding: 10px 12px !important;
   margin: 0 !important;
   border-radius: 16px !important;
-  border: 1px solid rgba(0, 243, 255, 0.32) !important;
-  background: rgba(12, 16, 24, 0.92) !important;
+  border: 2px solid rgba(0, 243, 255, 0.85) !important;
+  background: rgba(8, 14, 28, 0.98) !important;
   color: #eef6ff !important;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.48) !important;
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(0, 243, 255, 0.25),
+    0 0 24px rgba(0, 243, 255, 0.35) !important;
   cursor: grab !important;
   font-size: 12px !important;
   line-height: 1.3 !important;
@@ -759,8 +763,8 @@ body.ucwc-reduce-motion #ucwc-music-card .ucwc-music-lyrics-scroll {
   opacity: 1 !important;
   visibility: visible !important;
   pointer-events: auto !important;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   user-select: none !important;
   touch-action: none !important;
   -ms-touch-action: none !important;
@@ -768,14 +772,17 @@ body.ucwc-reduce-motion #ucwc-music-card .ucwc-music-lyrics-scroll {
 #ucwc-music-resume-chip.ucwc-music-chip-dragging,
 .ucwc-music-resume-chip.ucwc-music-chip-dragging {
   cursor: grabbing !important;
-  opacity: 0.96;
+  opacity: 0.98;
   transition: none !important;
-  z-index: 100000 !important;
+  z-index: 2147483646 !important;
 }
 #ucwc-music-resume-chip:hover,
 .ucwc-music-resume-chip:hover {
-  border-color: rgba(0, 243, 255, 0.5) !important;
-  background: rgba(14, 20, 32, 0.96) !important;
+  border-color: rgba(0, 243, 255, 1) !important;
+  background: rgba(10, 18, 34, 0.99) !important;
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.7),
+    0 0 28px rgba(0, 243, 255, 0.45) !important;
 }
 .ucwc-music-chip-row {
   display: flex !important;
