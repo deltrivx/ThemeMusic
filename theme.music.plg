@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "2026.07.30e">
+<!ENTITY version   "2026.07.30f">
 	<!ENTITY launch    "Settings/ThemeMusic">
 	<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 	<!ENTITY flash     "/boot/config/plugins/&name;">
 	<!ENTITY github    "deltrivx/ThemeMusic">
 	<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 	<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-	<!ENTITY ver       "v1.0.0-Beta5">
+	<!ENTITY ver       "v1.0.0-Beta6">
 	]>
 	<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 	
@@ -17,6 +17,8 @@
 	<CHANGES>
 	<![CDATA[
 	## Theme Music
+	###2026.07.30f
+	- v1.0.0-Beta6: card dual-pane fixed widths; wider list/lyrics rail; tighter L-R gap
 	###2026.07.30e
 	- v1.0.0-Beta5: title 主题音乐 + title runtime switch; remove dual-install warn/music subtitle; uniform control column
 	###2026.07.30d
@@ -49,23 +51,28 @@ exit 0
 <INLINE>
 <![CDATA[
 **主题音乐（Theme Music）**
-	## v1.0.0-Beta5 - 2026-07-30
-	
-	### 概述
-	
-	**主题音乐**独立插件。从 ThemeEffects 抽取音乐组件，以 `theme.music` 发布；路径、配置、缓存与主题特效完全分离。
-	
-	### Beta5 变更
-	
-	- 标题「主题音乐」；运行开关置于标题后（仿主题特效）
-	- 移除双装提示与「音乐」子标题
-	- 设置页 select/路径统一列宽
-	
-	### Beta4 变更
-	
-	- 设置页控件统一列宽（select/路径/音量）
-	- 全站播放：`__UCWC_MUSIC__` 独立配置；chip 可见性修复
-]]>
+		## v1.0.0-Beta6 - 2026-07-30
+		
+		### 概述
+		
+		**主题音乐**独立插件。从 ThemeEffects 抽取音乐组件，以 `theme.music` 发布；路径、配置、缓存与主题特效完全分离。
+		
+		### Beta6 变更
+		
+		- 仪表盘卡片：左右栏固定宽度；曲目/歌词区加宽并向左靠拢（缩小间隔）
+		- 长曲名/歌词跑马灯不再拉宽整卡
+		
+		### Beta5 变更
+		
+		- 标题「主题音乐」；运行开关置于标题后（仿主题特效）
+		- 移除双装提示与「音乐」子标题
+		- 设置页 select/路径统一列宽
+		
+		### Beta4 变更
+		
+		- 设置页控件统一列宽（select/路径/音量）
+		- 全站播放：`__UCWC_MUSIC__` 独立配置；chip 可见性修复
+	]]>
 </INLINE>
 </FILE>
 

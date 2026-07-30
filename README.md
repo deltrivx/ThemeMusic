@@ -5,9 +5,9 @@
 从 [ThemeEffects](https://github.com/deltrivx/ThemeEffects) 音乐组件拆出，路径 / 配置 / 缓存完全独立。  
 自 **ThemeEffects v2.6.0** 起主题侧已清除全部音乐代码；音乐仅由本插件提供。
 
-## 功能（v1.0.0-Beta5）
+## 功能（v1.0.0-Beta6）
 
-- 仪表盘音乐卡片（曲目列表 / 歌词 / 封面）
+- 仪表盘音乐卡片（曲目列表 / 歌词 / 封面；左右固定宽，曲目区加宽靠拢）
 - 可选全站 mini chip（上一曲 / 播放 / 下一曲 + 当前歌词）
 - 本地目录音源（`/mnt/…`，mp3 / flac / m4a / aac / ogg / opus / wav / wma）
 - 同目录 `.lrc` 或自动下载歌词；封面缓存
@@ -22,7 +22,7 @@
 https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/theme.music.plg
 ```
 
-默认安装包：**v1.0.0-Beta5**（beta）。
+默认安装包：**v1.0.0-Beta6**（beta）。
 
 设置入口：**设置 → 用户偏好 → 主题音乐**
 
