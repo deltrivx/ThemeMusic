@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "2026.07.30e">
+<!ENTITY version   "2026.07.31a">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
@@ -17,6 +17,8 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+			###2026.07.31a
+			- boot: restore runtime from flash before OTA (survive reboot when GitHub times out)
 			###2026.07.30e
 			- v1.0.4: reject mismatched sidecar LRC; stricter lrclib/netease match; quarantine bad lyrics
 			###2026.07.30d
@@ -85,32 +87,79 @@ exit 0
 </INLINE>
 </FILE>
 
-<!-- Download install helper then run OTA install for default ver -->
+<!-- Boot/install: restore runtime from flash first (offline-safe), then OTA if network works -->
 <FILE Name="/tmp/theme-music-install.sh" Run="/bin/bash">
 <INLINE>
 #!/bin/bash
-set -e
+# Never hard-fail boot when flash already has a package (reboot offline / GitHub timeout).
+set +e
+export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
+FLASH="&flash;"
+PLUG="&plugdir;"
+mkdir -p "$FLASH/assets" "$PLUG/assets"
+
+restore_from_flash() {
+  [ -f "$FLASH/ThemeMusic.page" ] || return 1
+  [ -f "$FLASH/ucwc-music-api.php" ] || return 1
+  echo "Theme Music: restoring runtime from flash…"
+  for f in ThemeMusic.page ThemeMusic_Loader.page ucwc-music-api.php theme-music-save.php theme-music-update.php; do
+    [ -f "$FLASH/$f" ] && install -m 0644 "$FLASH/$f" "$PLUG/$f"
+  done
+  for f in ucwc-music.js ucwc-music.css theme-music-settings.js theme-music-settings.css; do
+    [ -f "$FLASH/assets/$f" ] && install -m 0644 "$FLASH/assets/$f" "$PLUG/assets/$f"
+  done
+  return 0
+}
+
+if restore_from_flash; then
+  echo "Theme Music: flash restore OK"
+else
+  echo "Theme Music: no complete flash package yet; will need network install"
+fi
+
 URL="&installSH;"
 OUT="/tmp/theme-music-install-run.sh"
-echo "Theme Music: fetching install.sh…"
-if ! curl -4 -fsSL --http1.1 --connect-timeout 20 --retry 3 -o "$OUT" "$URL"; then
-  echo "Theme Music: primary raw failed, trying mirrors…"
-  ok=0
+echo "Theme Music: fetching install.sh for OTA &ver;…"
+ok=0
+if curl -4 -fsSL --http1.1 --connect-timeout 12 --max-time 45 --retry 2 -o "$OUT" "$URL"; then
+  ok=1
+else
   for m in \
     "https://cdn.jsdelivr.net/gh/&github;@main/scripts/install.sh" \
     "https://fastly.jsdelivr.net/gh/&github;@main/scripts/install.sh" \
     "https://raw.gitmirror.com/&github;/main/scripts/install.sh" \
     "https://ghfast.top/https://raw.githubusercontent.com/&github;/main/scripts/install.sh"
   do
-    if curl -4 -fsSL --http1.1 --connect-timeout 20 --retry 2 -o "$OUT" "$m"; then ok=1; break; fi
+    if curl -4 -fsSL --http1.1 --connect-timeout 12 --max-time 45 --retry 1 -o "$OUT" "$m"; then ok=1; break; fi
   done
-  [ "$ok" = "1" ] || { echo "Theme Music: cannot download install.sh"; exit 1; }
 fi
-chmod +x "$OUT"
-export UCWC_PLUGIN_INSTALL=1
-# bash -c keeps progress on stdout for plugin manager
-bash -c "sh '$OUT' install '&ver;' ota"
-exit 0
+
+if [ "$ok" = "1" ] && [ -s "$OUT" ]; then
+  chmod +x "$OUT"
+  export UCWC_PLUGIN_INSTALL=1
+  # Prefer line-buffered progress for plugin manager
+  if command -v stdbuf >/dev/null 2>&amp;1; then
+    stdbuf -oL -eL sh "$OUT" install "&ver;" ota
+  else
+    sh "$OUT" install "&ver;" ota
+  fi
+  rc=$?
+  if [ "$rc" -eq 0 ]; then
+    echo "Theme Music: OTA install OK (&ver;)"
+    exit 0
+  fi
+  echo "Theme Music: OTA returned $rc — falling back to flash restore"
+  restore_from_flash
+else
+  echo "Theme Music: cannot download install.sh (network)"
+fi
+
+if [ -f "$PLUG/ThemeMusic.page" ] && [ -f "$PLUG/ucwc-music-api.php" ]; then
+  echo "Theme Music: runtime present after offline/OTA path — boot OK"
+  exit 0
+fi
+echo "Theme Music: ERROR — no runtime files (flash empty and network failed)" >&amp;2
+exit 1
 </INLINE>
 </FILE>
 
