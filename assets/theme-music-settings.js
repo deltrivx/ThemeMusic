@@ -82,16 +82,23 @@
     enableApply(true);
   }
 
+  /**
+   * Match ThemeEffects alignPathFieldWidths:
+   * - selects stay content-sized (do NOT force a shared fixed width)
+   * - measure natural select width → --tm-ctrl-w
+   * - only path field (and volume bar) use that pixel width
+   * - browse button stays absolutely inside the path field
+   */
   function alignCtrlWidth() {
     if (!form) return;
-    // Prefer longest option rows so the whole music block shares one column width.
     var names = [
       "MUSIC_DASH_ONLY",
       "MUSIC_AUTOPLAY",
       "MUSIC_SOURCE",
+      "MUSIC_UI",
+      "MUSIC_ENABLE",
       "MUSIC_REPEAT",
       "SERVICE",
-      "MUSIC_ENABLE",
       "MUSIC_SHUFFLE",
     ];
     var probes = [];
@@ -106,37 +113,43 @@
     }
     if (!probes.length) return;
 
-    // Measure natural content width. CSS still pins width via --tm-ctrl-w
-    // (e.g. 12.5rem≈200px), so temporarily force max-content for a true
-    // content measure — otherwise every row reports the same CSS width and
-    // long labels stay clipped / path field looks misaligned.
+    // Undo any leftover fixed-width inline from older Beta4 builds; keep content size.
     for (i = 0; i < probes.length; i++) {
       try {
         if (probes[i].style) {
-          probes[i].style.setProperty("width", "max-content", "important");
-          probes[i].style.setProperty("min-width", "max-content", "important");
-          probes[i].style.setProperty("max-width", "none", "important");
+          probes[i].style.removeProperty("width");
+          probes[i].style.removeProperty("min-width");
+          probes[i].style.removeProperty("max-width");
         }
       } catch (ePrep) {}
     }
+    // Also clear fixed width on ALL form selects (previous uniform-column pass).
     try {
-      void form.offsetWidth; // reflow before measure
+      var allSel = form.querySelectorAll("dd > select, select");
+      for (i = 0; i < allSel.length; i++) {
+        if (allSel[i].style) {
+          allSel[i].style.removeProperty("width");
+          allSel[i].style.removeProperty("min-width");
+          allSel[i].style.removeProperty("max-width");
+        }
+      }
+    } catch (eClr) {}
+
+    try {
+      void form.offsetWidth;
     } catch (eReflow) {}
+
     w = 0;
     for (i = 0; i < probes.length; i++) {
       try {
         var r = probes[i].getBoundingClientRect();
         n = r && r.width ? r.width : probes[i].offsetWidth || 0;
-        // Also consider scrollWidth (option text may overflow visual box).
-        var sw = probes[i].scrollWidth || 0;
-        if (sw > n) n = sw;
         if (n > w) w = n;
       } catch (e0) {}
     }
-    if (!(w > 40)) w = 260;
+    if (!(w > 40)) return;
     w = Math.round(w);
-    // Keep a usable column: fit long labels like「开启（浏览器可能拦截）」/「仅仪表盘播放（推荐）」.
-    if (w < 260) w = 260;
+    if (w < 100) w = 100;
     if (w > 420) w = 420;
     var px = w + "px";
     form.style.setProperty("--tm-ctrl-w", px);
@@ -144,33 +157,54 @@
       document.documentElement.style.setProperty("--tm-ctrl-w", px);
     } catch (e2) {}
 
-    // Uniform select column (fixes 长短不一 / 选择器错位).
-    var sels = form.querySelectorAll("dd > select, select");
-    for (i = 0; i < sels.length; i++) {
-      sels[i].style.setProperty("width", px, "important");
-      sels[i].style.setProperty("min-width", px, "important");
-      sels[i].style.setProperty("max-width", "100%", "important");
-      sels[i].style.setProperty("box-sizing", "border-box", "important");
-    }
-
     var fields = form.querySelectorAll(".tm-path-field, .ucwc-path-field");
     for (i = 0; i < fields.length; i++) {
+      fields[i].style.setProperty("position", "relative", "important");
+      fields[i].style.setProperty("display", "inline-flex", "important");
+      fields[i].style.setProperty("align-items", "center", "important");
       fields[i].style.setProperty("width", px, "important");
-      fields[i].style.setProperty("min-width", "0", "important");
       fields[i].style.setProperty("max-width", "100%", "important");
       fields[i].style.setProperty("box-sizing", "border-box", "important");
+      fields[i].style.setProperty("min-width", "0", "important");
       var inp = fields[i].querySelector(".tm-local-path, .ucwc-local-path");
       if (inp) {
+        inp.style.setProperty("flex", "1 1 auto", "important");
         inp.style.setProperty("width", "100%", "important");
         inp.style.setProperty("max-width", "none", "important");
+        inp.style.setProperty("min-width", "0", "important");
+        inp.style.setProperty("padding-right", "36px", "important");
         inp.style.setProperty("box-sizing", "border-box", "important");
       }
+      // Pin browse icon inside the field (Unraid button CSS can knock it into flow).
+      var btn = fields[i].querySelector(".tm-path-browse, .ucwc-path-browse");
+      if (btn) {
+        btn.style.setProperty("position", "absolute", "important");
+        btn.style.setProperty("right", "2px", "important");
+        btn.style.setProperty("top", "50%", "important");
+        btn.style.setProperty("transform", "translateY(-50%)", "important");
+        btn.style.setProperty("left", "auto", "important");
+        btn.style.setProperty("bottom", "auto", "important");
+        btn.style.setProperty("z-index", "3", "important");
+        btn.style.setProperty("display", "inline-flex", "important");
+        btn.style.setProperty("align-items", "center", "important");
+        btn.style.setProperty("justify-content", "center", "important");
+        btn.style.setProperty("width", "30px", "important");
+        btn.style.setProperty("height", "28px", "important");
+        btn.style.setProperty("margin", "0", "important");
+        btn.style.setProperty("padding", "0", "important");
+        btn.style.setProperty("border", "none", "important");
+        btn.style.setProperty("background", "transparent", "important");
+        btn.style.setProperty("box-shadow", "none", "important");
+        btn.style.setProperty("flex", "0 0 auto", "important");
+        btn.style.setProperty("float", "none", "important");
+      }
     }
+    // Volume: ThemeEffects uses width:100% of a flexible row — keep readable bar, not forced to select px.
     var vol = form.querySelector(".tm-vol");
     if (vol) {
-      vol.style.setProperty("width", px, "important");
-      vol.style.setProperty("max-width", "100%", "important");
-      vol.style.setProperty("box-sizing", "border-box", "important");
+      vol.style.setProperty("max-width", "420px", "important");
+      vol.style.setProperty("width", "100%", "important");
+      vol.style.removeProperty("min-width");
     }
   }
 

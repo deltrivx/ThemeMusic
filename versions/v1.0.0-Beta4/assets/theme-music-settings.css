@@ -233,13 +233,16 @@ div.title .tm-title-ver .tm-pill-btn {
 }
 
 /*
- * Control column: fight Unraid default-base.css
- *   select:where(:not(.unapi *)) { width: 100%; }
- * :where() has 0 specificity, but still use !important + max-content.
+ * Match ThemeEffects music controls:
+ * - selects: content-sized (max-content), NOT a forced shared column
+ * - path field width tracks measured select via --tm-ctrl-w (JS)
+ * - browse icon absolutely inside the path input (not outside / next to it)
+ * Fight Unraid default-base.css: select:where(:not(.unapi *)) { width: 100%; }
  */
 form#theme-music-form,
 form[action*="ThemeMusic"] {
-  --tm-ctrl-w: 16.25rem;
+  /* fallback until JS measures (~ content width of a typical music select) */
+  --tm-ctrl-w: 12.5rem;
 }
 
 form#theme-music-form select,
@@ -251,9 +254,9 @@ form[action*="ThemeMusic"] select:where(:not(.unapi *)) {
   -webkit-appearance: none !important;
   -moz-appearance: none !important;
   appearance: none !important;
-  /* One shared control column (JS sets --tm-ctrl-w from longest row). */
-  width: var(--tm-ctrl-w, 16.25rem) !important;
-  min-width: var(--tm-ctrl-w, 16.25rem) !important;
+  /* ThemeEffects: keep selects content-sized; do not pin to --tm-ctrl-w */
+  width: max-content !important;
+  min-width: max-content !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
   background-color: rgba(0, 0, 0, 0.5) !important;
@@ -271,18 +274,19 @@ form[action*="ThemeMusic"] select::-ms-expand {
   display: none;
 }
 
-/* Path field: same outer width as content-sized select via --tm-ctrl-w */
+/* Path field: outer width follows neighboring content-sized select */
 .tm-path-field,
 .ucwc-path-field {
   position: relative !important;
   display: inline-flex !important;
-  align-items: center;
+  align-items: center !important;
   flex: 0 0 auto !important;
-  min-width: 0;
-  width: var(--tm-ctrl-w, 16.25rem) !important;
+  min-width: 0 !important;
+  width: var(--tm-ctrl-w, 12.5rem) !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
   vertical-align: middle;
+  overflow: visible !important;
 }
 
 form#theme-music-form .tm-path-field,
@@ -293,52 +297,74 @@ form#theme-music-form dd > .tm-path-field,
 form#theme-music-form dd > .ucwc-path-field,
 form[action*="ThemeMusic"] dd > .tm-path-field,
 form[action*="ThemeMusic"] dd > .ucwc-path-field {
-  width: var(--tm-ctrl-w, 16.25rem) !important;
-  max-width: min(100%, var(--tm-ctrl-w, 16.25rem)) !important;
+  width: var(--tm-ctrl-w, 12.5rem) !important;
+  max-width: min(100%, var(--tm-ctrl-w, 12.5rem)) !important;
 }
 
 .tm-path-field > .tm-local-path,
 .tm-path-field > .ucwc-local-path,
 .ucwc-path-field > .tm-local-path,
-.ucwc-path-field > .ucwc-local-path {
+.ucwc-path-field > .ucwc-local-path,
+form#theme-music-form .tm-path-field > input,
+form[action*="ThemeMusic"] .tm-path-field > input {
   flex: 1 1 auto !important;
   width: 100% !important;
   max-width: none !important;
   min-width: 0 !important;
   padding-right: 36px !important;
   box-sizing: border-box !important;
+  margin: 0 !important;
 }
 
-.tm-path-browse,
-.ucwc-path-browse {
-  position: absolute;
-  right: 2px;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 28px;
-  margin: 0;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: rgba(200, 220, 255, 0.88);
-  cursor: pointer;
-  line-height: 1;
-  font-size: 14px;
+/* Browse button MUST sit inside the path input (ThemeEffects pattern) */
+.tm-path-field > .tm-path-browse,
+.tm-path-field > .ucwc-path-browse,
+.ucwc-path-field > .tm-path-browse,
+.ucwc-path-field > .ucwc-path-browse,
+form#theme-music-form .tm-path-browse,
+form[action*="ThemeMusic"] .tm-path-browse,
+form#theme-music-form button.tm-path-browse,
+form[action*="ThemeMusic"] button.ucwc-path-browse {
+  position: absolute !important;
+  right: 2px !important;
+  top: 50% !important;
+  left: auto !important;
+  bottom: auto !important;
+  transform: translateY(-50%) !important;
+  z-index: 3 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 30px !important;
+  height: 28px !important;
+  min-width: 30px !important;
+  min-height: 28px !important;
+  max-width: 30px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: rgba(200, 220, 255, 0.88) !important;
+  cursor: pointer !important;
+  line-height: 1 !important;
+  font-size: 14px !important;
+  float: none !important;
+  flex: 0 0 auto !important;
+  vertical-align: middle !important;
 }
 
-.tm-path-browse:hover,
-.tm-path-browse:focus,
-.ucwc-path-browse:hover,
-.ucwc-path-browse:focus {
-  color: #7dd3fc;
-  background: rgba(125, 211, 252, 0.12);
-  outline: none;
+.tm-path-field > .tm-path-browse:hover,
+.tm-path-field > .tm-path-browse:focus,
+.tm-path-field > .ucwc-path-browse:hover,
+.tm-path-field > .ucwc-path-browse:focus,
+.ucwc-path-field > .tm-path-browse:hover,
+.ucwc-path-field > .ucwc-path-browse:focus {
+  color: #7dd3fc !important;
+  background: rgba(125, 211, 252, 0.12) !important;
+  outline: none !important;
 }
 
 .tm-path-browse .fa,
@@ -346,12 +372,13 @@ form[action*="ThemeMusic"] dd > .ucwc-path-field {
   pointer-events: none;
 }
 
+/* Volume row: ThemeEffects uses flexible full-ish width, not select column */
 .tm-vol {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  max-width: 420px;
-  width: var(--tm-ctrl-w, 16.25rem);
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  max-width: 420px !important;
+  width: 100% !important;
   min-width: min(280px, 100%);
   box-sizing: border-box;
   vertical-align: middle;
@@ -359,7 +386,7 @@ form[action*="ThemeMusic"] dd > .ucwc-path-field {
 
 .tm-vol input[type="range"] {
   flex: 1;
-  min-width: 120px;
+  min-width: 160px;
 }
 
 /* fileTree under path — match ThemeEffects absolute positioning */
@@ -375,7 +402,7 @@ ul.jqueryFileTree,
   z-index: 10050;
   max-height: 260px;
   overflow: auto;
-  width: var(--tm-ctrl-w, 16.25rem);
+  width: var(--tm-ctrl-w, 12.5rem);
   max-width: min(92vw, 100%);
   box-sizing: border-box;
   background: rgba(0, 0, 0, 0.5) !important;
@@ -440,13 +467,21 @@ ul.jqueryFileTree a:hover,
     text-align: center;
   }
   form#theme-music-form dd > select,
-  form[action*="ThemeMusic"] dd > select,
+  form[action*="ThemeMusic"] dd > select {
+    max-width: 100% !important;
+    width: max-content !important;
+    min-width: 0 !important;
+  }
   form#theme-music-form .tm-path-field,
-  form#theme-music-form .ucwc-path-field,
+  form#theme-music-form .ucwc-path-field {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    width: min(100%, var(--tm-ctrl-w, 12.5rem)) !important;
+  }
   form#theme-music-form .tm-vol {
     max-width: 100% !important;
     min-width: 0 !important;
-    width: min(100%, var(--tm-ctrl-w, 16.25rem)) !important;
+    width: 100% !important;
   }
   div.title .tm-title-ver {
     justify-content: center;
