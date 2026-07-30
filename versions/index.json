@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.0-Beta2",
-  "latest_version": "v1.0.0-Beta2",
+  "default": "v1.0.0-Beta3",
+  "latest_version": "v1.0.0-Beta3",
   "versions": [
+    {
+      "id": "v1.0.0-Beta3",
+      "label": "Beta3：右侧控件宽度/文件选择对齐 + 独立检查更新/日志 + 去掉保存提示",
+      "channel": "beta",
+      "released_at": "2026-07-30",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.0-Beta2",
       "label": "Beta2：设置页 markdown 布局对齐 + 应用按钮解锁保存",

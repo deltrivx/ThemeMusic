@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "2026.07.30b">
+<!ENTITY version   "2026.07.30c">
 <!ENTITY launch    "Settings/ThemeMusic">
 <!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 <!ENTITY flash     "/boot/config/plugins/&name;">
 <!ENTITY github    "deltrivx/ThemeMusic">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 <!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-<!ENTITY ver       "v1.0.0-Beta2">
+<!ENTITY ver       "v1.0.0-Beta3">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 
@@ -17,6 +17,9 @@
 <CHANGES>
 <![CDATA[
 ## Theme Music
+###2026.07.30c
+- v1.0.0-Beta3: content-sized selects, fileTree path align, independent update UI
+- remove save tip under title; theme-music-update.php + settings.js
 ###2026.07.30b
 - v1.0.0-Beta2: settings page Unraid markdown form (dt/dd) aligned with ThemeEffects
 - Apply button unlock on form change (BodyInlineJS + class=lock)
@@ -42,11 +45,17 @@ exit 0
 <INLINE>
 <![CDATA[
 **Theme Music**
-## v1.0.0-Beta2 - 2026-07-30
+## v1.0.0-Beta3 - 2026-07-30
 
 ### 概述
 
 **Theme Music** 独立插件。从 ThemeEffects 抽取音乐组件，以 `theme.music` 发布；路径、配置、缓存与主题特效完全分离。
+
+### Beta3 变更
+
+- 右侧控件内容宽度 + 文件选择框对齐 ThemeEffects
+- 标题栏独立检查更新 / 更新日志 / 版本号（theme-music-update.php）
+- 取消标题下保存成功提示
 
 ### Beta2 变更
 
@@ -94,7 +103,7 @@ fi
 chmod +x "$OUT"
 export UCWC_PLUGIN_INSTALL=1
 # bash -c keeps progress on stdout for plugin manager
-bash -c "source '$OUT'; install_plugin '&ver;' ota"
+bash -c "sh '$OUT' install '&ver;' ota"
 exit 0
 </INLINE>
 </FILE>

@@ -1,5 +1,21 @@
 # Theme Music Changelog
 
+## v1.0.0-Beta3 — 2026-07-30 (`2026.07.30c`)
+
+### 设置页布局
+- 右侧 select：`width: max-content !important`，对抗 Unraid `default-base.css` 的 `width:100%`
+- 路径框/音量条：`--tm-ctrl-w` 跟随邻近 select；fileTree 绝对定位在 path-field 下方（对齐 ThemeEffects）
+- 取消标题下方「已保存…」提示；保存后静默刷新
+
+### 独立版本管理
+- 新增 `theme-music-update.php`（仓库 deltrivx/ThemeMusic，jobs `/tmp/theme-music-jobs`）
+- 标题栏：版本号 +「检查更新」「更新日志」（与 ThemeEffects 完全独立）
+- `assets/theme-music-settings.js`：OTA/全量/进度/changelog 面板
+
+### 安装
+- `install.sh` / OTA manifest 纳入 update API 与 settings JS
+- 音乐卡片仍为 ThemeMusic 路径的 ucwc-music（与主题特效功能对齐）
+
 ## v1.0.0-Beta2 — 2026-07-30 (`2026.07.30b`)
 
 ### 设置页 / 应用
