@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.4",
-  "latest_version": "v1.0.4",
+  "default": "v1.0.5",
+  "latest_version": "v1.0.5",
   "versions": [
+    {
+      "id": "v1.0.5",
+      "label": "正式版 v1.0.5：开机 flash 优先恢复 runtime，再 OTA（重启离线不丢插件）",
+      "channel": "stable",
+      "released_at": "2026-07-31",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.4",
       "label": "正式版 v1.0.4：拒绝错配侧车歌词；加强 lrclib/网易云匹配并隔离坏 LRC",

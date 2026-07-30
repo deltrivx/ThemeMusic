@@ -1,5 +1,12 @@
 # Theme Music Changelog
 
+## v1.0.5 — 2026-07-31 (`2026.07.31b`)
+
+### 开机恢复（plg）
+- 插件脚本**先**从 flash 恢复 emhttp runtime，再尝试 OTA
+- 网络/GitHub 超时不再把已装插件打进 `plugins-error` 导致「重启后丢失」
+- 有完整 flash 包时离线 boot 仍 `exit 0`；包 id **v1.0.5**（内容同 v1.0.4 业务 + 官方 boot 路径）
+
 ## v1.0.4 — 2026-07-30 (`2026.07.30e`)
 
 ### 歌词错配修复（深度）
