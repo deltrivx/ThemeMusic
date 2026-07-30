@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.0-Beta6",
-  "latest_version": "v1.0.0-Beta6",
+  "default": "v1.0.0-Beta7",
+  "latest_version": "v1.0.0-Beta7",
   "versions": [
+    {
+      "id": "v1.0.0-Beta7",
+      "label": "Beta7：跨页续播/移动端进度恢复；FLAC seek 卡死自动重建",
+      "channel": "beta",
+      "released_at": "2026-07-30",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.0-Beta6",
       "label": "Beta6：卡片左右固定宽；曲目/歌词区加宽并向左靠拢",
