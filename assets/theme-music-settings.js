@@ -122,8 +122,8 @@
     }
     if (!(w > 40)) return;
     w = Math.round(w);
-    // Keep a usable column: at least path-friendly, cap for narrow screens.
-    if (w < 200) w = 200;
+    // Keep a usable column: fit long labels like「开启（浏览器可能拦截）」/「仅仪表盘播放（推荐）」.
+    if (w < 240) w = 240;
     if (w > 420) w = 420;
     var px = w + "px";
     form.style.setProperty("--tm-ctrl-w", px);

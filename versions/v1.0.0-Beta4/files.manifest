@@ -39,13 +39,13 @@
     },
     {
       "path": "assets/ucwc-music.js",
-      "sha256": "8439c60aa3b3ae1ec16f97b8cd478099ae37bbb53a1030f10b093c1a240111b9",
-      "size": 112107
+      "sha256": "e88494bc02bd91075a0c416762005e43180ac4ed817a499771a13b514a3d0f3c",
+      "size": 113548
     },
     {
       "path": "assets/ucwc-music.css",
-      "sha256": "eea8abbfa90da3fad6527c54fa3bc036a0b84c5ee54fceee5b3f40611036f246",
-      "size": 26643
+      "sha256": "f633a597ecbd73a7f4ba4a288960d3d618a4808b463c1ea7e19480bd628a5d48",
+      "size": 26781
     },
     {
       "path": "assets/theme-music-settings.css",
@@ -54,8 +54,8 @@
     },
     {
       "path": "assets/theme-music-settings.js",
-      "sha256": "cf64c90047cdc73da461a46f6084dfb6d510c3ae35f19ba33d8e991e9027b590",
-      "size": 45447
+      "sha256": "bdd586bcf3a164686a8803316ca041f42c0dec94ec0e65b2d89c73d9abd54d12",
+      "size": 45497
     }
   ]
 }

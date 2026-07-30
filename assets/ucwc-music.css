@@ -728,11 +728,14 @@ body.ucwc-reduce-motion #ucwc-music-card .ucwc-music-lyrics-scroll {
 #ucwc-music-resume-chip,
 .ucwc-music-resume-chip {
   position: fixed !important;
-  z-index: 99990 !important;
+  z-index: 2147483000 !important;
   left: auto !important;
   top: auto !important;
   right: 18px !important;
   bottom: 18px !important;
+  /* Escape stacking contexts from Unraid #template / theme wrappers */
+  isolation: isolate !important;
+  contain: none !important;
   display: flex !important;
   flex-direction: column !important;
   align-items: stretch !important;

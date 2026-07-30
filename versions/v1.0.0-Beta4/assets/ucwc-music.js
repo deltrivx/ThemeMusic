@@ -758,11 +758,32 @@
       chip.setAttribute("data-ucwc-chip-no-nav", "1");
     }
     try {
+      // Prefer body; fall back to html. Keep chip outside Unraid #template overflow.
       var hostEl = document.body || document.documentElement;
       if (chip.parentNode !== hostEl) hostEl.appendChild(chip);
     } catch (e1) {
       return;
     }
+    // Inline critical geometry so theme/Unraid CSS cannot zero-size or un-fix the chip.
+    try {
+      chip.style.setProperty("position", "fixed", "important");
+      chip.style.setProperty("z-index", "2147483000", "important");
+      chip.style.setProperty("display", "flex", "important");
+      chip.style.setProperty("flex-direction", "column", "important");
+      chip.style.setProperty("visibility", "visible", "important");
+      chip.style.setProperty("opacity", "1", "important");
+      chip.style.setProperty("pointer-events", "auto", "important");
+      chip.style.setProperty("width", "min(340px, calc(100vw - 24px))", "important");
+      chip.style.setProperty("min-width", "min(260px, calc(100vw - 24px))", "important");
+      chip.style.setProperty("min-height", "52px", "important");
+      chip.style.setProperty("box-sizing", "border-box", "important");
+      chip.style.setProperty("padding", "10px 12px", "important");
+      chip.style.setProperty("border-radius", "16px", "important");
+      chip.style.setProperty("border", "1px solid rgba(0, 243, 255, 0.45)", "important");
+      chip.style.setProperty("background", "rgba(12, 16, 24, 0.94)", "important");
+      chip.style.setProperty("color", "#eef6ff", "important");
+      chip.style.setProperty("box-shadow", "0 10px 32px rgba(0,0,0,0.5)", "important");
+    } catch (eStyle) {}
     applyChipPos();
     updateChipUi();
     if (label && chipEls.lrc && !(audio && !audio.paused)) {
