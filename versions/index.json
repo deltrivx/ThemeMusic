@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.18",
-  "latest_version": "v1.0.18",
+  "default": "v1.0.19",
+  "latest_version": "v1.0.19",
   "versions": [
+    {
+      "id": "v1.0.19",
+      "label": "正式版 v1.0.19：正常播放后自动清除续播提示",
+      "channel": "stable",
+      "released_at": "2026-07-31",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.18",
       "label": "正式版 v1.0.18：修复原生图标颜色和动态关闭键；自动唤醒音乐磁盘；降低 CPU 开销",

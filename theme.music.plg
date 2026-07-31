@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "v1.0.18">
+<!ENTITY version   "v1.0.19">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-		<!ENTITY ver       "v1.0.18">
+		<!ENTITY ver       "v1.0.19">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 		
@@ -17,6 +17,8 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+		### v1.0.19
+		- 音频开始正常播放后清除自动续播提示并恢复曲库状态
 		### v1.0.18
 		- 修复动态磁贴关闭键和折叠箭头在深色主题下变黑
 		- 关闭磁贴恢复为仅在 Unraid 磁贴管理模式动态显示
@@ -83,7 +85,7 @@ exit 0
 <INLINE>
 <![CDATA[
 **主题音乐（Theme Music）**
-				## v1.0.18 - 2026-07-31
+				## v1.0.19 - 2026-07-31
 				
 				### 概述
 				
@@ -91,10 +93,8 @@ exit 0
 				
 				### 本版变更
 				
-				- 修复原生关闭和折叠图标的深色主题颜色
-				- 关闭磁贴仅在磁贴管理模式动态显示
-				- 播放前自动唤醒本地或远程音乐存储
-				- 降低歌词同步和重复曲库扫描的 CPU 开销
+				- 音频开始正常播放后清除“正在尝试自动续播”提示
+				- 播放期间恢复显示正常曲库数量状态
 			]]>
 </INLINE>
 </FILE>
