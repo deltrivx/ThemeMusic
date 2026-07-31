@@ -17,6 +17,10 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+		### v1.1.0-beta2
+		- 修复上一曲只回到本曲开头、动态关闭键未对齐和标题分割线缺失
+		- Navidrome 测试连接直接使用当前输入，不必先应用
+		- 验证结构化歌词时间轴，并将 Navidrome 加入 FnOS 挂载恢复流程
 		### v1.1.0-beta
 		- 新增 Navidrome/OpenSubsonic 音源设置和连接测试
 		- 接入曲库、Range 串流、封面及结构化歌词
