@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="${1:-}"
 MODE="${2:-snapshot}"
 
-if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-Beta[0-9]+)?$ ]]; then
+if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[Bb]eta[0-9]*)?$ ]]; then
   echo "用法：$0 v主版本.次版本.修订版本 [snapshot|existing]" >&2
   exit 2
 fi
