@@ -4,6 +4,14 @@
   "latest_version": "v1.0.19",
   "versions": [
     {
+      "id": "v1.1.0-beta3",
+      "label": "Beta v1.1.0-beta3：卡片与胶囊三键即时双向同步",
+      "channel": "beta",
+      "released_at": "2026-07-31",
+      "music": true,
+      "ota": true
+    },
+    {
       "id": "v1.1.0-beta2",
       "label": "Beta v1.1.0-beta2：修复上一曲与磁贴对齐；Navidrome 输入即测；补全 FnOS 挂载恢复",
       "channel": "beta",
