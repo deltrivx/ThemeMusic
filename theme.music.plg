@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "v1.1.6">
+<!ENTITY version   "v1.1.7">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-		<!ENTITY ver       "v1.1.6">
+		<!ENTITY ver       "v1.1.7">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 		
@@ -17,6 +17,10 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+		### v1.1.7
+		- 代码许可改为 PolyForm Noncommercial 1.0.0，明确禁止未经授权的商业使用
+		- 更新日志版本列表自动换行并禁止横向滚动，窄屏改为单列布局
+		- 首次安装默认关闭，须在设置页手动开启；升级继续保留用户原有开关
 		### v1.1.6
 		- 全站胶囊模式在页面隐藏、切换和 Unraid 重绘时保留现有音频进程，不再主动暂停后等待点击续播
 		- 循环关闭、列表循环和单曲循环使用三种独立图标与状态类，当前模式一眼可辨
