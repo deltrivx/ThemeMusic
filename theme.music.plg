@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "v1.1.4">
+<!ENTITY version   "v1.1.5">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-		<!ENTITY ver       "v1.1.4">
+		<!ENTITY ver       "v1.1.5">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 		
@@ -17,6 +17,10 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+		### v1.1.5
+		- 收敛跨页续播为单一重试链，取消旧音频和旧 play Promise 回调，修复播放/暂停状态反复跳变
+		- 自动播放被浏览器策略拦截后停止无效重试，稳定等待一次用户播放手势
+		- 固定右侧标题栏、信息内容区及 flex 基准，曲目/歌词/歌曲信息切换不再改变卡片高度
 		### v1.1.4
 		- 本地曲库改为有硬上限的安全扫描，不跟随符号链接并消除逐曲目重复目录遍历
 		- 增加六小时服务端与会话曲库缓存，刷新和切页可直接恢复播放
