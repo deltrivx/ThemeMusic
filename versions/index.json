@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.6",
-  "latest_version": "v1.0.6",
+  "default": "v1.0.7",
+  "latest_version": "v1.0.7",
   "versions": [
+    {
+      "id": "v1.0.7",
+      "label": "正式版 v1.0.7：右侧复用区动态宽度(≤280)；仪表盘位置服务端记忆防复位",
+      "channel": "stable",
+      "released_at": "2026-07-31",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.6",
       "label": "正式版 v1.0.6：空库/未配置提示只显示在 status，避免歌名下与音量下重复",
