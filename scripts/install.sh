@@ -18,6 +18,8 @@ MUSIC_PAGE="$PERSIST_DIR/ThemeMusic.page"
 MUSIC_RUNTIME="$RUNTIME_DIR/ThemeMusic.page"
 MUSIC_CFG="$PERSIST_DIR/theme-music.cfg"
 SERVICE_CFG="$PERSIST_DIR/theme.music.cfg"
+PLUGIN_BOOT="/boot/config/plugins/theme.music.plg"
+PLUGIN_LOG="/var/log/plugins/theme.music.plg"
 
 VERSION=""
 INSTALL_MODE="ota"
@@ -171,6 +173,7 @@ local_path_for() {
     assets/*) printf '%s\n' "$PERSIST_DIR/$1" ;;
     ThemeMusic.page) printf '%s\n' "$MUSIC_PAGE" ;;
     ThemeMusic_Loader.page) printf '%s\n' "$LOADER_PAGE" ;;
+    PLUGIN-README.md) printf '%s\n' "$PERSIST_DIR/README.md" ;;
     theme-music.cfg) printf '%s\n' "$MUSIC_CFG" ;;
     theme.music.cfg) printf '%s\n' "$SERVICE_CFG" ;;
     ucwc-music-api.php) printf '%s\n' "$PERSIST_DIR/ucwc-music-api.php" ;;
@@ -256,6 +259,25 @@ write_options() {
   } > "$OPTIONS_FILE"
 }
 
+sync_plugin_metadata() {
+  _dst="$1"
+  _url="https://github.com/deltrivx/ThemeMusic/releases/download/$VERSION/theme.music-$VERSION.plg"
+  if ! download -o "$_dst" "$_url"; then
+    ucwc_log "提示：PLG 元数据下载失败，运行文件已安装；下次更新时会重试"
+    return 0
+  fi
+  _plg_ver=$(sed -n 's/.*<!ENTITY[[:space:]]\+version[[:space:]]\+"\([^"]*\)".*/\1/p' "$_dst" | head -1)
+  if [ "$_plg_ver" != "$VERSION" ] || ! grep -q '<PLUGIN name="&name;"' "$_dst"; then
+    ucwc_log "提示：PLG 元数据校验失败（期望 $VERSION，得到 ${_plg_ver:-空}）"
+    return 0
+  fi
+  install -m 0644 "$_dst" "$PLUGIN_BOOT"
+  if [ -d "$(dirname "$PLUGIN_LOG")" ]; then
+    install -m 0644 "$_dst" "$PLUGIN_LOG"
+  fi
+  ucwc_log "已同步 Unraid 插件列表元数据：$VERSION"
+}
+
 install_version() {
   case "$INSTALL_MODE" in
     ota|full) ;;
@@ -307,6 +329,7 @@ install_version() {
   for f in \
     ThemeMusic.page \
     ThemeMusic_Loader.page \
+    PLUGIN-README.md \
     theme-music.cfg \
     theme.music.cfg \
     ucwc-music-api.php \
@@ -338,6 +361,7 @@ install_version() {
   progress 75 "写入文件" "安装到 flash + runtime"
   install_pair "$tmp/ThemeMusic.page" "$MUSIC_PAGE" "$MUSIC_RUNTIME"
   install_pair "$tmp/ThemeMusic_Loader.page" "$LOADER_PAGE" "$LOADER_RUNTIME"
+  install_pair "$tmp/PLUGIN-README.md" "$PERSIST_DIR/README.md" "$RUNTIME_DIR/README.md"
   install_pair "$tmp/ucwc-music-api.php" "$PERSIST_DIR/ucwc-music-api.php" "$RUNTIME_DIR/ucwc-music-api.php"
   install_pair "$tmp/theme-music-save.php" "$PERSIST_DIR/theme-music-save.php" "$RUNTIME_DIR/theme-music-save.php"
   install_pair "$tmp/theme-music-update.php" "$PERSIST_DIR/theme-music-update.php" "$RUNTIME_DIR/theme-music-update.php"
@@ -396,6 +420,8 @@ install_version() {
     printf 'source=deltrivx/ThemeMusic\n'
   } > "$STATE_FILE"
 
+  sync_plugin_metadata "$tmp/theme.music-$VERSION.plg"
+
   progress 95 "收尾" "写入状态"
   echo "已安装：ThemeMusic $VERSION（模式：$INSTALL_MODE）"
   if [ "$INSTALL_MODE" = "ota" ]; then
@@ -412,6 +438,7 @@ uninstall_plugin() {
   rm -f \
     "$MUSIC_PAGE" "$MUSIC_RUNTIME" \
     "$LOADER_PAGE" "$LOADER_RUNTIME" \
+    "$PERSIST_DIR/README.md" "$RUNTIME_DIR/README.md" \
     "$PERSIST_DIR/ucwc-music-api.php" "$RUNTIME_DIR/ucwc-music-api.php" \
     "$PERSIST_DIR/theme-music-save.php" "$RUNTIME_DIR/theme-music-save.php" \
     "$PERSIST_DIR/theme-music-update.php" "$RUNTIME_DIR/theme-music-update.php" \

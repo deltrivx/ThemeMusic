@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "v1.1.1">
+<!ENTITY version   "v1.1.2">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-		<!ENTITY ver       "v1.1.1">
+		<!ENTITY ver       "v1.1.2">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 		
@@ -17,6 +17,11 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+		### v1.1.2
+		- 仓库说明、关于、支持、安全、贡献和中英文协议体系全面规范化
+		- Release 增加独立安装脚本、文件清单和统一校验和，安装后同步 PLG 元数据
+		- 插件管理器说明升级为正式中文介绍，并纳入闪存离线恢复
+		- 新增自动化发布验证，检查版本、清单、哈希、脚本、PLG 与文档一致性
 		### v1.1.1
 		- 移除仪表盘动态关闭卡片键，显示状态仅由总开关和运行模式决定
 		- 清除旧的临时隐藏状态及无用样式、事件分支
@@ -106,18 +111,28 @@ exit 0
 <FILE Name="&plugdir;/README.md">
 <INLINE>
 <![CDATA[
-**主题音乐（Theme Music）**
-				## v1.0.19 - 2026-07-31
-				
-				### 概述
-				
-				**主题音乐**独立插件。从 ThemeEffects 抽取音乐组件，以 `theme.music` 发布；路径、配置、缓存与主题特效完全分离。
-				
-				### 本版变更
-				
-				- 音频开始正常播放后清除“正在尝试自动续播”提示
-				- 播放期间恢复显示正常曲库数量状态
-			]]>
+# 主题音乐（Theme Music）
+
+适用于 Unraid 6.12+ 的独立 WebGUI 音乐播放器。
+
+## 核心能力
+
+- 本地目录与 Navidrome/OpenSubsonic 双音源
+- 仪表盘音乐卡片与全站音乐胶囊
+- PC/手机独立运行模式、随机、循环、音量和跨页续播
+- 曲库搜索与排序、封面、同步歌词和普通歌词
+- 播放前磁盘唤醒、远程挂载等待、低负载缓存
+- SHA256 差异 OTA、历史版本回滚和闪存离线恢复
+
+## 使用入口
+
+安装后前往：**设置 → 用户偏好 → 主题音乐**
+
+Navidrome 密码独立保存为 `0600`，不会写入普通配置、浏览器或日志。
+
+项目主页、完整说明、中文更新日志和支持信息：
+https://github.com/deltrivx/ThemeMusic
+]]>
 </INLINE>
 </FILE>
 
@@ -139,6 +154,7 @@ restore_from_flash() {
   for f in ThemeMusic.page ThemeMusic_Loader.page ucwc-music-api.php theme-music-save.php theme-music-update.php; do
     [ -f "$FLASH/$f" ] &amp;&amp; install -m 0644 "$FLASH/$f" "$PLUG/$f"
   done
+  [ -f "$FLASH/README.md" ] &amp;&amp; install -m 0644 "$FLASH/README.md" "$PLUG/README.md"
   for f in ucwc-music.js ucwc-music.css theme-music-settings.js theme-music-settings.css; do
     [ -f "$FLASH/assets/$f" ] &amp;&amp; install -m 0644 "$FLASH/assets/$f" "$PLUG/assets/$f"
   done
