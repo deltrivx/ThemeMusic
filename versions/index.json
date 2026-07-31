@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.16",
-  "latest_version": "v1.0.16",
+  "default": "v1.0.17",
+  "latest_version": "v1.0.17",
   "versions": [
+    {
+      "id": "v1.0.17",
+      "label": "正式版 v1.0.17：白色标题图标；修复原生折叠与磁贴关闭键对齐；扩大歌词区",
+      "channel": "stable",
+      "released_at": "2026-07-31",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.16",
       "label": "正式版 v1.0.16：修复按钮重绘失效；统一原生卡片；补全右上角功能键",
