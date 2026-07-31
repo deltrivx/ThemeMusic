@@ -1,6 +1,6 @@
 # 主题音乐（Theme Music）
 
-独立的 **Unraid WebGUI 音乐插件**（插件 id：`theme.music`，正式版 **v1.0.9**）。
+独立的 **Unraid WebGUI 音乐插件**（插件 id：`theme.music`，正式版 **v1.0.10**）。
 
 从 [ThemeEffects](https://github.com/deltrivx/ThemeEffects) 音乐组件拆出，路径 / 配置 / 缓存完全独立。  
 自 **ThemeEffects v2.6.0** 起主题侧已清除全部音乐代码；音乐仅由本插件提供。

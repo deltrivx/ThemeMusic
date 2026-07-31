@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.9",
-  "latest_version": "v1.0.9",
+  "default": "v1.0.10",
+  "latest_version": "v1.0.10",
   "versions": [
+    {
+      "id": "v1.0.10",
+      "label": "正式版 v1.0.10：左侧固定宽度；右侧复用区吃满剩余宽度（去 280 空白条）",
+      "channel": "stable",
+      "released_at": "2026-07-31",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.9",
       "label": "正式版 v1.0.9：卡片随 db_box 两栏/三栏 100% 自适应；tbody.sortable 落位对齐系统卡片",
