@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "v1.1.5">
+<!ENTITY version   "v1.1.6">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-		<!ENTITY ver       "v1.1.5">
+		<!ENTITY ver       "v1.1.6">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 		
@@ -17,6 +17,9 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+		### v1.1.6
+		- 全站胶囊模式在页面隐藏、切换和 Unraid 重绘时保留现有音频进程，不再主动暂停后等待点击续播
+		- 循环关闭、列表循环和单曲循环使用三种独立图标与状态类，当前模式一眼可辨
 		### v1.1.5
 		- 收敛跨页续播为单一重试链，取消旧音频和旧 play Promise 回调，修复播放/暂停状态反复跳变
 		- 自动播放被浏览器策略拦截后停止无效重试，稳定等待一次用户播放手势
