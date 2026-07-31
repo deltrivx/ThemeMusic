@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.11",
-  "latest_version": "v1.0.11",
+  "default": "v1.0.12",
+  "latest_version": "v1.0.12",
   "versions": [
+    {
+      "id": "v1.0.12",
+      "label": "正式版 v1.0.12：曲目/歌词切换高度稳定；专属重扫与歌词重匹配图标；状态行信息+音源+提示",
+      "channel": "stable",
+      "released_at": "2026-07-31",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.11",
       "label": "正式版 v1.0.11：本地搜索/重扫；截断提示；歌词重匹配；设置页清理缓存",
