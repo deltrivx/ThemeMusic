@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "v1.0.19">
+<!ENTITY version   "v1.1.0">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-		<!ENTITY ver       "v1.0.19">
+		<!ENTITY ver       "v1.1.0">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 		
@@ -17,6 +17,11 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+		### v1.1.0
+		- Navidrome 曲库、串流、封面和歌词结束测试并进入正式支持
+		- 卡片与胶囊三键即时双向同步，全部卡片控件兼容 Unraid 重绘
+		- 修复克隆卡片后搜索、音量、进度、曲目选择和折叠响应丢失
+		- 搜索采用低延迟合并刷新，兼顾响应速度与低配设备负载
 		### v1.1.0-beta3
 		- 卡片与胶囊的上一首、播放/暂停、下一首统一为同一控制链路
 		- 切歌立即双向同步曲名和按钮状态，不再等待远程媒体加载事件
