@@ -13,6 +13,36 @@
       "size": 3008
     },
     {
+      "path": "assets/theme-music-settings.css",
+      "sha256": "947e3869190d51d80553861846c58b315314c63da648ef91249e248321e28222",
+      "size": 11428
+    },
+    {
+      "path": "assets/theme-music-settings.js",
+      "sha256": "d333577359d92a2d32c2b4e1abe8e6a7228176f689070c1edb74835ffa06eb8d",
+      "size": 44430
+    },
+    {
+      "path": "assets/ucwc-music.css",
+      "sha256": "0389805e09f1f61a9f873f2df9e8ebe58e71c28a8fd6cee651c7d1adad9c525e",
+      "size": 26316
+    },
+    {
+      "path": "assets/ucwc-music.js",
+      "sha256": "61cecb772b13097dff59fb20e7aadec71bebf91be7a824e414213cfcb5f9de11",
+      "size": 111404
+    },
+    {
+      "path": "theme-music-save.php",
+      "sha256": "4067c03ecf20673507187173d35b56ee0ae87728de4b1e915c37eabfe23fd388",
+      "size": 6595
+    },
+    {
+      "path": "theme-music-update.php",
+      "sha256": "600c8f9e6b0dcf4d31062fa7896264823904d0dc93651c7f73e44e4139625efc",
+      "size": 43341
+    },
+    {
       "path": "theme-music.cfg",
       "sha256": "59a12f72db41305c942a8b14a4832cd016cf3f0c1b7456e54a8eda99f516ac7c",
       "size": 172
@@ -26,36 +56,6 @@
       "path": "ucwc-music-api.php",
       "sha256": "fad1f2d684dbc743757c24a06feddb5572b9d4f1e7b73ca9069b3c206f539b0a",
       "size": 62750
-    },
-    {
-      "path": "theme-music-save.php",
-      "sha256": "4067c03ecf20673507187173d35b56ee0ae87728de4b1e915c37eabfe23fd388",
-      "size": 6595
-    },
-    {
-      "path": "theme-music-update.php",
-      "sha256": "600c8f9e6b0dcf4d31062fa7896264823904d0dc93651c7f73e44e4139625efc",
-      "size": 43341
-    },
-    {
-      "path": "assets/ucwc-music.js",
-      "sha256": "61cecb772b13097dff59fb20e7aadec71bebf91be7a824e414213cfcb5f9de11",
-      "size": 111404
-    },
-    {
-      "path": "assets/ucwc-music.css",
-      "sha256": "0389805e09f1f61a9f873f2df9e8ebe58e71c28a8fd6cee651c7d1adad9c525e",
-      "size": 26316
-    },
-    {
-      "path": "assets/theme-music-settings.css",
-      "sha256": "947e3869190d51d80553861846c58b315314c63da648ef91249e248321e28222",
-      "size": 11428
-    },
-    {
-      "path": "assets/theme-music-settings.js",
-      "sha256": "d333577359d92a2d32c2b4e1abe8e6a7228176f689070c1edb74835ffa06eb8d",
-      "size": 44430
     }
   ]
 }
