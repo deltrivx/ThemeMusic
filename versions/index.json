@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.1.0",
-  "latest_version": "v1.1.0",
+  "default": "v1.1.1",
+  "latest_version": "v1.1.1",
   "versions": [
+    {
+      "id": "v1.1.1",
+      "label": "正式版 v1.1.1：移除关闭卡片键；卡片显示完全由主题音乐设置控制",
+      "channel": "stable",
+      "released_at": "2026-07-31",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.1.0",
       "label": "正式版 v1.1.0：Navidrome 正式支持；卡片全部控件即时响应并兼容 Unraid 重绘",

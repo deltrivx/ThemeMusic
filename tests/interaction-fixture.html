@@ -44,7 +44,7 @@
 <body>
   <div id="fixture-actions">
     <button id="fixture-clone" type="button">模拟 Unraid 重绘</button>
-    <button id="fixture-manage" type="button">切换磁贴管理</button>
+    <button id="fixture-manage" type="button">模拟关闭键注入</button>
     <output id="fixture-drag-count">拖拽冒泡：0</output>
   </div>
   <table id="db_box1" class="dashboard"></table>
@@ -96,9 +96,14 @@
         card.parentNode.replaceChild(card.cloneNode(true), card);
       });
       document.getElementById("fixture-manage").addEventListener("click", function () {
-        var close = document.querySelector("#ucwc-music-card .ucwc-music-native-dismiss");
-        if (!close) return;
-        close.style.display = getComputedStyle(close).display === "none" ? "inline-block" : "none";
+        var host = document.getElementById("ucwc-music-dash-host");
+        var cell = host && host.querySelector("tr:first-child > td:first-child");
+        if (!cell || cell.querySelector(":scope > i.control.tile")) return;
+        var dismiss = document.createElement("i");
+        dismiss.className = "fa fa-fw fa-close control tile";
+        dismiss.title = "关闭磁贴";
+        dismiss.textContent = "×";
+        cell.insertBefore(dismiss, cell.firstChild);
       });
     })();
   </script>

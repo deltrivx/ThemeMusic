@@ -1,0 +1,150 @@
+Menu="Buttons:101"
+Link="nav-user"
+---
+<?php
+/**
+ * ThemeMusic global loader — injects music config + CSS/JS when enabled.
+ * Plugin id: theme.music
+ */
+require_once "$docroot/plugins/dynamix/include/Wrappers.php";
+
+$persist = '/boot/config/plugins/theme.music';
+$runtime = '/usr/local/emhttp/plugins/theme.music';
+$svc_cfg = "$persist/theme.music.cfg";
+$fx_path = "$persist/theme-music.cfg";
+
+$ucwc_service = 'enabled';
+if (is_file($svc_cfg)) {
+    $raw = @parse_ini_file($svc_cfg);
+    if (is_array($raw) && isset($raw['SERVICE']) && $raw['SERVICE'] !== '') {
+        $ucwc_service = strtolower(trim((string)$raw['SERVICE']));
+    }
+}
+if (!in_array($ucwc_service, ['enabled', 'enable', '1', 'yes'], true)) {
+    echo '<!-- ThemeMusic:runtime-disabled -->';
+    return;
+}
+
+$fx = [
+    'MUSIC_ENABLE' => 'no',
+    'MUSIC_RUN_MODE' => 'card',
+    'MUSIC_UI' => 'card',
+    'MUSIC_SOURCE' => 'local',
+    'MUSIC_LOCAL_DIR' => '',
+    'MUSIC_VOLUME' => '70',
+    'MUSIC_AUTOPLAY' => 'no',
+    'MUSIC_SHUFFLE' => 'no',
+    'MUSIC_REPEAT' => 'off',
+    'MUSIC_DASH_ONLY' => 'yes',
+    'MUSIC_RUN_MODE_MOBILE' => 'same',
+    'MUSIC_VOLUME_MOBILE' => '70',
+    'MUSIC_AUTOPLAY_MOBILE' => 'no',
+    'MUSIC_SHUFFLE_MOBILE' => 'no',
+    'MUSIC_REPEAT_MOBILE' => 'off',
+];
+$had_run_mode = false;
+if (is_file($fx_path)) {
+    $raw = @parse_ini_file($fx_path);
+    if (is_array($raw)) {
+        foreach ($fx as $k => $v) {
+            if (isset($raw[$k]) && $raw[$k] !== '') $fx[$k] = (string)$raw[$k];
+        }
+        $had_run_mode = isset($raw['MUSIC_RUN_MODE']) && trim((string)$raw['MUSIC_RUN_MODE']) !== '';
+    }
+}
+
+$fx_music = (($fx['MUSIC_ENABLE'] ?? 'no') === 'yes');
+$fx_run_mode = $had_run_mode ? strtolower(trim((string)($fx['MUSIC_RUN_MODE'] ?? ''))) : '';
+if (!in_array($fx_run_mode, ['card', 'chip', 'both'], true)) {
+    /* Legacy: no MUSIC_RUN_MODE key — map ENABLE + DASH_ONLY (old sitewide = both). */
+    if ($fx_music) {
+        $fx_run_mode = (($fx['MUSIC_DASH_ONLY'] ?? 'yes') === 'no') ? 'both' : 'card';
+    } else {
+        $fx_run_mode = 'card';
+    }
+}
+$fx_music_ui = $fx_run_mode;
+$fx_music_source = strtolower(trim((string)($fx['MUSIC_SOURCE'] ?? 'local')));
+if (!in_array($fx_music_source, ['local', 'navidrome'], true)) $fx_music_source = 'local';
+$fx_music_dir = trim((string)($fx['MUSIC_LOCAL_DIR'] ?? ''));
+$fx_music_vol = intval($fx['MUSIC_VOLUME'] ?? 70);
+if ($fx_music_vol < 0) $fx_music_vol = 0;
+if ($fx_music_vol > 100) $fx_music_vol = 100;
+$fx_music_autoplay = (($fx['MUSIC_AUTOPLAY'] ?? 'no') === 'yes');
+$fx_music_shuffle = (($fx['MUSIC_SHUFFLE'] ?? 'no') === 'yes');
+$fx_music_repeat = in_array(($fx['MUSIC_REPEAT'] ?? 'off'), ['off', 'one', 'all'], true) ? $fx['MUSIC_REPEAT'] : 'off';
+$fx_music_dash_only = ($fx_run_mode === 'card');
+$fx_mob_mode = strtolower(trim((string)($fx['MUSIC_RUN_MODE_MOBILE'] ?? 'same')));
+if (!in_array($fx_mob_mode, ['same', 'card', 'chip', 'both'], true)) $fx_mob_mode = 'same';
+$fx_mob_vol = intval($fx['MUSIC_VOLUME_MOBILE'] ?? $fx_music_vol);
+if ($fx_mob_vol < 0) $fx_mob_vol = 0;
+if ($fx_mob_vol > 100) $fx_mob_vol = 100;
+$fx_mob_autoplay = (($fx['MUSIC_AUTOPLAY_MOBILE'] ?? 'no') === 'yes');
+$fx_mob_shuffle = (($fx['MUSIC_SHUFFLE_MOBILE'] ?? 'no') === 'yes');
+$fx_mob_repeat = in_array(($fx['MUSIC_REPEAT_MOBILE'] ?? 'off'), ['off', 'one', 'all'], true) ? $fx['MUSIC_REPEAT_MOBILE'] : 'off';
+
+if (!$fx_music) {
+    echo '<!-- ThemeMusic:music-disabled -->';
+    return;
+}
+
+/* Independent music cfg: __UCWC_MUSIC__ is source of truth for ThemeMusic.
+ * Also mirror onto __UCWC_THEME__.music for compat, and re-assert after TE
+ * (Buttons:100) may assign a full object with music.enable=false.
+ * Flat fields = PC defaults; mobile profile under .mobile (client picks by device). */
+?>
+<script>
+(function () {
+  var musicCfg = {
+    enable: true,
+    run_mode: <?= json_encode($fx_run_mode) ?>,
+    ui: <?= json_encode($fx_music_ui) ?>,
+    source: <?= json_encode($fx_music_source) ?>,
+    local_dir: <?= json_encode($fx_music_dir) ?>,
+    volume: <?= (int)$fx_music_vol ?>,
+    autoplay: <?= $fx_music_autoplay ? 'true' : 'false' ?>,
+    shuffle: <?= $fx_music_shuffle ? 'true' : 'false' ?>,
+    repeat: <?= json_encode($fx_music_repeat) ?>,
+    dash_only: <?= $fx_music_dash_only ? 'true' : 'false' ?>,
+    mobile: {
+      run_mode: <?= json_encode($fx_mob_mode) ?>,
+      volume: <?= (int)$fx_mob_vol ?>,
+      autoplay: <?= $fx_mob_autoplay ? 'true' : 'false' ?>,
+      shuffle: <?= $fx_mob_shuffle ? 'true' : 'false' ?>,
+      repeat: <?= json_encode($fx_mob_repeat) ?>
+    },
+    plugin: "theme.music"
+  };
+  window.__UCWC_MUSIC__ = musicCfg;
+  window.__UCWC_THEME__ = window.__UCWC_THEME__ || {};
+  window.__UCWC_THEME__.music = musicCfg;
+  // Re-assert after other loaders / late scripts that rebuild __UCWC_THEME__
+  function reassert() {
+    try {
+      window.__UCWC_MUSIC__ = musicCfg;
+      window.__UCWC_THEME__ = window.__UCWC_THEME__ || {};
+      window.__UCWC_THEME__.music = musicCfg;
+    } catch (e0) {}
+  }
+  reassert();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", reassert);
+  }
+  setTimeout(reassert, 0);
+  setTimeout(reassert, 50);
+  setTimeout(reassert, 300);
+})();
+</script>
+<?php
+$music_css = "$runtime/assets/ucwc-music.css";
+$music_js = "$runtime/assets/ucwc-music.js";
+if (is_file($music_css)):
+  $mcssv = filemtime($music_css);
+?>
+<link rel="stylesheet" id="ucwc-music-css" href="/plugins/theme.music/assets/ucwc-music.css?v=<?=$mcssv?>">
+<?php endif;
+if (is_file($music_js)):
+  $mjsv = filemtime($music_js);
+?>
+<script src="/plugins/theme.music/assets/ucwc-music.js?v=<?=$mjsv?>"></script>
+<?php endif; ?>
