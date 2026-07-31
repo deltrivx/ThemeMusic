@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.1.3",
-  "latest_version": "v1.1.3",
+  "default": "v1.1.4",
+  "latest_version": "v1.1.4",
   "versions": [
+    {
+      "id": "v1.1.4",
+      "label": "正式版 v1.1.4：安全限额扫描；刷新免重扫；五键即时响应；右侧歌曲信息；插件列表修复",
+      "channel": "stable",
+      "released_at": "2026-07-31",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.1.3",
       "label": "正式版 v1.1.3：Release 归档优先安装；双重 SHA256 校验；快速镜像故障切换",

@@ -295,7 +295,15 @@ sync_plugin_metadata() {
   fi
   install -m 0644 "$_dst" "$PLUGIN_BOOT"
   if [ -d "$(dirname "$PLUGIN_LOG")" ]; then
-    install -m 0644 "$_dst" "$PLUGIN_LOG"
+    # Unraid discovers installed plugins through /var/log/plugins/*.plg
+    # registration symlinks. During a PLG-driven install, plugin(8) creates
+    # the link after this script returns; terminal/OTA installs must register
+    # themselves. A regular copied file here can be omitted from Plugins UI.
+    if [ "${UCWC_PLUGIN_INSTALL:-}" = "1" ]; then
+      [ -L "$PLUGIN_LOG" ] || rm -f "$PLUGIN_LOG"
+    else
+      ln -sfn "$PLUGIN_BOOT" "$PLUGIN_LOG"
+    fi
   fi
   ucwc_log "已同步 Unraid 插件列表元数据：$VERSION"
 }

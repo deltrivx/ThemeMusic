@@ -21,6 +21,10 @@
     i.tile { display:none; }
   </style>
   <script>
+    if (new URLSearchParams(location.search).get("reset") === "1") {
+      sessionStorage.removeItem("ucwc_music_library_v2");
+    }
+    window.__fixtureListFetchCount = 0;
     window.__UCWC_MUSIC__ = {
       enable: true,
       source: new URLSearchParams(location.search).get("source") === "navidrome" ? "navidrome" : "local",
@@ -31,7 +35,13 @@
       repeat: "off"
     };
     window.fetch = function (url) {
-      var body = String(url).indexOf("action=list") >= 0
+      var isList = String(url).indexOf("action=list") >= 0;
+      if (isList) {
+        window.__fixtureListFetchCount += 1;
+        var counter = document.getElementById("fixture-fetch-count");
+        if (counter) counter.textContent = "曲库请求：" + window.__fixtureListFetchCount;
+      }
+      var body = isList
         ? {ok:true,tracks:[
             {id:window.__UCWC_MUSIC__.source === "navidrome" ? "nd:song-a" : "a.mp3",title:"测试歌曲 A",artist:"测试歌手",album:"测试专辑",ext:"mp3",size:1024},
             {id:window.__UCWC_MUSIC__.source === "navidrome" ? "nd:song-b" : "b.mp3",title:"测试歌曲 B",artist:"测试歌手",album:"测试专辑",ext:"mp3",size:2048}
@@ -46,6 +56,7 @@
     <button id="fixture-clone" type="button">模拟 Unraid 重绘</button>
     <button id="fixture-manage" type="button">模拟关闭键注入</button>
     <output id="fixture-drag-count">拖拽冒泡：0</output>
+    <output id="fixture-fetch-count">曲库请求：0</output>
   </div>
   <table id="db_box1" class="dashboard"></table>
   <script src="../assets/ucwc-music.js"></script>
