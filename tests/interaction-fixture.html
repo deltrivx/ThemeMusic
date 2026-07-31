@@ -25,6 +25,68 @@
       sessionStorage.removeItem("ucwc_music_library_v2");
     }
     window.__fixtureListFetchCount = 0;
+    window.__fixtureAudioPlayCount = 0;
+    window.__fixtureAudioPauseCount = 0;
+    function updateAudioCounters() {
+      var out = document.getElementById("fixture-audio-count");
+      if (out) {
+        out.textContent = "音频调用：play=" + window.__fixtureAudioPlayCount + " pause=" + window.__fixtureAudioPauseCount;
+      }
+    }
+    var fixtureAudioMode = new URLSearchParams(location.search).get("audio");
+    if (fixtureAudioMode === "mock" || fixtureAudioMode === "blocked") {
+      window.Audio = function FixtureAudio() {
+        var target = new EventTarget();
+        target.paused = true;
+        target.currentTime = 0;
+        target.duration = 180;
+        target.readyState = 0;
+        target.volume = 0.7;
+        target.muted = false;
+        target.error = null;
+        target.src = "";
+        target.style = { cssText: "" };
+        target.setAttribute = function () {};
+        target.removeAttribute = function (name) { if (name === "src") target.src = ""; };
+        target.load = function () {
+          target.readyState = 4;
+          setTimeout(function () {
+            target.dispatchEvent(new Event("loadedmetadata"));
+            target.dispatchEvent(new Event("canplay"));
+          }, 0);
+        };
+        target.play = function () {
+          window.__fixtureAudioPlayCount += 1;
+          updateAudioCounters();
+          if (fixtureAudioMode === "blocked") {
+            return Promise.reject(new DOMException("play() requires user interaction", "NotAllowedError"));
+          }
+          return new Promise(function (resolve) {
+            setTimeout(function () {
+              if (target.paused) {
+                target.paused = false;
+                target.dispatchEvent(new Event("play"));
+              }
+              resolve();
+            }, 80);
+          });
+        };
+        target.pause = function () {
+          if (!target.paused) {
+            window.__fixtureAudioPauseCount += 1;
+            target.paused = true;
+            target.dispatchEvent(new Event("pause"));
+            updateAudioCounters();
+          }
+        };
+        return target;
+      };
+    }
+    if (new URLSearchParams(location.search).get("resume") === "1") {
+      var resumePayload = JSON.stringify({playing:true,intent:true,index:0,t:12,id:"a.mp3",vol:0.7,sitewide:false,ts:Date.now()});
+      sessionStorage.setItem("ucwc_music_play_v1", resumePayload);
+      localStorage.setItem("ucwc_music_play_v1", resumePayload);
+    }
     window.__UCWC_MUSIC__ = {
       enable: true,
       source: new URLSearchParams(location.search).get("source") === "navidrome" ? "navidrome" : "local",
@@ -57,6 +119,7 @@
     <button id="fixture-manage" type="button">模拟关闭键注入</button>
     <output id="fixture-drag-count">拖拽冒泡：0</output>
     <output id="fixture-fetch-count">曲库请求：0</output>
+    <output id="fixture-audio-count">音频调用：play=0 pause=0</output>
   </div>
   <table id="db_box1" class="dashboard"></table>
   <script src="../assets/ucwc-music.js"></script>

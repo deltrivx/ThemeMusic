@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.1.4",
-  "latest_version": "v1.1.4",
+  "default": "v1.1.5",
+  "latest_version": "v1.1.5",
   "versions": [
+    {
+      "id": "v1.1.5",
+      "label": "正式版 v1.1.5：跨页续播单一状态链；自动播放拦截不循环；歌曲信息区高度固定",
+      "channel": "stable",
+      "released_at": "2026-07-31",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.1.4",
       "label": "正式版 v1.1.4：安全限额扫描；刷新免重扫；五键即时响应；右侧歌曲信息；插件列表修复",
