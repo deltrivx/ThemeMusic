@@ -86,7 +86,20 @@ fi
 
 echo "[7/7] 发布产物"
 if [ -n "$VERSION" ]; then
-  (cd "dist/$VERSION" && shasum -a 256 -c SHA256SUMS)
+  (
+    cd "dist/$VERSION"
+    shasum -a 256 -c SHA256SUMS
+    tar -tzf "ThemeMusic-$VERSION.tar.gz" | awk -v p="ThemeMusic-$VERSION" '
+      /(^|\/)\._/ { bad=1 }
+      $0 == p || index($0, p "/") == 1 { next }
+      { bad=1 }
+      END { exit bad }
+    '
+    if zipinfo -1 "ThemeMusic-$VERSION.zip" | grep -Eq '(^|/)\._'; then
+      echo "ZIP 含 macOS AppleDouble 元数据" >&2
+      exit 1
+    fi
+  )
 else
   echo "未指定版本，跳过发布产物校验"
 fi

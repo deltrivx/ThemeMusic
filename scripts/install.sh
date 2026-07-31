@@ -38,12 +38,22 @@ progress() {
 }
 
 ucwc_curl() {
-  curl -4 -fsSL --http1.1 --tlsv1.2 --connect-timeout 15 --retry 3 --retry-delay 1 "$@"
+  # Mirror candidates already provide retries. Keep each failed endpoint bounded
+  # so an established-but-stalled raw.githubusercontent.com connection cannot
+  # block a small OTA file for several minutes.
+  curl -4 -fsSL --http1.1 --tlsv1.2 --connect-timeout 8 --retry 0 "$@"
 }
 
 ucwc_url_candidates() {
   _u=$1
   _rel=""
+  case "$_u" in
+    https://github.com/deltrivx/ThemeMusic/releases/download/*)
+      printf '%s\n' "$_u"
+      printf '%s%s\n' "https://ghfast.top/" "$_u"
+      return 0
+      ;;
+  esac
   case "$_u" in
     https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/*)
       _rel=${_u#https://raw.githubusercontent.com/deltrivx/ThemeMusic/main}
@@ -100,12 +110,12 @@ download() {
   for _try in $(ucwc_url_candidates "$_url" | tr '\n' ' '); do
     [ -n "$_try" ] || continue
     if [ -n "$_dest" ]; then
-      if ucwc_curl --max-time 300 -o "$_dest" $_extra "$_try"; then
+      if ucwc_curl --max-time 30 -o "$_dest" $_extra "$_try"; then
         _ok=0
         break
       fi
     else
-      if ucwc_curl --max-time 300 $_extra "$_try"; then
+      if ucwc_curl --max-time 30 $_extra "$_try"; then
         _ok=0
         break
       fi
@@ -125,7 +135,7 @@ fetch_index() {
   done
   for _b in $_bases; do
     _b=${_b%/}
-    _idx=$(ucwc_curl --max-time 60 "$_b/versions/index.json?_ts=$_ts" 2>/dev/null) || _idx=""
+    _idx=$(ucwc_curl --max-time 30 "$_b/versions/index.json?_ts=$_ts" 2>/dev/null) || _idx=""
     case "$_idx" in
       "{"*)
         REPO_RAW="$_b"
@@ -204,6 +214,7 @@ fetch_pkg() {
   _url=$2
   _rel=$3
   _label=${4:-$_rel}
+  _source=${5:-}
   mkdir -p "$(dirname "$_dest")"
 
   _expect_sha=$(manifest_get "$_rel" sha256)
@@ -238,6 +249,17 @@ fetch_pkg() {
   fi
 
   OTA_FETCHED=$(( ${OTA_FETCHED:-0} + 1 ))
+  if [ -n "$_source" ] && [ -f "$_source" ]; then
+    if [ -n "$_expect_sha" ]; then
+      _source_sha=$(file_sha256 "$_source")
+      if [ -z "$_source_sha" ] || [ "$_source_sha" != "$_expect_sha" ]; then
+        ucwc_log "归档校验失败：$_label"
+        return 1
+      fi
+    fi
+    cp -a "$_source" "$_dest"
+    return 0
+  fi
   download -o "$_dest" "$_url"
 }
 
@@ -299,6 +321,7 @@ install_version() {
   fi
 
   base="$REPO_RAW/versions/$VERSION"
+  release_base="https://github.com/deltrivx/ThemeMusic/releases/download/$VERSION"
   tmp=$(mktemp -d /tmp/ThemeMusic.XXXXXX)
   trap 'rm -rf "$tmp"' EXIT INT TERM
   OTA_SKIPPED=0
@@ -315,7 +338,8 @@ install_version() {
   mkdir -p "$tmp/assets" "$PERSIST_DIR/assets" "$RUNTIME_DIR/assets"
 
   progress 22 "拉取清单" "files.manifest（OTA 差异比对）"
-  if download -o "$tmp/files.manifest" "$base/files.manifest?_ts=$(date +%s)"; then
+  if download -o "$tmp/files.manifest" "$release_base/files.manifest" \
+    || download -o "$tmp/files.manifest" "$base/files.manifest?_ts=$(date +%s)"; then
     MANIFEST_JSON=$(cat "$tmp/files.manifest" 2>/dev/null || true)
     case "$MANIFEST_JSON" in
       "{"*) ucwc_log "已加载文件清单（OTA 可用 sha256 比对）" ;;
@@ -323,6 +347,39 @@ install_version() {
     esac
   else
     ucwc_log "无 files.manifest（旧包），OTA 将尽量复用同尺寸本地文件"
+  fi
+
+  # Prefer one small, checksummed Release archive over a dozen raw GitHub
+  # requests. OTA still compares every manifest hash and only writes changed
+  # runtime files. Legacy releases automatically fall back to per-file fetches.
+  ARCHIVE_DIR=""
+  archive="$tmp/ThemeMusic-$VERSION.tar.gz"
+  sums="$tmp/SHA256SUMS"
+  if download -o "$sums" "$release_base/SHA256SUMS" \
+    && download -o "$archive" "$release_base/ThemeMusic-$VERSION.tar.gz"; then
+    archive_expect=$(awk -v n="ThemeMusic-$VERSION.tar.gz" '$2 == n {print $1; exit}' "$sums" 2>/dev/null || true)
+    archive_actual=$(file_sha256 "$archive")
+    archive_root="ThemeMusic-$VERSION"
+    if [ -n "$archive_expect" ] && [ "$archive_actual" = "$archive_expect" ] \
+      && tar -tzf "$archive" | awk -v p="$archive_root" '
+        $0 == p || index($0, p "/") == 1 {
+          if ($0 ~ /(^|\/)\.\.(\/|$)/) bad=1
+          next
+        }
+        { bad=1 }
+        END { exit bad }
+      ' \
+      && ! tar -tvzf "$archive" | awk '$1 ~ /^[lh]/ { found=1 } END { exit !found }'; then
+      mkdir -p "$tmp/release"
+      if tar -xzf "$archive" -C "$tmp/release" \
+        && [ -d "$tmp/release/$archive_root" ]; then
+        ARCHIVE_DIR="$tmp/release/$archive_root"
+        ucwc_log "已验证并展开 Release 归档（单次下载，逐文件 SHA256）"
+      fi
+    fi
+  fi
+  if [ -z "$ARCHIVE_DIR" ]; then
+    ucwc_log "Release 归档不可用，将回退到逐文件镜像下载"
   fi
 
   progress 35 "下载文件" "ThemeMusic 页面与播放器"
@@ -343,7 +400,7 @@ install_version() {
     bn=$(basename "$f")
     dir=$(dirname "$f")
     mkdir -p "$tmp/$dir"
-    if fetch_pkg "$tmp/$f" "$base/$f" "$f" "$bn"; then
+    if fetch_pkg "$tmp/$f" "$base/$f" "$f" "$bn" "${ARCHIVE_DIR:+$ARCHIVE_DIR/$f}"; then
       :
     elif download -o "$tmp/$f" "$REPO_RAW/$f"; then
       OTA_FETCHED=$((OTA_FETCHED + 1))

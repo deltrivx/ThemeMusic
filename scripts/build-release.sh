@@ -112,8 +112,15 @@ PY
 
 (
   cd "$DIST_DIR"
-  zip -q -r "ThemeMusic-$VERSION.zip" "ThemeMusic-$VERSION"
-  tar -czf "ThemeMusic-$VERSION.tar.gz" "ThemeMusic-$VERSION"
+  # macOS otherwise serializes extended attributes as hidden AppleDouble
+  # entries (._*) that produce warnings and fail strict archive validation on
+  # Unraid/Linux.
+  COPYFILE_DISABLE=1 zip -q -X -r "ThemeMusic-$VERSION.zip" "ThemeMusic-$VERSION"
+  tar_flags=(--no-xattrs)
+  if tar --version 2>&1 | grep -qi bsdtar; then
+    tar_flags+=(--no-mac-metadata)
+  fi
+  COPYFILE_DISABLE=1 tar "${tar_flags[@]}" -czf "ThemeMusic-$VERSION.tar.gz" "ThemeMusic-$VERSION"
   cp "$PACKAGE_DIR/theme.music.plg" "theme.music-$VERSION.plg"
   cp "$PACKAGE_DIR/files.manifest" files.manifest
   cp "$PACKAGE_DIR/install.sh" install.sh

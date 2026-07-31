@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "v1.1.2">
+<!ENTITY version   "v1.1.3">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-		<!ENTITY ver       "v1.1.2">
+		<!ENTITY ver       "v1.1.3">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 		
@@ -17,6 +17,10 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+		### v1.1.3
+		- 安装器优先使用经总校验的 Release 归档，避免 Raw 单文件请求长时间阻塞
+		- 归档通过总 SHA256 后仍逐文件复核清单，OTA 只写入变化项
+		- 收紧故障端点等待并增加 Release 备用入口，旧版本仍可自动回退
 		### v1.1.2
 		- 仓库说明、关于、支持、安全、贡献和中英文协议体系全面规范化
 		- Release 增加独立安装脚本、文件清单和统一校验和，安装后同步 PLG 元数据
