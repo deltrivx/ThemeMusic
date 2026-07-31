@@ -20,6 +20,7 @@ PACKAGE_DIR="$DIST_DIR/ThemeMusic-$VERSION"
 RUNTIME_FILES=(
   ThemeMusic.page
   ThemeMusic_Loader.page
+  PLUGIN-README.md
   assets/theme-music-settings.css
   assets/theme-music-settings.js
   assets/ucwc-music.css
@@ -75,8 +76,12 @@ cp -R "$VERSION_DIR"/. "$PACKAGE_DIR"/
 copy_release_file() {
   local rel="$1"
   local dest="$2"
-  if [[ "$MODE" == "existing" ]] && git -C "$ROOT" cat-file -e "$VERSION:$rel" 2>/dev/null; then
-    git -C "$ROOT" show "$VERSION:$rel" > "$dest"
+  if [[ "$MODE" == "existing" ]]; then
+    if git -C "$ROOT" cat-file -e "$VERSION:$rel" 2>/dev/null; then
+      git -C "$ROOT" show "$VERSION:$rel" > "$dest"
+    else
+      return 1
+    fi
   else
     cp "$ROOT/$rel" "$dest"
   fi
@@ -86,6 +91,9 @@ copy_release_file theme.music.plg "$PACKAGE_DIR/theme.music.plg"
 copy_release_file README.md "$PACKAGE_DIR/README.md"
 copy_release_file CHANGELOG.md "$PACKAGE_DIR/CHANGELOG.md"
 copy_release_file scripts/install.sh "$PACKAGE_DIR/install.sh"
+for doc in ABOUT.md CONTRIBUTING.md SECURITY.md SUPPORT.md LICENSE LICENSE-ASSETS.md NOTICE; do
+  copy_release_file "$doc" "$PACKAGE_DIR/$doc" || true
+done
 
 # Historical manifests used date-letter package versions. Release artifacts use
 # one canonical semantic version in both Unraid's package version and OTA target.
@@ -107,10 +115,14 @@ PY
   zip -q -r "ThemeMusic-$VERSION.zip" "ThemeMusic-$VERSION"
   tar -czf "ThemeMusic-$VERSION.tar.gz" "ThemeMusic-$VERSION"
   cp "$PACKAGE_DIR/theme.music.plg" "theme.music-$VERSION.plg"
+  cp "$PACKAGE_DIR/files.manifest" files.manifest
+  cp "$PACKAGE_DIR/install.sh" install.sh
   shasum -a 256 \
     "ThemeMusic-$VERSION.zip" \
     "ThemeMusic-$VERSION.tar.gz" \
-    "theme.music-$VERSION.plg" > SHA256SUMS
+    "theme.music-$VERSION.plg" \
+    files.manifest \
+    install.sh > SHA256SUMS
 )
 
 echo "版本目录：$VERSION_DIR"

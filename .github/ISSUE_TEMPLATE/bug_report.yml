@@ -1,0 +1,39 @@
+name: 问题报告
+description: 报告可重复的 Theme Music 故障
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: 请先移除密码、Token、Cookie、私人媒体信息和公网地址。
+  - type: input
+    id: versions
+    attributes:
+      label: 版本
+      description: Theme Music、Unraid 和浏览器版本
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: 音源
+      options: [本地目录, Navidrome/OpenSubsonic]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 重现步骤
+      description: 请给出最小、连续、可重复的步骤。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期与实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 已脱敏日志或截图

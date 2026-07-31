@@ -1,0 +1,94 @@
+#!/bin/bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+VERSION="${1:-}"
+cd "$ROOT"
+
+echo "[1/7] JavaScript 与 Shell 语法"
+node --check assets/ucwc-music.js
+node --check assets/theme-music-settings.js
+sh -n scripts/install.sh
+bash -n scripts/build-release.sh
+bash -n scripts/verify-release.sh
+
+echo "[2/7] JSON 与版本索引"
+python3 -m json.tool versions/index.json >/dev/null
+python3 - <<'PY'
+import json, pathlib, re
+root = pathlib.Path('.')
+index = json.loads((root / 'versions/index.json').read_text())
+ids = [item['id'] for item in index['versions']]
+assert ids, '版本索引为空'
+assert len(ids) == len(set(ids)), '版本索引存在重复 id'
+assert index['default'] == index['latest_version'] == ids[0], '默认、最新和首项不一致'
+plg = (root / 'theme.music.plg').read_text()
+m = re.search(r'<!ENTITY\s+version\s+"([^"]+)">', plg)
+assert m and m.group(1) == ids[0], 'PLG 版本与索引不一致'
+readme = (root / 'README.md').read_text()
+assert ids[0] in readme, 'README 未声明当前版本'
+changelog = (root / 'CHANGELOG.md').read_text()
+assert re.search(r'^##\s+' + re.escape(ids[0]) + r'\b', changelog, re.M), 'CHANGELOG 缺少当前版本'
+print(f"当前版本：{ids[0]}；索引版本数：{len(ids)}")
+PY
+
+echo "[3/7] 所有版本清单哈希"
+python3 - <<'PY'
+import hashlib, json, pathlib
+root = pathlib.Path('versions')
+count = 0
+for manifest in sorted(root.glob('*/files.manifest')):
+    data = json.loads(manifest.read_text())
+    assert data.get('version') == manifest.parent.name, f'{manifest}: version 不一致'
+    for item in data.get('files', []):
+        path = manifest.parent / item['path']
+        assert path.is_file(), f'{manifest}: 缺少 {item["path"]}'
+        raw = path.read_bytes()
+        assert len(raw) == item['size'], f'{path}: size 不一致'
+        assert hashlib.sha256(raw).hexdigest() == item['sha256'], f'{path}: sha256 不一致'
+        count += 1
+print(f'已校验 {count} 个版本文件')
+PY
+
+echo "[4/7] PLG 内联脚本"
+python3 - <<'PY'
+import html, pathlib, re, subprocess, tempfile
+text = pathlib.Path('theme.music.plg').read_text()
+blocks = re.findall(r'<FILE(?: [^>]*)? Run="/bin/bash"(?: [^>]*)?>\s*<INLINE>\n(.*?)\n</INLINE>', text, re.S)
+assert blocks, '未找到 PLG 内联脚本'
+for idx, block in enumerate(blocks):
+    block = html.unescape(block)
+    for key, value in {
+        '&ver;': 'v0.0.0', '&flash;': '/tmp/theme.music', '&plugdir;': '/tmp/theme.music.runtime',
+        '&installSH;': 'https://example.invalid/install.sh', '&github;': 'owner/repo'
+    }.items():
+        block = block.replace(key, value)
+    with tempfile.NamedTemporaryFile('w', suffix='.sh') as fh:
+        fh.write(block); fh.flush()
+        subprocess.run(['bash', '-n', fh.name], check=True)
+print(f'已校验 {len(blocks)} 个内联脚本')
+PY
+
+echo "[5/7] 文档与许可证"
+for file in README.md ABOUT.md CHANGELOG.md PLUGIN-README.md CONTRIBUTING.md SECURITY.md SUPPORT.md LICENSE LICENSE-ASSETS.md NOTICE; do
+  test -s "$file" || { echo "缺少文档：$file" >&2; exit 1; }
+done
+
+echo "[6/7] 当前源文件一致性"
+if [ -n "$VERSION" ]; then
+  test -d "versions/$VERSION" || { echo "版本目录不存在：$VERSION" >&2; exit 1; }
+  for rel in ThemeMusic.page ThemeMusic_Loader.page PLUGIN-README.md assets/theme-music-settings.css assets/theme-music-settings.js assets/ucwc-music.css assets/ucwc-music.js theme-music-save.php theme-music-update.php theme-music.cfg theme.music.cfg ucwc-music-api.php; do
+    cmp -s "$rel" "versions/$VERSION/$rel" || { echo "快照不一致：$rel" >&2; exit 1; }
+  done
+else
+  echo "未指定版本，跳过当前快照比较"
+fi
+
+echo "[7/7] 发布产物"
+if [ -n "$VERSION" ]; then
+  (cd "dist/$VERSION" && shasum -a 256 -c SHA256SUMS)
+else
+  echo "未指定版本，跳过发布产物校验"
+fi
+
+echo "Theme Music 发布检查全部通过。"
