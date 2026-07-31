@@ -1,5 +1,15 @@
 # Theme Music Changelog
 
+## v1.1.0-beta — 2026-07-31
+
+### Navidrome 音源
+- 设置页增加 Navidrome 地址、用户名、独立密码和连接测试
+- 使用 Subsonic 1.16.1 加盐令牌鉴权，密码仅写入 `navidrome.secret`（权限 `0600`）
+- 支持 Navidrome 曲库分页读取、两分钟缓存、搜索、排序和手动刷新
+- 音频经插件同源代理转发，完整保留 HTTP Range，浏览器不接触 Navidrome 密码
+- 接入 Navidrome 封面、同步歌词和无时间轴歌词
+- 保留本地目录音源，可在两种音源之间切换；升级不会覆盖现有配置
+
 ## v1.0.19 — 2026-07-31
 
 ### 自动续播状态

@@ -23,7 +23,7 @@
   <script>
     window.__UCWC_MUSIC__ = {
       enable: true,
-      source: "local",
+      source: new URLSearchParams(location.search).get("source") === "navidrome" ? "navidrome" : "local",
       run_mode: "card",
       volume: 70,
       autoplay: false,
@@ -33,8 +33,8 @@
     window.fetch = function (url) {
       var body = String(url).indexOf("action=list") >= 0
         ? {ok:true,tracks:[
-            {id:"a.mp3",title:"测试歌曲 A",artist:"测试歌手",album:"测试专辑",ext:"mp3",size:1024},
-            {id:"b.mp3",title:"测试歌曲 B",artist:"测试歌手",album:"测试专辑",ext:"mp3",size:2048}
+            {id:window.__UCWC_MUSIC__.source === "navidrome" ? "nd:song-a" : "a.mp3",title:"测试歌曲 A",artist:"测试歌手",album:"测试专辑",ext:"mp3",size:1024},
+            {id:window.__UCWC_MUSIC__.source === "navidrome" ? "nd:song-b" : "b.mp3",title:"测试歌曲 B",artist:"测试歌手",album:"测试专辑",ext:"mp3",size:2048}
           ]}
         : {ok:false};
       return Promise.resolve({ok:true,json:function(){return Promise.resolve(body);}});

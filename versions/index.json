@@ -4,6 +4,14 @@
   "latest_version": "v1.0.19",
   "versions": [
     {
+      "id": "v1.1.0-beta",
+      "label": "Beta v1.1.0：新增 Navidrome 曲库、串流、封面和歌词音源",
+      "channel": "beta",
+      "released_at": "2026-07-31",
+      "music": true,
+      "ota": true
+    },
+    {
       "id": "v1.0.19",
       "label": "正式版 v1.0.19：正常播放后自动清除续播提示",
       "channel": "stable",
