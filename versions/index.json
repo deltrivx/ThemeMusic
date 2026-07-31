@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.10",
-  "latest_version": "v1.0.10",
+  "default": "v1.0.11",
+  "latest_version": "v1.0.11",
   "versions": [
+    {
+      "id": "v1.0.11",
+      "label": "正式版 v1.0.11：本地搜索/重扫；截断提示；歌词重匹配；设置页清理缓存",
+      "channel": "stable",
+      "released_at": "2026-07-31",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.10",
       "label": "正式版 v1.0.10：左侧固定宽度；右侧复用区吃满剩余宽度（去 280 空白条）",
