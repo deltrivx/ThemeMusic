@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Theme Music 更新日志布局回归</title>
+  <script>if (new URLSearchParams(location.search).get("narrow") === "1") document.documentElement.className = "narrow";</script>
+  <link rel="stylesheet" href="../assets/theme-music-settings.css">
+  <style>
+    body { margin: 0; background: #111; }
+    #tm-panel { display: block; position: static; transform: none; margin: 20px auto; }
+    html.narrow #tm-panel { width: 350px; }
+  </style>
+</head>
+<body>
+  <div id="tm-panel">
+    <h3>更新日志</h3>
+    <div class="tm-ver-grid">
+      <div class="tm-ver-list">
+        <button class="tm-ver-item active"><strong>v1.1.7-super-long-version-name</strong> · 2026-07-31<br>这是一个用于验证左侧简短更新日志能够在表格区域内自动换行而不会产生横向滚动的超长说明ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<br><span class="tm-chip">music</span></button>
+      </div>
+      <div><div class="tm-log">右侧完整更新日志。ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789</div></div>
+    </div>
+  </div>
+</body>
+</html>

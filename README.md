@@ -2,12 +2,12 @@
 
 [![最新版本](https://img.shields.io/github/v/release/deltrivx/ThemeMusic?display_name=tag&sort=semver&label=最新版本)](https://github.com/deltrivx/ThemeMusic/releases/latest)
 [![Unraid](https://img.shields.io/badge/Unraid-6.12%2B-F15A2C?logo=unraid&logoColor=white)](https://unraid.net/)
-[![代码许可](https://img.shields.io/badge/代码许可-MIT-2ea44f)](LICENSE)
+[![代码许可](https://img.shields.io/badge/代码许可-PolyForm%20Noncommercial%201.0.0-8a2be2)](LICENSE)
 [![文档与视觉资产](https://img.shields.io/badge/文档与视觉资产-CC%20BY--NC--SA%204.0-8a2be2)](LICENSE-ASSETS.md)
 
 面向 Unraid WebGUI 的独立音乐播放器插件。它把本地目录或 Navidrome/OpenSubsonic 曲库原生融入仪表盘，同时提供可跨页面工作的音乐胶囊、歌词、封面、断点续播和完整的桌面/移动端配置。
 
-> 当前正式版：**v1.1.6** · 插件 ID：`theme.music` · 最低 Unraid：**6.12.0**
+> 当前正式版：**v1.1.7** · 插件 ID：`theme.music` · 最低 Unraid：**6.12.0**
 
 ## 为什么选择 Theme Music
 
@@ -42,7 +42,7 @@ Theme Music 只有一个状态源。卡片与胶囊是否显示完全由设置�
 https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/theme.music.plg
 ```
 
-安装完成后进入 **设置 → 用户偏好 → 主题音乐**。
+安装完成后插件默认关闭。进入 **设置 → 用户偏好 → 主题音乐**，手动开启总开关并完成音源配置后再使用。
 
 也可在 Unraid 终端使用独立安装器：
 
@@ -54,7 +54,7 @@ curl -fsSL https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/in
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/install.sh -o /tmp/theme-music-install.sh
-sh /tmp/theme-music-install.sh install v1.1.6 ota
+sh /tmp/theme-music-install.sh install v1.1.7 ota
 ```
 
 ## 快速配置
@@ -149,11 +149,11 @@ shasum -a 256 -c SHA256SUMS
 
 ## 许可证
 
-- 程序源代码采用 [MIT License](LICENSE)。MIT 允许使用、修改、分发和商业使用。
+- 程序源代码采用 [PolyForm Noncommercial License 1.0.0](LICENSE)：允许个人与非商业组织在非商业目的下使用、修改和分发；任何商业使用均须事先取得作者书面授权。
 - 仓库原创文档与视觉资产采用 [CC BY-NC-SA 4.0](LICENSE-ASSETS.md)，要求署名、非商业使用并以相同方式共享。
 - 第三方名称、商标、图标及服务分别归其权利人所有，详见 [NOTICE](NOTICE)。
 
-两套许可适用于不同材料，互不覆盖；“非商业”限制不适用于 MIT 授权的程序源代码。
+两套许可适用于不同材料，互不覆盖；程序代码、原创文档和原创视觉资产均禁止未经授权的商业使用。
 
 ## 致谢
 
