@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.0.8",
-  "latest_version": "v1.0.8",
+  "default": "v1.0.9",
+  "latest_version": "v1.0.9",
   "versions": [
+    {
+      "id": "v1.0.9",
+      "label": "正式版 v1.0.9：卡片随 db_box 两栏/三栏 100% 自适应；tbody.sortable 落位对齐系统卡片",
+      "channel": "stable",
+      "released_at": "2026-07-31",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.0.8",
       "label": "正式版 v1.0.8：右侧栏按列表字体测量；避免 max-content 自我锁窄（仍≤280）",
