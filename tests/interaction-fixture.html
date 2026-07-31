@@ -51,6 +51,37 @@
     (function () {
       var dragCount = 0;
       var table = document.getElementById("db_box1");
+      window.fixtureToggleArrow = function (icon) {
+        icon.classList.toggle("fa-chevron-up");
+        icon.classList.toggle("fa-chevron-down");
+      };
+      function installNativeControls() {
+        var host = document.getElementById("ucwc-music-dash-host");
+        var card = document.getElementById("ucwc-music-card");
+        if (!host || !card) return false;
+        var cell = host.querySelector("tr:first-child > td:first-child");
+        var controls = card.querySelector(".tile-header-right-controls");
+        if (!cell || !controls) return false;
+        if (!cell.querySelector(":scope > i.control.tile")) {
+          var dismiss = document.createElement("i");
+          dismiss.className = "fa fa-fw fa-close control tile";
+          dismiss.title = "关闭磁贴";
+          dismiss.textContent = "×";
+          cell.insertBefore(dismiss, cell.firstChild);
+        }
+        if (!controls.querySelector(".openclose")) {
+          var arrow = document.createElement("i");
+          arrow.className = "fa fa-fw fa-chevron-up control openclose";
+          arrow.title = "显示/隐藏内容";
+          arrow.textContent = "⌃";
+          arrow.setAttribute("onclick", "fixtureToggleArrow(this)");
+          controls.appendChild(arrow);
+        }
+        return true;
+      }
+      var nativeTimer = setInterval(function () {
+        if (installNativeControls()) clearInterval(nativeTimer);
+      }, 50);
       ["pointerdown", "mousedown", "touchstart"].forEach(function (type) {
         table.addEventListener(type, function () {
           dragCount += 1;
