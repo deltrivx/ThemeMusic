@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "v1.0.12",
+  "version": "v1.0.16",
   "files": [
     {
       "path": "ThemeMusic.page",
@@ -24,13 +24,13 @@
     },
     {
       "path": "assets/ucwc-music.css",
-      "sha256": "a91ddbc8379405f8c6291451b6977b14d06d52f137623b0270c2cb1f23c4dcd6",
-      "size": 35101
+      "sha256": "522e27d24e0bf44b85bcfbafde31048987f6a2f550dadefa132ecccb9ea55ad4",
+      "size": 36859
     },
     {
       "path": "assets/ucwc-music.js",
-      "sha256": "a08d60c558150ac255f9c7a23a7beaae75d113a6aa865be0e310b28acdd8371c",
-      "size": 172900
+      "sha256": "a6d5240552caf7f0d665c352188f5d964fab1cfe7a03e41e7bf096feb17b5fe7",
+      "size": 183931
     },
     {
       "path": "theme-music-save.php",

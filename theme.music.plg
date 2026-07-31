@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "2026.07.31m">
+<!ENTITY version   "v1.0.16">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-		<!ENTITY ver       "v1.0.15">
+		<!ENTITY ver       "v1.0.16">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 		
@@ -17,59 +17,44 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
-			###2026.07.31k
-			- v1.0.13: status row info icon vertically aligned with source/tip text
-			###2026.07.31j
-			- v1.0.12: stable list/lyrics height; distinct rescan/lyric icons; status info+source+tip
-			###2026.07.31i
-			- v1.0.11: local lib search/rescan; scan truncate tip (2000); lyric re-fetch; cache clear in settings
-			###2026.07.31h
-			- v1.0.10: left pane fixed width; right list/lyrics fills residual (no 280 blank strip)
-			###2026.07.31g
-			- v1.0.9: card width 100% of db_box column (2/3-col); tbody.sortable host like system tiles
-			###2026.07.31f
-			- v1.0.8: fitRightPane uses list-item font metrics; avoid max-content self-lock under 280 cap
-			###2026.07.31e
-			- v1.0.7: dynamic right pane width (cap 280); server-side dash position memory
-			###2026.07.31d
-			- v1.0.6: empty/unconfigured tip only under volume status (no duplicate under title)
-			###2026.07.31b
-			- v1.0.5: boot restore-from-flash before OTA (official package; survive reboot offline/timeout)
-			###2026.07.31a
-			- boot: restore runtime from flash before OTA (survive reboot when GitHub times out)
-			###2026.07.30e
-			- v1.0.4: reject mismatched sidecar LRC; stricter lrclib/netease match; quarantine bad lyrics
-			###2026.07.30d
-			- v1.0.3: lyric clock aligned to ThemeEffects beta (floor*1000 - offset; no fixed lead)
-			###2026.07.30c
-			- v1.0.2: list/lyrics toggle unclipped; rAF lyric sync + LRC offset fix
-			###2026.07.30a
-			- v1.0.1: dual-pane gap; active-only lyric marquee; dash pos persist; mobile apply/done center
-			###2026.07.30
-			- v1.0.0 stable: music source first + local-dir hideRow; PC/mobile profiles; run modes; tab-hide pause
-			###2026.07.30i
-			- v1.0.0-Beta9: PC/mobile separate run mode + playback defaults; pause on tab hide
-			###2026.07.30h
-			- v1.0.0-Beta8: run mode card/chip/both; remove play-range; SERVICE master switch
-			###2026.07.30g
-			- v1.0.0-Beta7: cross-page resume/mobile progress recovery; FLAC stall hard-reset
-			###2026.07.30f
-			- v1.0.0-Beta6: card dual-pane fixed widths; wider list/lyrics rail; tighter L-R gap
-			###2026.07.30e
-		- v1.0.0-Beta5: title 主题音乐 + title runtime switch; remove dual-install warn/music subtitle; uniform control column
-		###2026.07.30d
-		- v1.0.0-Beta4: uniform settings control column; sitewide chip vs ThemeEffects cfg isolation
-		###2026.07.30c
-		- v1.0.0-Beta3: content-sized selects, fileTree path align, independent update UI
-		- remove save tip under title; theme-music-update.php + settings.js
-		###2026.07.30b
-		- v1.0.0-Beta2: settings page Unraid markdown form (dt/dd) aligned with ThemeEffects
-		- Apply button unlock on form change (BodyInlineJS + class=lock)
-		- theme-music-settings.css path-field widths; install.sh OTA includes settings CSS
-		###2026.07.30a
-		- v1.0.0-Beta1: standalone Unraid music plugin (dashboard card + sitewide chip)
-		- Local library (mp3/flac/m4a…), LRC lyrics, cover cache, cross-page resume (best-effort)
-		- Independent of ThemeEffects; do not enable music on both plugins at once
+		### v1.0.16
+		- 修复仪表盘重绘或克隆卡片后，随机与循环按钮多次点击失效
+		- 隔离按钮鼠标、触摸事件与 Unraid 卡片拖拽，兼容电脑端和移动端
+		- 卡片外观改用 Unraid 原生仪表盘标题、背景、边框和控件样式
+		- 右上角补充重新扫描、插件设置和隐藏卡片功能键
+		- 插件、OTA、Release 与文档版本号统一使用 v1.0.16
+		### v1.0.15
+		- 优化随机与循环按钮状态刷新，精简曲库状态文案
+		### v1.0.14
+		- 增加曲目排序切换及歌词、封面徽标
+		### v1.0.13
+		- 统一状态栏信息图标、音源和提示文字的垂直对齐
+		### v1.0.12
+		- 稳定曲目与歌词面板高度，区分重扫与歌词匹配图标
+		### v1.0.11
+		- 增加曲库搜索、重新扫描、歌词重新匹配和缓存清理
+		### v1.0.10
+		- 左侧控制区保持稳定，右侧曲目与歌词区填满剩余宽度
+		### v1.0.9
+		- 卡片适配仪表盘两栏与三栏布局，并接入原生拖拽排序
+		### v1.0.8
+		- 根据实际字体宽度优化曲目与歌词面板尺寸
+		### v1.0.7
+		- 增加仪表盘位置服务端记忆
+		### v1.0.6
+		- 修复空曲库和未配置提示重复显示
+		### v1.0.5
+		- 开机优先从闪存恢复插件，离线或网络超时不再丢失
+		### v1.0.4
+		- 加强歌词匹配校验并隔离错误歌词文件
+		### v1.0.3
+		- 修正歌词时间轴与偏移处理
+		### v1.0.2
+		- 修复曲目与歌词切换遮挡及歌词同步
+		### v1.0.1
+		- 优化双栏布局、歌词滚动、卡片位置和移动端按钮
+		### v1.0.0
+		- 首个正式版：独立音乐插件、电脑与手机配置、卡片与胶囊模式
 		]]>
 		</CHANGES>
 
@@ -87,20 +72,18 @@ exit 0
 <INLINE>
 <![CDATA[
 **主题音乐（Theme Music）**
-				## v1.0.0-Beta9 - 2026-07-30
+				## v1.0.16 - 2026-07-31
 				
 				### 概述
 				
 				**主题音乐**独立插件。从 ThemeEffects 抽取音乐组件，以 `theme.music` 发布；路径、配置、缓存与主题特效完全分离。
 				
-				### Beta9 变更
+				### 本版变更
 				
-				- 电脑/手机分设运行模式与音量、自动播放、随机、循环
-				- 手机默认「和电脑端配置相同」；划掉标签页暂停播放
-				
-				### Beta8 变更
-				
-				- 运行模式三选项；取消播放范围；标题后总开关
+				- 修复电脑端和移动端随机、循环按钮多次点击失效
+				- 仪表盘重绘后自动接管新卡片，不再出现重复卡片
+				- 卡片样式与 Unraid 原生仪表盘统一
+				- 右上角提供重新扫描、设置和隐藏功能键
 			]]>
 </INLINE>
 </FILE>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ThemeMusic 交互回归测试</title>
+  <link rel="stylesheet" href="../assets/ucwc-music.css">
+  <style>
+    :root {
+      --dashboard-background-color: #1f242d;
+      --dashboard-border-color: #3a424f;
+      --dashboard-icon-color: #d6dce8;
+      --dashboard-title-action-color: rgba(255,255,255,.1);
+      --text-color: #eef2f8;
+    }
+    body { margin: 20px; color: var(--text-color); background: #11151b; font: 14px Arial,sans-serif; }
+    #fixture-actions { display:flex; gap:8px; margin-bottom:16px; }
+    table.dashboard { width:min(720px,100%); border-collapse:collapse; }
+    table.dashboard > tbody { display:table-row-group; background:var(--dashboard-background-color); border:1px solid var(--dashboard-border-color); }
+    table.dashboard > tbody > tr > td { padding:0; }
+  </style>
+  <script>
+    window.__UCWC_MUSIC__ = {
+      enable: true,
+      source: "local",
+      run_mode: "card",
+      volume: 70,
+      autoplay: false,
+      shuffle: false,
+      repeat: "off"
+    };
+    window.fetch = function (url) {
+      var body = String(url).indexOf("action=list") >= 0
+        ? {ok:true,tracks:[
+            {id:"a.mp3",title:"测试歌曲 A",artist:"测试歌手",album:"测试专辑",ext:"mp3",size:1024},
+            {id:"b.mp3",title:"测试歌曲 B",artist:"测试歌手",album:"测试专辑",ext:"mp3",size:2048}
+          ]}
+        : {ok:false};
+      return Promise.resolve({ok:true,json:function(){return Promise.resolve(body);}});
+    };
+  </script>
+</head>
+<body>
+  <div id="fixture-actions">
+    <button id="fixture-clone" type="button">模拟 Unraid 重绘</button>
+    <output id="fixture-drag-count">拖拽冒泡：0</output>
+  </div>
+  <table id="db_box1" class="dashboard"></table>
+  <script src="../assets/ucwc-music.js"></script>
+  <script>
+    (function () {
+      var dragCount = 0;
+      var table = document.getElementById("db_box1");
+      ["pointerdown", "mousedown", "touchstart"].forEach(function (type) {
+        table.addEventListener(type, function () {
+          dragCount += 1;
+          document.getElementById("fixture-drag-count").textContent = "拖拽冒泡：" + dragCount;
+        });
+      });
+      document.getElementById("fixture-clone").addEventListener("click", function () {
+        var card = document.getElementById("ucwc-music-card");
+        if (!card || !card.parentNode) return;
+        card.parentNode.replaceChild(card.cloneNode(true), card);
+      });
+    })();
+  </script>
+</body>
+</html>
