@@ -21,8 +21,12 @@
     i.tile { display:none; }
   </style>
   <script>
-    if (new URLSearchParams(location.search).get("reset") === "1") {
+    var fixtureParams = new URLSearchParams(location.search);
+    if (fixtureParams.get("reset") === "1") {
       sessionStorage.removeItem("ucwc_music_library_v2");
+      sessionStorage.removeItem("ucwc_music_play_v1");
+      localStorage.removeItem("ucwc_music_play_v1");
+      localStorage.removeItem("ucwc_music_v1");
     }
     window.__fixtureListFetchCount = 0;
     window.__fixtureAudioPlayCount = 0;
@@ -33,7 +37,7 @@
         out.textContent = "音频调用：play=" + window.__fixtureAudioPlayCount + " pause=" + window.__fixtureAudioPauseCount;
       }
     }
-    var fixtureAudioMode = new URLSearchParams(location.search).get("audio");
+    var fixtureAudioMode = fixtureParams.get("audio");
     if (fixtureAudioMode === "mock" || fixtureAudioMode === "blocked") {
       window.Audio = function FixtureAudio() {
         var target = new EventTarget();
@@ -82,15 +86,17 @@
         return target;
       };
     }
-    if (new URLSearchParams(location.search).get("resume") === "1") {
-      var resumePayload = JSON.stringify({playing:true,intent:true,index:0,t:12,id:"a.mp3",vol:0.7,sitewide:false,ts:Date.now()});
+    var fixtureRunMode = fixtureParams.get("mode");
+    if (fixtureRunMode !== "chip" && fixtureRunMode !== "both") fixtureRunMode = "card";
+    if (fixtureParams.get("resume") === "1") {
+      var resumePayload = JSON.stringify({playing:true,intent:true,index:0,t:12,id:"a.mp3",vol:0.7,sitewide:fixtureRunMode !== "card",ts:Date.now()});
       sessionStorage.setItem("ucwc_music_play_v1", resumePayload);
       localStorage.setItem("ucwc_music_play_v1", resumePayload);
     }
     window.__UCWC_MUSIC__ = {
       enable: true,
-      source: new URLSearchParams(location.search).get("source") === "navidrome" ? "navidrome" : "local",
-      run_mode: "card",
+      source: fixtureParams.get("source") === "navidrome" ? "navidrome" : "local",
+      run_mode: fixtureRunMode,
       volume: 70,
       autoplay: false,
       shuffle: false,
@@ -117,6 +123,7 @@
   <div id="fixture-actions">
     <button id="fixture-clone" type="button">模拟 Unraid 重绘</button>
     <button id="fixture-manage" type="button">模拟关闭键注入</button>
+    <button id="fixture-pagehide" type="button">模拟页面隐藏</button>
     <output id="fixture-drag-count">拖拽冒泡：0</output>
     <output id="fixture-fetch-count">曲库请求：0</output>
     <output id="fixture-audio-count">音频调用：play=0 pause=0</output>
@@ -178,6 +185,9 @@
         dismiss.title = "关闭磁贴";
         dismiss.textContent = "×";
         cell.insertBefore(dismiss, cell.firstChild);
+      });
+      document.getElementById("fixture-pagehide").addEventListener("click", function () {
+        window.dispatchEvent(new Event("pagehide"));
       });
     })();
   </script>
