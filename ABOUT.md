@@ -40,7 +40,7 @@ ThemeMusic_Loader.page（全局注入）
 
 - `versions/index.json` 是可安装版本索引。
 - `versions/<版本>/files.manifest` 记录每个运行文件的大小和 SHA256。
-- `scripts/install.sh` 负责安装、OTA、回滚、离线恢复和 PLG 元数据同步。
+- `scripts/install.sh` 优先使用经总校验的 Release 归档，负责安装、差异写入、回滚、离线恢复和 PLG 元数据同步。
 - GitHub Release 提供完整包、PLG、独立安装器、文件清单和总校验清单。
 
 ## 项目关系
