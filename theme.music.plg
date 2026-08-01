@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "v1.1.9">
+<!ENTITY version   "v1.2.0">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-		<!ENTITY ver       "v1.1.9">
+		<!ENTITY ver       "v1.2.0">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 		
@@ -17,6 +17,10 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+		### v1.2.0
+		- 本地大曲库改为低优先级、单实例后台完整索引，复用旧索引并原子切换，避免重复扫描与同步硬截断
+		- 曲目列表按 300 首分段渲染但保留完整播放队列；歌词支持按曲目提前/延后 0.5 秒及手动归零
+		- 设置页启动盘旧缓存按钮独占一行居中；PLG、快照、索引、文档和 Release 产物全部同步
 		### v1.1.9
 		- 自动识别本地阵列盘、SMB/CIFS 与 NFS，本地磁盘唤醒和远端共享就绪探测完全分流
 		- 歌词与下载封面统一保存为歌曲同目录的“歌曲名.lrc”和“歌曲名.jpg”，不再写入启动盘动态缓存

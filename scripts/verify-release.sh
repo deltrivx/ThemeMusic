@@ -45,6 +45,8 @@ ids = [item['id'] for item in index['versions']]
 assert ids, '版本索引为空'
 assert len(ids) == len(set(ids)), '版本索引存在重复 id'
 assert index['default'] == index['latest_version'] == ids[0], '默认、最新和首项不一致'
+latest_channels = [item['id'] for item in index['versions'] if item.get('channel') == 'latest']
+assert latest_channels == [index['latest_version']], f'latest 频道标记错误：{latest_channels}'
 plg = (root / 'theme.music.plg').read_text()
 m = re.search(r'<!ENTITY\s+version\s+"([^"]+)">', plg)
 assert m and m.group(1) == ids[0], 'PLG 版本与索引不一致'
@@ -53,6 +55,23 @@ assert ids[0] in readme, 'README 未声明当前版本'
 changelog = (root / 'CHANGELOG.md').read_text()
 assert re.search(r'^##\s+' + re.escape(ids[0]) + r'\b', changelog, re.M), 'CHANGELOG 缺少当前版本'
 print(f"当前版本：{ids[0]}；索引版本数：{len(ids)}")
+PY
+
+python3 - <<'PY'
+import pathlib
+api = pathlib.Path('ucwc-music-api.php').read_text()
+player = pathlib.Path('assets/ucwc-music.js').read_text()
+page = pathlib.Path('ThemeMusic.page').read_text()
+css = pathlib.Path('assets/theme-music-settings.css').read_text()
+assert 'function m_scan_complete(' in api, '缺少后台完整扫描器'
+assert 'LOCK_EX | LOCK_NB' in api and 'nice -n 10 php' in api, '后台索引缺少单实例锁或低优先级启动'
+assert 'm_atomic_json_write' in api and '@rename($tmp, $path)' in api, '曲库索引未使用原子切换'
+assert 'm_scan($root' not in api, 'list 仍调用旧同步扫描'
+assert 'slice(0, 1200)' not in player and 'slice(0,1200)' not in player, '前端仍截断 1200 首'
+assert 'listRenderLimit: 300' in player and 'ucwc-music-list-more' in player, '大曲库缺少分段渲染'
+assert 'LYRIC_DRIFT_KEY' in player and 'adjustLyricDrift(500)' in player and 'adjustLyricDrift(-500)' in player, '歌词时间校准不完整'
+assert 'tm-cache-control-row' in page and 'justify-content: center' in css, '启动盘缓存按钮未独占一行居中'
+print('大曲库、歌词校准与设置布局约束通过')
 PY
 
 echo "[3/7] 所有版本清单哈希"

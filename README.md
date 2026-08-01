@@ -7,7 +7,7 @@
 
 面向 Unraid WebGUI 的独立音乐播放器插件。它把本地目录或 Navidrome/OpenSubsonic 曲库原生融入仪表盘，同时提供可跨页面工作的音乐胶囊、歌词、封面、断点续播和完整的桌面/移动端配置。
 
-> 当前正式版：**v1.1.9** · 插件 ID：`theme.music` · 最低 Unraid：**6.12.0**
+> 当前正式版：**v1.2.0** · 插件 ID：`theme.music` · 最低 Unraid：**6.12.0**
 
 ## 为什么选择 Theme Music
 
@@ -54,7 +54,7 @@ curl -fsSL https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/in
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/install.sh -o /tmp/theme-music-install.sh
-sh /tmp/theme-music-install.sh install v1.1.9 ota
+sh /tmp/theme-music-install.sh install v1.2.0 ota
 ```
 
 ## 快速配置
@@ -86,6 +86,8 @@ sh /tmp/theme-music-install.sh install v1.1.9 ota
 - 目录封面、FLAC 内嵌封面、Navidrome 封面和受控的封面补全。
 - HTTP Range 串流、进度拖动、跨页会话恢复和播放失败自恢复。
 - 卡片位置持久化，兼容 Unraid 重绘、克隆、两栏/三栏与移动布局。
+- 本地大曲库由低优先级单实例后台任务建立完整索引，页面始终复用最后一次完整结果，重复刷新不会叠加扫描。
+- 曲目列表按 300 首分段渲染，完整索引不再因 1200 首前端截断而丢失；歌词可按曲目提前/延后 0.5 秒并手动归零。
 - 六小时曲库索引缓存；歌词和下载封面按歌曲名写入音乐目录并直接复用。
 
 ## 数据、网络与安全

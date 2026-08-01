@@ -11,6 +11,8 @@ permissions:
 
 jobs:
   verify:
+    outputs:
+      version: ${{ steps.build.outputs.version }}
     runs-on: ubuntu-latest
     steps:
       - name: 检出仓库
@@ -30,3 +32,40 @@ jobs:
           name: ThemeMusic-${{ steps.build.outputs.version }}
           path: dist/${{ steps.build.outputs.version }}/
           if-no-files-found: error
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+      - name: 下载已验证产物
+        uses: actions/download-artifact@v4
+        with:
+          name: ThemeMusic-${{ needs.verify.outputs.version }}
+          path: release-assets
+      - name: 创建正式 Release（已存在则跳过）
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "Release $VERSION 已存在，跳过。"
+            exit 0
+          fi
+          awk -v version="$VERSION" '
+            $0 ~ "^## " version "([[:space:]]|$)" {capture=1; next}
+            capture && /^## / {exit}
+            capture {print}
+          ' CHANGELOG.md > release-notes.md
+          assets=()
+          while IFS= read -r -d '' asset; do assets+=("$asset"); done < <(find release-assets -maxdepth 1 -type f -print0)
+          test "${#assets[@]}" -gt 0
+          gh release create "$VERSION" "${assets[@]}" \
+            --target "$GITHUB_SHA" \
+            --title "Theme Music $VERSION" \
+            --notes-file release-notes.md \
+            --latest
