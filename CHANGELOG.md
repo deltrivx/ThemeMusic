@@ -1,3 +1,29 @@
+## v1.3.0-beta — 2026-08-02
+
+### 新增
+
+- **飞牛音乐(FnOS)音源**：新增 `fnos` 音源类型，通过 SSH 直连 FnOS 宿主机读取飞牛音乐的 SQLite 数据库，获取曲库、元数据与文件路径，无需额外服务端 API
+- 支持飞牛音乐已扫描的曲目、专辑、艺术家、时长、码率、采样率等完整元数据
+- 封面与歌词沿用 ThemeMusic 本地文件匹配机制，从歌曲同目录 `.lrc` / `.jpg` 文件读取
+
+### 配置
+
+| 设置项 | 说明 |
+|--------|------|
+| 宿主机地址 | FnOS 宿主机 IP，默认 `192.168.31.5`，需已配置 SSH 免密 |
+| 数据库路径 | 飞牛音乐 SQLite 数据库路径，默认 `/usr/local/apps/@appdata/trim.music/db/music.db` |
+| 音乐目录 | 曲库根目录，默认 `/vol2/1000/Music` |
+
+### 文件改动
+
+| 文件 | 改动 |
+|------|------|
+| `ucwc-music-api.php` | 新增 `fnos` 音源类型，含扫描 worker、list、cover、lyric、stream 路由 |
+| `ThemeMusic.page` | 设置页新增飞牛音乐配置项（宿主机/数据库/音乐目录） |
+| `versions/index.json` | 新增 v1.3.0-beta |
+| `theme.music.plg` | 版本号更新至 v1.3.0-beta |
+| `README.md` | 当前正式版与安装命令更新至 v1.3.0-beta |
+
 ## v1.2.2 — 2026-08-01
 
 ### 修复

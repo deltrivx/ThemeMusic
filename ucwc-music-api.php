@@ -40,6 +40,9 @@ function mcfg_load($path) {
         "MUSIC_RUN_MODE" => "card",
         "MUSIC_UI" => "card",
         "MUSIC_SOURCE" => "local",
+        "MUSIC_FNOS_HOST" => "192.168.31.5",
+        "MUSIC_FNOS_DB" => "/usr/local/apps/@appdata/trim.music/db/music.db",
+        "MUSIC_FNOS_MUSIC_DIR" => "/vol2/1000/Music",
         "MUSIC_LOCAL_DIR" => "",
         "MUSIC_NAVIDROME_URL" => "http://127.0.0.1:4533",
         "MUSIC_NAVIDROME_USER" => "",
@@ -73,7 +76,10 @@ function mcfg_load($path) {
     $d["MUSIC_UI"] = $mode;
     $d["MUSIC_DASH_ONLY"] = ($mode === "card") ? "yes" : "no";
     $src = strtolower(trim((string)($d["MUSIC_SOURCE"] ?? "local")));
-    $d["MUSIC_SOURCE"] = in_array($src, ["local", "navidrome"], true) ? $src : "local";
+    $d["MUSIC_SOURCE"] = in_array($src, ["local", "navidrome", "fnos"], true) ? $src : "local";
+    $d["MUSIC_FNOS_HOST"] = trim((string)($d["MUSIC_FNOS_HOST"] ?? "192.168.31.5"));
+    $d["MUSIC_FNOS_DB"] = trim((string)($d["MUSIC_FNOS_DB"] ?? "/usr/local/apps/@appdata/trim.music/db/music.db"));
+    $d["MUSIC_FNOS_MUSIC_DIR"] = trim((string)($d["MUSIC_FNOS_MUSIC_DIR"] ?? "/vol2/1000/Music"));
     $ndUrl = rtrim(trim((string)($d["MUSIC_NAVIDROME_URL"] ?? "")), "/");
     if ($ndUrl === "" || !preg_match('#^https?://#i', $ndUrl)) $ndUrl = "http://127.0.0.1:4533";
     $d["MUSIC_NAVIDROME_URL"] = $ndUrl;
@@ -2001,7 +2007,58 @@ function m_scan_worker($source, $scope, $cfg) {
     ];
     m_scan_state_write($source, $scope, $state);
     try {
-        if ($source === "local") {
+        if ($source === "fnos") {
+            $host = $cfg["MUSIC_FNOS_HOST"] ?? "192.168.31.5";
+            $db = $cfg["MUSIC_FNOS_DB"] ?? "/usr/local/apps/@appdata/trim.music/db/music.db";
+            $musicDir = $cfg["MUSIC_FNOS_MUSIC_DIR"] ?? "/vol2/1000/Music";
+            $sshCmd = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 " . escapeshellarg($host);
+            $sql = escapeshellarg("SELECT t.id, t.title, t.album_id, t.duration_ms, t.track_no, t.disc_no, t.year, af.path, af.suffix, af.size, af.bitrate, af.sample_rate, af.container, af.codec, a.name as album_name, ar.name as artist_name FROM track t JOIN audio_file af ON t.audio_file_id=af.id LEFT JOIN album a ON t.album_id=a.id LEFT JOIN track_artist ta ON ta.track_id=t.id LEFT JOIN artist ar ON ta.artist_id=ar.id WHERE t.is_audio_file_deleted=0 AND t.is_admin_deleted=0 ORDER BY t.id");
+            $cmd = $sshCmd . " sqlite3 -json " . escapeshellarg($db) . " " . $sql;
+            $output = @shell_exec($cmd);
+            if ($output === null || $output === "") {
+                throw new RuntimeException("飞牛音乐数据库查询失败，请确认 SSH 连接和数据库路径");
+            }
+            $rows = @json_decode($output, true);
+            if (!is_array($rows)) {
+                throw new RuntimeException("飞牛音乐数据库返回格式异常");
+            }
+            $tracks = [];
+            foreach ($rows as $row) {
+                $path = $row["path"] ?? "";
+                if ($path === "") continue;
+                $relPath = $path;
+                if (strpos($path, $musicDir) === 0) {
+                    $relPath = substr($path, strlen($musicDir));
+                }
+                $track = [
+                    "id" => "fnos_" . ($row["id"] ?? 0),
+                    "title" => $row["title"] ?? basename($path),
+                    "artist" => $row["artist_name"] ?? "未知艺术家",
+                    "album" => $row["album_name"] ?? "未知专辑",
+                    "path" => $relPath,
+                    "full_path" => $path,
+                    "duration" => intval(($row["duration_ms"] ?? 0) / 1000),
+                    "track_no" => intval($row["track_no"] ?? 0),
+                    "disc_no" => intval($row["disc_no"] ?? 0),
+                    "year" => intval($row["year"] ?? 0),
+                    "suffix" => $row["suffix"] ?? "",
+                    "size" => intval($row["size"] ?? 0),
+                    "bitrate" => intval($row["bitrate"] ?? 0),
+                    "sample_rate" => intval($row["sample_rate"] ?? 0),
+                    "container" => $row["container"] ?? "",
+                    "codec" => $row["codec"] ?? "",
+                    "source" => "fnos",
+                ];
+                $tracks[] = $track;
+            }
+            $err = "";
+            $meta = [
+                "truncated" => false, "limit" => 100000, "max_depth" => 0,
+                "count" => count($tracks),
+                "elapsed_ms" => (int)round((microtime(true) - $started) * 1000),
+                "stop_reason" => "",
+            ];
+        } elseif ($source === "local") {
             $root = m_realpath_dir($scope);
             if ($root === "") throw new RuntimeException("本地音乐目录无效或不可访问");
             [$tracks, $err, $meta] = m_scan_complete($root, function ($progress) use ($source, $scope, &$state) {
@@ -2227,7 +2284,7 @@ $cfg = mcfg_load($fx_path);
 if (PHP_SAPI === "cli" && (string)($argv[1] ?? "") === "theme-music-scan-worker") {
     $workerSource = strtolower((string)($argv[2] ?? ""));
     $workerScope = base64_decode((string)($argv[3] ?? ""), true);
-    if (in_array($workerSource, ["local", "navidrome"], true) && is_string($workerScope) && $workerScope !== "") {
+    if (in_array($workerSource, ["local", "navidrome", "fnos"], true) && is_string($workerScope) && $workerScope !== "") {
         m_scan_worker($workerSource, $workerScope, $cfg);
     }
     exit;
@@ -2238,7 +2295,9 @@ $action = strtolower(trim((string)($_GET["action"] ?? $_POST["action"] ?? "")));
 if ($action === "config") {
     $root = m_realpath_dir($cfg["MUSIC_LOCAL_DIR"] ?? "");
     $storage = ($cfg["MUSIC_SOURCE"] ?? "local") === "navidrome"
-        ? ["strategy" => "navidrome", "label" => "Navidrome 远端 API", "fs_type" => "http"]
+        ? ($cfg["MUSIC_SOURCE"] === "fnos"
+        ? ["strategy" => "fnos", "label" => "飞牛音乐", "fs_type" => "local"]
+        : ["strategy" => "navidrome", "label" => "Navidrome 远端 API", "fs_type" => "http"])
         : ($root !== "" ? m_detect_storage_source($root, $root) : ["strategy" => "invalid", "label" => "本地音乐目录不可访问", "fs_type" => ""]);
     if (!isset($storage["label"])) $storage["label"] = m_storage_label($storage, true);
     unset($storage["device"], $storage["target"]);
@@ -2251,6 +2310,9 @@ if ($action === "config") {
         "run_mode" => $run_mode,
         "ui" => $run_mode,
         "source" => $cfg["MUSIC_SOURCE"] ?? "local",
+        "fnos_host" => $cfg["MUSIC_FNOS_HOST"] ?? "",
+        "fnos_db" => $cfg["MUSIC_FNOS_DB"] ?? "",
+        "fnos_music_dir" => $cfg["MUSIC_FNOS_MUSIC_DIR"] ?? "",
         "local_dir" => $cfg["MUSIC_LOCAL_DIR"] ?? "",
         "local_dir_ok" => $root !== "",
         "navidrome_url" => $cfg["MUSIC_NAVIDROME_URL"] ?? "",
@@ -2386,6 +2448,31 @@ if ($action === "list") {
     }
     $source = strtolower((string)($cfg["MUSIC_SOURCE"] ?? "local"));
     $forceScan = ((string)($_GET["refresh"] ?? "") === "1");
+    if ($source === "fnos") {
+        $scope = "fnos|" . ($cfg["MUSIC_FNOS_HOST"] ?? "192.168.31.5");
+        $cached = m_library_cache_read($scope);
+        $stale = !is_array($cached) || (time() - (int)($cached["created_at"] ?? 0)) > 21600;
+        $job = ($forceScan || $stale) ? m_start_scan_worker($source, $scope) : m_scan_state_read($source, $scope);
+        $cached = m_library_cache_read($scope);
+        $scanning = m_scan_state_active($job);
+        $tracks = is_array($cached) ? $cached["tracks"] : [];
+        $scanMeta = is_array($cached) ? ($cached["scan"] ?? []) : [];
+        if (!$tracks && !$scanning && ($job["status"] ?? "") === "error") {
+            mjson(["ok" => false, "error" => "飞牛音乐曲库索引失败：" . ($job["error"] ?? "未知错误"), "tracks" => []], 503);
+        }
+        mjson([
+            "ok" => true,
+            "source" => "fnos",
+            "count" => count($tracks),
+            "tracks" => $tracks,
+            "truncated" => false,
+            "limit" => 100000,
+            "max_depth" => 0,
+            "cached" => is_array($cached),
+            "scanning" => $scanning,
+            "scan" => $job,
+        ]);
+    }
     if ($source === "navidrome") {
         $scope = "navidrome|" . ($cfg["MUSIC_NAVIDROME_URL"] ?? "") . "|" . ($cfg["MUSIC_NAVIDROME_USER"] ?? "");
         $cached = m_library_cache_read($scope);
@@ -2405,6 +2492,7 @@ if ($action === "list") {
         mjson([
             "ok" => true,
             "source" => "navidrome",
+            "source" => "fnos",
             "count" => count($tracks),
             "tracks" => $tracks,
             "truncated" => $truncated,
@@ -2485,6 +2573,65 @@ if ($action === "stream") {
         echo "music disabled";
         exit;
     }
+    if (($cfg["MUSIC_SOURCE"] ?? "local") === "fnos") {
+        $host = $cfg["MUSIC_FNOS_HOST"] ?? "192.168.31.5";
+        $db = $cfg["MUSIC_FNOS_DB"] ?? "/usr/local/apps/@appdata/trim.music/db/music.db";
+        $trackId = (int)preg_replace("/^fnos_/", "", $id);
+        $sshCmd = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 " . escapeshellarg($host);
+        $sql = escapeshellarg("SELECT af.path FROM track t JOIN audio_file af ON t.audio_file_id=af.id WHERE t.id=" . $trackId);
+        $path = trim(@shell_exec($sshCmd . " sqlite3 " . escapeshellarg($db) . " " . $sql));
+        if ($path !== "") {
+            $local = m_find_local_cover($path);
+            if ($local !== "") {
+                m_cover_response($local, $cfg);
+                exit;
+            }
+        }
+        mjson(["ok" => false, "error" => "未找到封面"], 404);
+        exit;
+    }
+    if (($cfg["MUSIC_SOURCE"] ?? "local") === "fnos") {
+        $host = $cfg["MUSIC_FNOS_HOST"] ?? "192.168.31.5";
+        $db = $cfg["MUSIC_FNOS_DB"] ?? "/usr/local/apps/@appdata/trim.music/db/music.db";
+        $trackId = (int)preg_replace("/^fnos_/", "", $id);
+        $sshCmd = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 " . escapeshellarg($host);
+        $sql = escapeshellarg("SELECT af.path FROM track t JOIN audio_file af ON t.audio_file_id=af.id WHERE t.id=" . $trackId);
+        $path = trim(@shell_exec($sshCmd . " sqlite3 " . escapeshellarg($db) . " " . $sql));
+        if ($path !== "") {
+            $lyric = m_find_local_lyric($path);
+            if ($lyric !== "") {
+                header("Content-Type: text/plain; charset=utf-8");
+                echo $lyric;
+                exit;
+            }
+        }
+        mjson(["ok" => false, "error" => "未找到歌词"], 404);
+        exit;
+    }
+    if (($cfg["MUSIC_SOURCE"] ?? "local") === "fnos") {
+        $trackId = (int)preg_replace("/^fnos_/", "", $id);
+        $host = $cfg["MUSIC_FNOS_HOST"] ?? "192.168.31.5";
+        $db = $cfg["MUSIC_FNOS_DB"] ?? "/usr/local/apps/@appdata/trim.music/db/music.db";
+        $sshCmd = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 " . escapeshellarg($host);
+        $sql = escapeshellarg("SELECT af.path FROM track t JOIN audio_file af ON t.audio_file_id=af.id WHERE t.id=" . $trackId);
+        $path = trim(@shell_exec($sshCmd . " sqlite3 " . escapeshellarg($db) . " " . $sql));
+        if ($path === "") {
+            mjson(["ok" => false, "error" => "未找到文件"], 404);
+            exit;
+        }
+        $sshCmd2 = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 " . escapeshellarg($host);
+        $absPath = $path;
+        if (strpos($absPath, "/") !== 0) {
+            $musicDir = $cfg["MUSIC_FNOS_MUSIC_DIR"] ?? "/vol2/1000/Music";
+            $absPath = rtrim($musicDir, "/") . "/" . $absPath;
+        }
+        $mime = m_mime_by_suffix(pathinfo($absPath, PATHINFO_EXTENSION));
+        header("Content-Type: " . $mime);
+        header("Content-Disposition: inline");
+        $cmd = $sshCmd2 . " cat " . escapeshellarg($absPath);
+        passthru($cmd);
+        exit;
+    }
     if (($cfg["MUSIC_SOURCE"] ?? "local") === "navidrome") {
         $id = m_navidrome_id($_GET["id"] ?? $_GET["path"] ?? "");
         if ($id === "") {
@@ -2523,6 +2670,65 @@ if ($action === "stream") {
 if ($action === "lyrics") {
     if (($cfg["MUSIC_ENABLE"] ?? "no") !== "yes") {
         mjson(["ok" => false, "error" => "音乐组件未开启", "lines" => []], 400);
+    }
+    if (($cfg["MUSIC_SOURCE"] ?? "local") === "fnos") {
+        $host = $cfg["MUSIC_FNOS_HOST"] ?? "192.168.31.5";
+        $db = $cfg["MUSIC_FNOS_DB"] ?? "/usr/local/apps/@appdata/trim.music/db/music.db";
+        $trackId = (int)preg_replace("/^fnos_/", "", $id);
+        $sshCmd = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 " . escapeshellarg($host);
+        $sql = escapeshellarg("SELECT af.path FROM track t JOIN audio_file af ON t.audio_file_id=af.id WHERE t.id=" . $trackId);
+        $path = trim(@shell_exec($sshCmd . " sqlite3 " . escapeshellarg($db) . " " . $sql));
+        if ($path !== "") {
+            $local = m_find_local_cover($path);
+            if ($local !== "") {
+                m_cover_response($local, $cfg);
+                exit;
+            }
+        }
+        mjson(["ok" => false, "error" => "未找到封面"], 404);
+        exit;
+    }
+    if (($cfg["MUSIC_SOURCE"] ?? "local") === "fnos") {
+        $host = $cfg["MUSIC_FNOS_HOST"] ?? "192.168.31.5";
+        $db = $cfg["MUSIC_FNOS_DB"] ?? "/usr/local/apps/@appdata/trim.music/db/music.db";
+        $trackId = (int)preg_replace("/^fnos_/", "", $id);
+        $sshCmd = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 " . escapeshellarg($host);
+        $sql = escapeshellarg("SELECT af.path FROM track t JOIN audio_file af ON t.audio_file_id=af.id WHERE t.id=" . $trackId);
+        $path = trim(@shell_exec($sshCmd . " sqlite3 " . escapeshellarg($db) . " " . $sql));
+        if ($path !== "") {
+            $lyric = m_find_local_lyric($path);
+            if ($lyric !== "") {
+                header("Content-Type: text/plain; charset=utf-8");
+                echo $lyric;
+                exit;
+            }
+        }
+        mjson(["ok" => false, "error" => "未找到歌词"], 404);
+        exit;
+    }
+    if (($cfg["MUSIC_SOURCE"] ?? "local") === "fnos") {
+        $trackId = (int)preg_replace("/^fnos_/", "", $id);
+        $host = $cfg["MUSIC_FNOS_HOST"] ?? "192.168.31.5";
+        $db = $cfg["MUSIC_FNOS_DB"] ?? "/usr/local/apps/@appdata/trim.music/db/music.db";
+        $sshCmd = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 " . escapeshellarg($host);
+        $sql = escapeshellarg("SELECT af.path FROM track t JOIN audio_file af ON t.audio_file_id=af.id WHERE t.id=" . $trackId);
+        $path = trim(@shell_exec($sshCmd . " sqlite3 " . escapeshellarg($db) . " " . $sql));
+        if ($path === "") {
+            mjson(["ok" => false, "error" => "未找到文件"], 404);
+            exit;
+        }
+        $sshCmd2 = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 " . escapeshellarg($host);
+        $absPath = $path;
+        if (strpos($absPath, "/") !== 0) {
+            $musicDir = $cfg["MUSIC_FNOS_MUSIC_DIR"] ?? "/vol2/1000/Music";
+            $absPath = rtrim($musicDir, "/") . "/" . $absPath;
+        }
+        $mime = m_mime_by_suffix(pathinfo($absPath, PATHINFO_EXTENSION));
+        header("Content-Type: " . $mime);
+        header("Content-Disposition: inline");
+        $cmd = $sshCmd2 . " cat " . escapeshellarg($absPath);
+        passthru($cmd);
+        exit;
     }
     if (($cfg["MUSIC_SOURCE"] ?? "local") === "navidrome") {
         $rel = (string)($_GET["id"] ?? $_GET["path"] ?? "");
@@ -2583,6 +2789,7 @@ if ($action === "lyrics") {
             "ok" => true,
             "id" => $rel,
             "source" => "navidrome",
+            "source" => "fnos",
             "offset_ms" => 0,
             "meta" => $meta ?: new stdClass(),
             "lines" => $lines,
@@ -2736,13 +2943,73 @@ if ($action === "cover") {
     if (($cfg["MUSIC_ENABLE"] ?? "no") !== "yes") {
         mjson(["ok" => false, "error" => "音乐组件未开启", "url" => ""], 400);
     }
+    if (($cfg["MUSIC_SOURCE"] ?? "local") === "fnos") {
+        $host = $cfg["MUSIC_FNOS_HOST"] ?? "192.168.31.5";
+        $db = $cfg["MUSIC_FNOS_DB"] ?? "/usr/local/apps/@appdata/trim.music/db/music.db";
+        $trackId = (int)preg_replace("/^fnos_/", "", $id);
+        $sshCmd = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 " . escapeshellarg($host);
+        $sql = escapeshellarg("SELECT af.path FROM track t JOIN audio_file af ON t.audio_file_id=af.id WHERE t.id=" . $trackId);
+        $path = trim(@shell_exec($sshCmd . " sqlite3 " . escapeshellarg($db) . " " . $sql));
+        if ($path !== "") {
+            $local = m_find_local_cover($path);
+            if ($local !== "") {
+                m_cover_response($local, $cfg);
+                exit;
+            }
+        }
+        mjson(["ok" => false, "error" => "未找到封面"], 404);
+        exit;
+    }
+    if (($cfg["MUSIC_SOURCE"] ?? "local") === "fnos") {
+        $host = $cfg["MUSIC_FNOS_HOST"] ?? "192.168.31.5";
+        $db = $cfg["MUSIC_FNOS_DB"] ?? "/usr/local/apps/@appdata/trim.music/db/music.db";
+        $trackId = (int)preg_replace("/^fnos_/", "", $id);
+        $sshCmd = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 " . escapeshellarg($host);
+        $sql = escapeshellarg("SELECT af.path FROM track t JOIN audio_file af ON t.audio_file_id=af.id WHERE t.id=" . $trackId);
+        $path = trim(@shell_exec($sshCmd . " sqlite3 " . escapeshellarg($db) . " " . $sql));
+        if ($path !== "") {
+            $lyric = m_find_local_lyric($path);
+            if ($lyric !== "") {
+                header("Content-Type: text/plain; charset=utf-8");
+                echo $lyric;
+                exit;
+            }
+        }
+        mjson(["ok" => false, "error" => "未找到歌词"], 404);
+        exit;
+    }
+    if (($cfg["MUSIC_SOURCE"] ?? "local") === "fnos") {
+        $trackId = (int)preg_replace("/^fnos_/", "", $id);
+        $host = $cfg["MUSIC_FNOS_HOST"] ?? "192.168.31.5";
+        $db = $cfg["MUSIC_FNOS_DB"] ?? "/usr/local/apps/@appdata/trim.music/db/music.db";
+        $sshCmd = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 " . escapeshellarg($host);
+        $sql = escapeshellarg("SELECT af.path FROM track t JOIN audio_file af ON t.audio_file_id=af.id WHERE t.id=" . $trackId);
+        $path = trim(@shell_exec($sshCmd . " sqlite3 " . escapeshellarg($db) . " " . $sql));
+        if ($path === "") {
+            mjson(["ok" => false, "error" => "未找到文件"], 404);
+            exit;
+        }
+        $sshCmd2 = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 " . escapeshellarg($host);
+        $absPath = $path;
+        if (strpos($absPath, "/") !== 0) {
+            $musicDir = $cfg["MUSIC_FNOS_MUSIC_DIR"] ?? "/vol2/1000/Music";
+            $absPath = rtrim($musicDir, "/") . "/" . $absPath;
+        }
+        $mime = m_mime_by_suffix(pathinfo($absPath, PATHINFO_EXTENSION));
+        header("Content-Type: " . $mime);
+        header("Content-Disposition: inline");
+        $cmd = $sshCmd2 . " cat " . escapeshellarg($absPath);
+        passthru($cmd);
+        exit;
+    }
     if (($cfg["MUSIC_SOURCE"] ?? "local") === "navidrome") {
         $rel = (string)($_GET["id"] ?? $_GET["path"] ?? "");
         [$song, $songErr] = m_navidrome_song($cfg, $rel);
         if (!is_array($song)) mjson(["ok" => false, "error" => $songErr, "url" => ""], 404);
         $coverId = (string)($song["coverArt"] ?? "");
         if ($coverId === "") {
-            mjson(["ok" => true, "id" => $rel, "url" => "", "source" => "navidrome", "empty" => true]);
+            mjson(["ok" => true, "id" => $rel, "url" => "", "source" => "navidrome",
+            "source" => "fnos", "empty" => true]);
         }
         $raw = isset($_GET["raw"]) && !in_array(strtolower((string)$_GET["raw"]), ["0", "no", "false", "off"], true);
         if ($raw) m_navidrome_proxy($cfg, "getCoverArt", ["id" => $coverId, "size" => 600], "image");
@@ -2752,6 +3019,7 @@ if ($action === "cover") {
             "id" => $rel,
             "url" => $url,
             "source" => "navidrome",
+            "source" => "fnos",
             "empty" => false,
             "error" => null,
         ]);

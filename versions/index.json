@@ -1,12 +1,20 @@
 {
   "schema": 1,
-  "default": "v1.2.2",
-  "latest_version": "v1.2.2",
+  "default": "v1.3.0-beta",
+  "latest_version": "v1.3.0-beta",
   "versions": [
+    {
+      "id": "v1.3.0-beta",
+      "label": "Beta v1.3.0-beta：新增飞牛音乐(FnOS)音源",
+      "channel": "beta",
+      "released_at": "2026-08-02",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.2.2",
       "label": "修复胶囊与卡片的上一曲、下一曲和播放暂停失效",
-      "channel": "latest",
+      "channel": "stable",
       "released_at": "2026-08-01",
       "music": true,
       "ota": true
