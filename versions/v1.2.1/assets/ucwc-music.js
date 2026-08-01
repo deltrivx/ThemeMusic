@@ -4789,8 +4789,7 @@
     var ratio = parseInt(input.value, 10) / 1000;
     if (!isFinite(ratio)) return;
     var target = Math.max(0, Math.min(duration, ratio * duration));
-    
-    else if (audio) audio.currentTime = target;
+    if (audio) audio.currentTime = target;
     syncLyrics(true);
     savePlaySession();
   }
