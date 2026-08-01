@@ -8,6 +8,22 @@ cd "$ROOT"
 echo "[1/7] JavaScript 与 Shell 语法"
 node --check assets/ucwc-music.js
 node --check assets/theme-music-settings.js
+python3 - <<'PY'
+import pathlib, re, subprocess, tempfile
+host = pathlib.Path('assets/ucwc-music-host.html').read_text(encoding='utf-8')
+match = re.search(r'<script>\s*(.*?)\s*</script>', host, re.S)
+assert match, '音乐宿主缺少内联脚本'
+with tempfile.NamedTemporaryFile('w', suffix='.js') as fh:
+    fh.write(match.group(1)); fh.flush()
+    subprocess.run(['node', '--check', fh.name], check=True)
+player = pathlib.Path('assets/ucwc-music.js').read_text(encoding='utf-8')
+assert player.count('hostWindow = window.open(') == 1, '宿主窗口创建点必须严格等于一处'
+assert 'var HOST_NAME = "ucwc_theme_music_host_v2";' in player, '客户端缺少固定宿主窗口名'
+assert 'var HOST_NAME = "ucwc_theme_music_host_v2";' in host, '宿主页面窗口名不一致'
+assert 'window.open(' not in host, '宿主页面不得创建任何新窗口'
+assert not re.search(r'set(?:Interval|Timeout)\s*\([^;]{0,1000}window\.open\s*\(', player, re.S), '定时器不得创建宿主窗口'
+print('音乐宿主语法与单窗口约束通过')
+PY
 sh -n scripts/install.sh
 bash -n scripts/build-release.sh
 bash -n scripts/verify-release.sh
@@ -84,7 +100,7 @@ fi
 echo "[6/7] 当前源文件一致性"
 if [ -n "$VERSION" ]; then
   test -d "versions/$VERSION" || { echo "版本目录不存在：$VERSION" >&2; exit 1; }
-  for rel in ThemeMusic.page ThemeMusic_Loader.page PLUGIN-README.md assets/theme-music-settings.css assets/theme-music-settings.js assets/ucwc-music.css assets/ucwc-music.js theme-music-save.php theme-music-update.php theme-music.cfg theme.music.cfg ucwc-music-api.php; do
+  for rel in ThemeMusic.page ThemeMusic_Loader.page PLUGIN-README.md assets/theme-music-settings.css assets/theme-music-settings.js assets/ucwc-music.css assets/ucwc-music-host.html assets/ucwc-music.js theme-music-save.php theme-music-update.php theme-music.cfg theme.music.cfg ucwc-music-api.php; do
     cmp -s "$rel" "versions/$VERSION/$rel" || { echo "快照不一致：$rel" >&2; exit 1; }
   done
 else

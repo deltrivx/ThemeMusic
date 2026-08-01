@@ -7,7 +7,7 @@
 
 面向 Unraid WebGUI 的独立音乐播放器插件。它把本地目录或 Navidrome/OpenSubsonic 曲库原生融入仪表盘，同时提供可跨页面工作的音乐胶囊、歌词、封面、断点续播和完整的桌面/移动端配置。
 
-> 当前正式版：**v1.1.7** · 插件 ID：`theme.music` · 最低 Unraid：**6.12.0**
+> 当前正式版：**v1.1.8** · 插件 ID：`theme.music` · 最低 Unraid：**6.12.0**
 
 ## 为什么选择 Theme Music
 
@@ -15,7 +15,7 @@
 |---|---|
 | 双音源 | 读取 Unraid 本地目录，或通过 Subsonic API 接入 Navidrome/OpenSubsonic |
 | 原生界面 | 仪表盘音乐卡片复用 Dynamix 卡片结构、配色、拖拽顺序与折叠行为 |
-| 全站播放 | 音乐胶囊在 Unraid 页面间保持播放控制，卡片与胶囊状态双向同步 |
+| 全站播放 | 固定名称的单一音频宿主跨刷新保持播放，Tower 内嵌胶囊与卡片双向同步 |
 | 完整媒体体验 | 播放列表、搜索、排序、随机、循环、进度、音量、封面与同步/普通歌词 |
 | PC / 手机分设 | 两端可独立选择运行模式、音量、自动播放、随机与循环策略 |
 | 存储友好 | 播放前唤醒本地磁盘；CIFS/NFS 音源以轻量读取等待远端存储恢复 |
@@ -32,7 +32,7 @@ Theme Music 只有一个状态源。卡片与胶囊是否显示完全由设置�
 | `chip` | — | ✓ | 继续 |
 | `both` | ✓ | ✓ | 继续 |
 
-手机运行模式可选择“和电脑端配置相同”，也可以独立覆盖。浏览器的自动播放策略仍可能要求首次手势确认。
+手机运行模式可选择“和电脑端配置相同”，也可以独立覆盖。全站模式首次点击播放会创建一个固定名称的紧凑音频宿主窗口；后续刷新和内部切页只重新连接它，不会循环创建标签。切换到非 Tower 页面时播放自动暂停，返回 Tower 后自动恢复；关闭 Tower 页面后宿主会结束播放并自行关闭。浏览器仍可能要求允许本站弹窗或首次播放手势。
 
 ## 安装
 
@@ -54,7 +54,7 @@ curl -fsSL https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/in
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/install.sh -o /tmp/theme-music-install.sh
-sh /tmp/theme-music-install.sh install v1.1.7 ota
+sh /tmp/theme-music-install.sh install v1.1.8 ota
 ```
 
 ## 快速配置

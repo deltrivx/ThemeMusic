@@ -15,5 +15,18 @@ jobs:
     steps:
       - name: 检出仓库
         uses: actions/checkout@v4
-      - name: 校验代码、版本清单、PLG 与文档
-        run: ./scripts/verify-release.sh
+      - name: 构建并校验当前版本
+        id: build
+        run: |
+          version="$(python3 -c 'import json; print(json.load(open("versions/index.json"))["latest_version"])')"
+          ./scripts/verify-release.sh
+          ./scripts/build-release.sh "$version" snapshot
+          git diff --exit-code -- "versions/$version"
+          ./scripts/verify-release.sh "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: 保存构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ThemeMusic-${{ steps.build.outputs.version }}
+          path: dist/${{ steps.build.outputs.version }}/
+          if-no-files-found: error
