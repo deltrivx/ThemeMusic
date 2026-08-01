@@ -1,4 +1,4 @@
-name: 发布 v1.2.1 精确回退
+name: 发布 v1.2.1 取消小窗
 
 on:
   push:
@@ -17,33 +17,52 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 精确恢复 v1.1.9 胶囊队列行为
+      - name: 禁用独立宿主并保留页面内播放器
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, pathlib, re
-          version = 'v1.2.1'
+          import json
+          import pathlib
+          import re
 
+          version = 'v1.2.1'
           js_path = pathlib.Path('assets/ucwc-music.js')
           js = js_path.read_text(encoding='utf-8')
-          old = 'message.tracks = state.tracks.slice();'
-          new = 'message.tracks = state.tracks.slice(0, 1200);'
-          if old in js:
-              js = js.replace(old, new, 1)
-          elif new not in js:
-              raise SystemExit('找不到胶囊队列发送逻辑')
-          js_path.write_text(js, encoding='utf-8')
 
-          # 确认 v1.2.0 其他核心功能仍在。
+          # 胶囊控制直接回落到当前页面的 audio 播放器。
+          # 保留旧宿主代码作为兼容死代码，但不再分发命令或创建小窗。
+          pattern = r'(function dispatchPersistentHost\(command, fromGesture\) \{\n)(\s*)'
+          replacement = r'\1\2// v1.2.1: disable popup host; caller continues through the local audio fallback.\n\2return false;\n\2'
+          js, count = re.subn(pattern, replacement, js, count=1)
+          if count != 1:
+              if 'v1.2.1: disable popup host' not in js:
+                  raise SystemExit('找不到独立宿主分发入口')
+
+          # 防止未来代码绕过分发入口直接调用创建函数。
+          pattern2 = r'(function ensurePersistentHostFromGesture\(command\) \{\n)(\s*)'
+          replacement2 = r'\1\2// v1.2.1: popup host is intentionally disabled.\n\2return false;\n\2'
+          js, count2 = re.subn(pattern2, replacement2, js, count=1)
+          if count2 != 1:
+              if 'popup host is intentionally disabled' not in js:
+                  raise SystemExit('找不到独立宿主创建入口')
+
+          # 保留完整曲库，不恢复任何 1200 首截断。
+          js = js.replace('message.tracks = state.tracks.slice(0, 1200);', 'message.tracks = state.tracks.slice();')
+
           required = [
               'listRenderLimit: 300',
               'LYRIC_DRIFT_KEY',
               'state.tracks = j.tracks',
               'libraryScanning',
+              'v1.2.1: disable popup host',
+              'popup host is intentionally disabled',
           ]
           for token in required:
               if token not in js:
                   raise SystemExit('核心功能缺失：' + token)
+          if 'slice(0, 1200)' in js or 'slice(0,1200)' in js:
+              raise SystemExit('仍存在 1200 首前端截断')
+          js_path.write_text(js, encoding='utf-8')
 
           index_path = pathlib.Path('versions/index.json')
           index = json.loads(index_path.read_text(encoding='utf-8'))
@@ -55,7 +74,7 @@ jobs:
           index['versions'] = [x for x in index['versions'] if x.get('id') != version]
           index['versions'].insert(0, {
               'id': version,
-              'label': '正式版 v1.2.1：音乐胶囊恢复 v1.1.9 队列行为；保留 v1.2.0 大曲库索引与歌词校准',
+              'label': '正式版 v1.2.1：音乐胶囊取消独立小窗并恢复页面内播放；保留完整曲库索引与歌词校准',
               'channel': 'latest',
               'released_at': '2026-08-01',
               'music': True,
@@ -69,16 +88,21 @@ jobs:
           readme = readme.replace('install v1.2.0 ota', 'install v1.2.1 ota')
           readme_path.write_text(readme, encoding='utf-8')
 
+          plugin_readme_path = pathlib.Path('PLUGIN-README.md')
+          plugin_readme = plugin_readme_path.read_text(encoding='utf-8')
+          plugin_readme = plugin_readme.replace('单一音频宿主跨刷新保持播放', '页面内音频播放器与胶囊控制')
+          plugin_readme_path.write_text(plugin_readme, encoding='utf-8')
+
           changelog_path = pathlib.Path('CHANGELOG.md')
           changelog = changelog_path.read_text(encoding='utf-8')
           heading = '## v1.2.1 — 2026-08-01'
           if heading not in changelog:
               entry = '''## v1.2.1 — 2026-08-01
 
-### 音乐胶囊行为回退
-- 音乐胶囊发送给独立播放宿主的曲目队列恢复为 v1.1.9 的最多 1200 首，撤销 v1.2.0 对胶囊完整曲库队列的改动
-- 仪表盘音乐卡片和服务器仍保留完整曲库，曲目列表继续按 300 首分段渲染
-- 保留 v1.1.9 的存储分流、歌曲同目录歌词/封面，以及 v1.2.0 的后台索引和歌词时间校准
+### 音乐胶囊取消独立小窗
+- 禁用独立音频宿主的命令分发与创建入口，音乐胶囊重新直接控制当前 Unraid 页面内的隐藏 audio 播放器
+- 点击播放、上一首和下一首不再调用 `window.open`，完整页面刷新后继续依靠既有会话状态恢复曲目与进度
+- 保留 v1.1.9 的本地磁盘/SMB/NFS 分流与歌曲同目录歌词封面，以及 v1.2.0 的后台完整索引、300 首分段渲染和歌词时间校准
 
 '''
               changelog = changelog.replace('# Theme Music Changelog\n\n', '# Theme Music Changelog\n\n' + entry, 1)
@@ -90,8 +114,8 @@ jobs:
           plg = re.sub(r'(<!ENTITY\s+ver\s+")[^"]+(">)', r'\g<1>v1.2.1\2', plg, count=1)
           marker = '\t\t## Theme Music\n'
           note = ('\t\t### v1.2.1\n'
-                  '\t\t- 音乐胶囊恢复 v1.1.9 的 1200 首宿主队列行为\n'
-                  '\t\t- 完整后台索引、300 首分段渲染和歌词校准保持不变\n')
+                  '\t\t- 音乐胶囊取消独立小窗，恢复当前 Unraid 页面内播放\n'
+                  '\t\t- v1.1.9 存储功能与 v1.2.0 完整曲库、分段渲染、歌词校准保持不变\n')
           if '\t\t### v1.2.1\n' not in plg:
               plg = plg.replace(marker, marker + note, 1)
           plg_path.write_text(plg, encoding='utf-8')
@@ -105,6 +129,6 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add assets/ucwc-music.js README.md CHANGELOG.md theme.music.plg versions/index.json versions/v1.2.1
-          git commit -m '发布 Theme Music v1.2.1：回退音乐胶囊队列行为'
+          git add assets/ucwc-music.js README.md PLUGIN-README.md CHANGELOG.md theme.music.plg versions/index.json versions/v1.2.1
+          git commit -m '发布 Theme Music v1.2.1：取消音乐胶囊独立小窗'
           git push origin HEAD:main
