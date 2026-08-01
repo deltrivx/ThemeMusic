@@ -1,12 +1,20 @@
 {
   "schema": 1,
-  "default": "v1.2.1",
-  "latest_version": "v1.2.1",
+  "default": "v1.2.2",
+  "latest_version": "v1.2.2",
   "versions": [
+    {
+      "id": "v1.2.2",
+      "label": "修复胶囊与卡片的上一曲、下一曲和播放暂停失效",
+      "channel": "latest",
+      "released_at": "2026-08-01",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.2.1",
       "label": "移除音频宿主弹窗，胶囊改用内联音频",
-      "channel": "latest",
+      "channel": "history",
       "released_at": "2026-08-01",
       "music": true,
       "ota": true
