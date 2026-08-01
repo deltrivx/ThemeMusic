@@ -7,7 +7,7 @@
 
 面向 Unraid WebGUI 的独立音乐播放器插件。它把本地目录或 Navidrome/OpenSubsonic 曲库原生融入仪表盘，同时提供可跨页面工作的音乐胶囊、歌词、封面、断点续播和完整的桌面/移动端配置。
 
-> 当前正式版：**v1.1.8** · 插件 ID：`theme.music` · 最低 Unraid：**6.12.0**
+> 当前正式版：**v1.1.9** · 插件 ID：`theme.music` · 最低 Unraid：**6.12.0**
 
 ## 为什么选择 Theme Music
 
@@ -54,7 +54,7 @@ curl -fsSL https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/in
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/install.sh -o /tmp/theme-music-install.sh
-sh /tmp/theme-music-install.sh install v1.1.8 ota
+sh /tmp/theme-music-install.sh install v1.1.9 ota
 ```
 
 ## 快速配置
@@ -86,7 +86,7 @@ sh /tmp/theme-music-install.sh install v1.1.8 ota
 - 目录封面、FLAC 内嵌封面、Navidrome 封面和受控的封面补全。
 - HTTP Range 串流、进度拖动、跨页会话恢复和播放失败自恢复。
 - 卡片位置持久化，兼容 Unraid 重绘、克隆、两栏/三栏与移动布局。
-- 曲库、歌词和封面缓存管理；手动刷新可绕过曲库缓存。
+- 六小时曲库索引缓存；歌词和下载封面按歌曲名写入音乐目录并直接复用。
 
 ## 数据、网络与安全
 
@@ -108,10 +108,10 @@ sh /tmp/theme-music-install.sh install v1.1.8 ota
 | 普通配置 | `/boot/config/plugins/theme.music/theme-music.cfg` |
 | 服务开关 | `/boot/config/plugins/theme.music/theme.music.cfg` |
 | Navidrome 密码 | `/boot/config/plugins/theme.music/navidrome.secret` |
-| 封面/歌词缓存 | `/boot/config/plugins/theme.music/cover-cache`、`lyrics-cache` |
+| 本地歌词/下载封面 | 与歌曲同目录的 `歌曲名.lrc`、`歌曲名.jpg` |
 | Web API | `/plugins/theme.music/ucwc-music-api.php` |
 
-用户配置、密码和缓存不会打入 GitHub Release。升级默认保留配置；卸载会禁用服务并保留 flash 中的用户数据，便于恢复。
+用户配置和密码不会打入 GitHub Release。安装/升级会删除旧版本遗留的启动盘动态歌词与封面缓存，但保留配置、密码和插件状态；卸载会禁用服务并保留 flash 中的用户数据，便于恢复。
 
 ## 发布、校验与回滚
 

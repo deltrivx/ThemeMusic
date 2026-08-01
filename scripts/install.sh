@@ -178,6 +178,29 @@ file_size() {
   wc -c < "$1" 2>/dev/null | tr -d ' \t\r\n'
 }
 
+clear_legacy_boot_caches() {
+  _removed=0
+  _bytes=0
+  for _legacy in \
+    "$PERSIST_DIR/lyrics-cache" \
+    "$PERSIST_DIR/cover-cache"
+  do
+    # Safety invariant: only these two retired dynamic-cache directories may be removed.
+    case "$_legacy" in
+      "$PERSIST_DIR/lyrics-cache"|"$PERSIST_DIR/cover-cache") ;;
+      *) ucwc_log "拒绝清理非白名单路径：$_legacy"; return 1 ;;
+    esac
+    if [ -d "$_legacy" ]; then
+      _n=$(find "$_legacy" -type f 2>/dev/null | wc -l | tr -d ' ')
+      _b=$(du -sk "$_legacy" 2>/dev/null | awk '{print $1 * 1024}')
+      _removed=$((_removed + ${_n:-0}))
+      _bytes=$((_bytes + ${_b:-0}))
+      rm -rf -- "$_legacy"
+    fi
+  done
+  ucwc_log "已清理启动盘旧动态缓存：${_removed} 个文件，${_bytes} 字节；配置与密钥均保留"
+}
+
 local_path_for() {
   case "$1" in
     assets/*) printf '%s\n' "$PERSIST_DIR/$1" ;;
@@ -424,6 +447,9 @@ install_version() {
     progress 65 "OTA 比对完成" "跳过 ${OTA_SKIPPED:-0} · 下载 ${OTA_FETCHED:-0}"
   fi
 
+  progress 70 "迁移缓存" "删除启动盘旧歌词/封面缓存（保留配置）"
+  clear_legacy_boot_caches
+
   progress 75 "写入文件" "安装到 flash + runtime"
   install_pair "$tmp/ThemeMusic.page" "$MUSIC_PAGE" "$MUSIC_RUNTIME"
   install_pair "$tmp/ThemeMusic_Loader.page" "$LOADER_PAGE" "$LOADER_RUNTIME"
@@ -515,7 +541,7 @@ uninstall_plugin() {
     "$PERSIST_DIR/assets/theme-music-settings.css" "$RUNTIME_DIR/assets/theme-music-settings.css" \
     "$PERSIST_DIR/assets/theme-music-settings.js" "$RUNTIME_DIR/assets/theme-music-settings.js" \
     "$OPTIONS_FILE"
-  # Keep flash cfg/caches; mark service disabled
+  # Keep flash configuration and secrets; dynamic media caches are retired.
   printf 'SERVICE="disabled"\n' > "$SERVICE_CFG" 2>/dev/null || true
   rm -rf "$RUNTIME_DIR"
   echo "ThemeMusic 已卸载（flash 配置保留于 $PERSIST_DIR）。请强制刷新 WebGUI。"
