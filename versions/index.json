@@ -6,7 +6,7 @@
     {
       "id": "v1.3.0-beta",
       "label": "Beta v1.3.0-beta：新增飞牛音乐(FnOS)音源",
-      "channel": "beta",
+      "channel": "latest",
       "released_at": "2026-08-02",
       "music": true,
       "ota": true
