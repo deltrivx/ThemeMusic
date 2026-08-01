@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY version   "v1.1.8">
+<!ENTITY version   "v1.1.9">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-		<!ENTITY ver       "v1.1.8">
+		<!ENTITY ver       "v1.1.9">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 		
@@ -17,6 +17,10 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+		### v1.1.9
+		- 自动识别本地阵列盘、SMB/CIFS 与 NFS，本地磁盘唤醒和远端共享就绪探测完全分流
+		- 歌词与下载封面统一保存为歌曲同目录的“歌曲名.lrc”和“歌曲名.jpg”，不再写入启动盘动态缓存
+		- 安装或升级时自动清除启动盘旧歌词/封面缓存目录，保留配置、密码与插件状态
 		### v1.1.8
 		- 全站模式使用固定名称的单一音频宿主，Tower 刷新和内部切页不再重建当前播放
 		- 音乐胶囊继续内嵌在 Tower 页面并同步曲目、进度和控制状态；离开 Tower 自动暂停，返回自动恢复

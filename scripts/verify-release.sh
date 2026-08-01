@@ -17,11 +17,18 @@ with tempfile.NamedTemporaryFile('w', suffix='.js') as fh:
     fh.write(match.group(1)); fh.flush()
     subprocess.run(['node', '--check', fh.name], check=True)
 player = pathlib.Path('assets/ucwc-music.js').read_text(encoding='utf-8')
+api = pathlib.Path('ucwc-music-api.php').read_text(encoding='utf-8')
+installer = pathlib.Path('scripts/install.sh').read_text(encoding='utf-8')
 assert player.count('hostWindow = window.open(') == 1, '宿主窗口创建点必须严格等于一处'
 assert 'var HOST_NAME = "ucwc_theme_music_host_v2";' in player, '客户端缺少固定宿主窗口名'
 assert 'var HOST_NAME = "ucwc_theme_music_host_v2";' in host, '宿主页面窗口名不一致'
 assert 'window.open(' not in host, '宿主页面不得创建任何新窗口'
 assert not re.search(r'set(?:Interval|Timeout)\s*\([^;]{0,1000}window\.open\s*\(', player, re.S), '定时器不得创建宿主窗口'
+assert '$base["strategy"] = "smb";' in api and '$base["strategy"] = "nfs";' in api, '缺少 SMB/NFS 独立存储策略'
+assert api.count('cmdSpinup=') == 1 and '$strategy === "local_disk"' in api, 'emcmd 必须只用于本地磁盘唤醒'
+assert 'm_atomic_sidecar_write($dst, $text)' in api, '歌词未固定写入歌曲同目录'
+assert '$side = $dir . "/" . $stem . ".jpg";' in api, '封面未固定写入歌曲名.jpg'
+assert 'clear_legacy_boot_caches' in installer and 'rm -rf -- "$_legacy"' in installer, '安装器缺少旧启动盘缓存清理'
 print('音乐宿主语法与单窗口约束通过')
 PY
 sh -n scripts/install.sh
