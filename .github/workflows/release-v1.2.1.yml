@@ -1,23 +1,25 @@
-name: 发布 v1.2.1 取消小窗
+name: 发布 Theme Music v1.2.1
 
 on:
   push:
     branches: [main]
     paths:
       - .github/workflows/release-v1.2.1.yml
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  release-v121:
+  release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: 检出仓库
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 禁用独立宿主并保留页面内播放器
+      - name: 生成 v1.2.1 源码与完整版本元数据
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -25,110 +27,166 @@ jobs:
           import pathlib
           import re
 
+          root = pathlib.Path('.')
           version = 'v1.2.1'
-          js_path = pathlib.Path('assets/ucwc-music.js')
+          date = '2026-08-01'
+
+          # 只禁止独立小窗启动。胶囊未连接宿主时会继续走原有页面内 audio 控制链路。
+          js_path = root / 'assets/ucwc-music.js'
           js = js_path.read_text(encoding='utf-8')
-
-          # 胶囊控制直接回落到当前页面的 audio 播放器。
-          # 保留旧宿主代码作为兼容死代码，但不再分发命令或创建小窗。
-          pattern = r'(function dispatchPersistentHost\(command, fromGesture\) \{\n)(\s*)'
-          replacement = r'\1\2// v1.2.1: disable popup host; caller continues through the local audio fallback.\n\2return false;\n\2'
-          js, count = re.subn(pattern, replacement, js, count=1)
-          if count != 1:
-              if 'v1.2.1: disable popup host' not in js:
-                  raise SystemExit('找不到独立宿主分发入口')
-
-          # 防止未来代码绕过分发入口直接调用创建函数。
-          pattern2 = r'(function ensurePersistentHostFromGesture\(command\) \{\n)(\s*)'
-          replacement2 = r'\1\2// v1.2.1: popup host is intentionally disabled.\n\2return false;\n\2'
-          js, count2 = re.subn(pattern2, replacement2, js, count=1)
-          if count2 != 1:
-              if 'popup host is intentionally disabled' not in js:
-                  raise SystemExit('找不到独立宿主创建入口')
-
-          # 保留完整曲库，不恢复任何 1200 首截断。
-          js = js.replace('message.tracks = state.tracks.slice(0, 1200);', 'message.tracks = state.tracks.slice();')
+          if 'var HOST_POPUP_ENABLED = false;' not in js:
+              anchor = 'var HOST_PROTOCOL = 2;'
+              if anchor not in js:
+                  raise SystemExit('找不到宿主协议定义')
+              js = js.replace(anchor, 'var HOST_POPUP_ENABLED = false;\n  ' + anchor, 1)
+          signature = 'function ensurePersistentHostFromGesture(command) {'
+          guard = 'function ensurePersistentHostFromGesture(command) {\n    if (!HOST_POPUP_ENABLED) return false;'
+          if guard not in js:
+              if signature not in js:
+                  raise SystemExit('找不到独立宿主启动入口')
+              js = js.replace(signature, guard, 1)
+          js_path.write_text(js, encoding='utf-8')
 
           required = [
+              'var HOST_POPUP_ENABLED = false;',
+              'if (!HOST_POPUP_ENABLED) return false;',
               'listRenderLimit: 300',
               'LYRIC_DRIFT_KEY',
               'state.tracks = j.tracks',
               'libraryScanning',
-              'v1.2.1: disable popup host',
-              'popup host is intentionally disabled',
           ]
           for token in required:
               if token not in js:
                   raise SystemExit('核心功能缺失：' + token)
           if 'slice(0, 1200)' in js or 'slice(0,1200)' in js:
-              raise SystemExit('仍存在 1200 首前端截断')
-          js_path.write_text(js, encoding='utf-8')
+              raise SystemExit('主播放器仍存在 1200 首截断')
 
-          index_path = pathlib.Path('versions/index.json')
+          # Theme Effects 同款规则：default、latest_version、首项和唯一 latest 必须一致。
+          index_path = root / 'versions/index.json'
           index = json.loads(index_path.read_text(encoding='utf-8'))
-          for item in index['versions']:
+          for item in index.get('versions', []):
               if item.get('channel') == 'latest':
                   item['channel'] = 'stable'
           index['default'] = version
           index['latest_version'] = version
-          index['versions'] = [x for x in index['versions'] if x.get('id') != version]
+          index['versions'] = [x for x in index.get('versions', []) if x.get('id') != version]
           index['versions'].insert(0, {
               'id': version,
-              'label': '正式版 v1.2.1：音乐胶囊取消独立小窗并恢复页面内播放；保留完整曲库索引与歌词校准',
+              'label': '正式版 v1.2.1：音乐胶囊取消独立小窗；保留完整曲库索引、歌词校准与存储分流',
               'channel': 'latest',
-              'released_at': '2026-08-01',
+              'released_at': date,
               'music': True,
               'ota': True,
           })
           index_path.write_text(json.dumps(index, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
-          readme_path = pathlib.Path('README.md')
-          readme = readme_path.read_text(encoding='utf-8')
-          readme = readme.replace('当前正式版：**v1.2.0**', '当前正式版：**v1.2.1**')
-          readme = readme.replace('install v1.2.0 ota', 'install v1.2.1 ota')
-          readme_path.write_text(readme, encoding='utf-8')
+          # README：当前版本、安装命令及小窗说明同步。
+          p = root / 'README.md'
+          s = p.read_text(encoding='utf-8')
+          s = re.sub(r'当前正式版：\*\*v[^*]+\*\*', '当前正式版：**v1.2.1**', s, count=1)
+          s = re.sub(r'install v[0-9]+\.[0-9]+\.[0-9]+ ota', 'install v1.2.1 ota', s)
+          s = s.replace('单一音频宿主跨刷新保持播放', '页面内音频播放器与跨页状态恢复')
+          s = s.replace('固定名称的单一音频宿主', '当前页面内的音频播放器')
+          p.write_text(s, encoding='utf-8')
 
-          plugin_readme_path = pathlib.Path('PLUGIN-README.md')
-          plugin_readme = plugin_readme_path.read_text(encoding='utf-8')
-          plugin_readme = plugin_readme.replace('单一音频宿主跨刷新保持播放', '页面内音频播放器与胶囊控制')
-          plugin_readme_path.write_text(plugin_readme, encoding='utf-8')
+          # 插件管理器简介同步，不能继续宣传会创建固定窗口。
+          p = root / 'PLUGIN-README.md'
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('仪表盘音乐卡片与全站音乐胶囊，单一音频宿主跨刷新保持播放',
+                        '仪表盘音乐卡片与全站音乐胶囊，使用当前页面内音频播放器')
+          s = re.sub(r'全站模式的宿主仅在用户点击播放时创建.*?关闭 Tower 后结束播放。',
+                     '全站胶囊直接控制当前 Unraid 页面内的音频播放器，不再创建额外小窗口或标签页；切页后按保存的歌曲与进度恢复。',
+                     s, flags=re.S)
+          p.write_text(s, encoding='utf-8')
 
-          changelog_path = pathlib.Path('CHANGELOG.md')
-          changelog = changelog_path.read_text(encoding='utf-8')
+          # CHANGELOG 同步。
+          p = root / 'CHANGELOG.md'
+          s = p.read_text(encoding='utf-8')
           heading = '## v1.2.1 — 2026-08-01'
-          if heading not in changelog:
+          if heading not in s:
               entry = '''## v1.2.1 — 2026-08-01
 
 ### 音乐胶囊取消独立小窗
-- 禁用独立音频宿主的命令分发与创建入口，音乐胶囊重新直接控制当前 Unraid 页面内的隐藏 audio 播放器
-- 点击播放、上一首和下一首不再调用 `window.open`，完整页面刷新后继续依靠既有会话状态恢复曲目与进度
-- 保留 v1.1.9 的本地磁盘/SMB/NFS 分流与歌曲同目录歌词封面，以及 v1.2.0 的后台完整索引、300 首分段渲染和歌词时间校准
+- 禁止音乐胶囊创建固定名称的独立音频宿主窗口，播放控制回到当前 Unraid 页面内的 audio 链路
+- 保留 v1.1.8 的胶囊交互与状态恢复、v1.1.9 的本地磁盘/SMB/NFS 分流和歌曲同目录歌词封面
+- 保留 v1.2.0 的后台完整曲库索引、300 首分段渲染、歌词时间校准及低负载扫描
 
 '''
-              changelog = changelog.replace('# Theme Music Changelog\n\n', '# Theme Music Changelog\n\n' + entry, 1)
-          changelog_path.write_text(changelog, encoding='utf-8')
+              s = s.replace('# Theme Music Changelog\n\n', '# Theme Music Changelog\n\n' + entry, 1)
+          p.write_text(s, encoding='utf-8')
 
-          plg_path = pathlib.Path('theme.music.plg')
-          plg = plg_path.read_text(encoding='utf-8')
-          plg = re.sub(r'(<!ENTITY\s+version\s+")[^"]+(">)', r'\g<1>v1.2.1\2', plg, count=1)
-          plg = re.sub(r'(<!ENTITY\s+ver\s+")[^"]+(">)', r'\g<1>v1.2.1\2', plg, count=1)
+          # PLG：version、ver 和 CHANGES 必须同步。
+          p = root / 'theme.music.plg'
+          s = p.read_text(encoding='utf-8')
+          s = re.sub(r'(<!ENTITY\s+version\s+")[^"]+(">)', r'\g<1>v1.2.1\2', s, count=1)
+          s = re.sub(r'(<!ENTITY\s+ver\s+")[^"]+(">)', r'\g<1>v1.2.1\2', s, count=1)
           marker = '\t\t## Theme Music\n'
           note = ('\t\t### v1.2.1\n'
-                  '\t\t- 音乐胶囊取消独立小窗，恢复当前 Unraid 页面内播放\n'
-                  '\t\t- v1.1.9 存储功能与 v1.2.0 完整曲库、分段渲染、歌词校准保持不变\n')
-          if '\t\t### v1.2.1\n' not in plg:
-              plg = plg.replace(marker, marker + note, 1)
-          plg_path.write_text(plg, encoding='utf-8')
+                  '\t\t- 音乐胶囊不再创建独立小窗，恢复当前页面内播放\n'
+                  '\t\t- 保留 v1.1.8/v1.1.9 功能及 v1.2.0 完整曲库和歌词校准\n')
+          if '\t\t### v1.2.1\n' not in s:
+              if marker not in s:
+                  raise SystemExit('PLG 更新日志插入点不存在')
+              s = s.replace(marker, marker + note, 1)
+          p.write_text(s, encoding='utf-8')
+
+          # 发布校验同步新规则：小窗创建代码可作为历史兼容保留，但启动总开关必须关闭。
+          p = root / 'scripts/verify-release.sh'
+          s = p.read_text(encoding='utf-8')
+          old = "assert player.count('hostWindow = window.open(') == 1, '宿主窗口创建点必须严格等于一处'"
+          new = "assert 'var HOST_POPUP_ENABLED = false;' in player and 'if (!HOST_POPUP_ENABLED) return false;' in player, '独立宿主小窗未关闭'"
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
+              raise SystemExit('发布校验中的宿主窗口规则未找到')
+          p.write_text(s, encoding='utf-8')
           PY
 
+          # 先生成不可变快照和六项发布产物，再执行完整校验。
           ./scripts/build-release.sh v1.2.1 snapshot
           ./scripts/verify-release.sh
           ./scripts/verify-release.sh v1.2.1
+          git diff --exit-code -- versions/v1.2.1 || true
 
-      - name: 提交 v1.2.1
+      - name: 提交完整 v1.2.1
+        id: commit
         run: |
+          set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add assets/ucwc-music.js README.md PLUGIN-README.md CHANGELOG.md theme.music.plg versions/index.json versions/v1.2.1
+          git add \
+            assets/ucwc-music.js \
+            README.md PLUGIN-README.md CHANGELOG.md \
+            theme.music.plg versions/index.json versions/v1.2.1 \
+            scripts/verify-release.sh
           git commit -m '发布 Theme Music v1.2.1：取消音乐胶囊独立小窗'
           git push origin HEAD:main
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: 创建正式 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: v1.2.1
+          TARGET_SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "Release $VERSION 已存在，跳过。"
+            exit 0
+          fi
+          awk -v version="$VERSION" '
+            $0 ~ "^## " version "([[:space:]]|$)" {capture=1; next}
+            capture && /^## / {exit}
+            capture {print}
+          ' CHANGELOG.md > release-notes.md
+          gh release create "$VERSION" \
+            dist/$VERSION/ThemeMusic-$VERSION.zip \
+            dist/$VERSION/ThemeMusic-$VERSION.tar.gz \
+            dist/$VERSION/theme.music-$VERSION.plg \
+            dist/$VERSION/files.manifest \
+            dist/$VERSION/install.sh \
+            dist/$VERSION/SHA256SUMS \
+            --target "$TARGET_SHA" \
+            --title "Theme Music $VERSION" \
+            --notes-file release-notes.md \
+            --latest
