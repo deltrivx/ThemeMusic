@@ -1,0 +1,110 @@
+name: 发布 v1.2.1 精确回退
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/release-v1.2.1.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release-v121:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 精确恢复 v1.1.9 胶囊队列行为
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib, re
+          version = 'v1.2.1'
+
+          js_path = pathlib.Path('assets/ucwc-music.js')
+          js = js_path.read_text(encoding='utf-8')
+          old = 'message.tracks = state.tracks.slice();'
+          new = 'message.tracks = state.tracks.slice(0, 1200);'
+          if old in js:
+              js = js.replace(old, new, 1)
+          elif new not in js:
+              raise SystemExit('找不到胶囊队列发送逻辑')
+          js_path.write_text(js, encoding='utf-8')
+
+          # 确认 v1.2.0 其他核心功能仍在。
+          required = [
+              'listRenderLimit: 300',
+              'LYRIC_DRIFT_KEY',
+              'state.tracks = j.tracks',
+              'libraryScanning',
+          ]
+          for token in required:
+              if token not in js:
+                  raise SystemExit('核心功能缺失：' + token)
+
+          index_path = pathlib.Path('versions/index.json')
+          index = json.loads(index_path.read_text(encoding='utf-8'))
+          for item in index['versions']:
+              if item.get('channel') == 'latest':
+                  item['channel'] = 'stable'
+          index['default'] = version
+          index['latest_version'] = version
+          index['versions'] = [x for x in index['versions'] if x.get('id') != version]
+          index['versions'].insert(0, {
+              'id': version,
+              'label': '正式版 v1.2.1：音乐胶囊恢复 v1.1.9 队列行为；保留 v1.2.0 大曲库索引与歌词校准',
+              'channel': 'latest',
+              'released_at': '2026-08-01',
+              'music': True,
+              'ota': True,
+          })
+          index_path.write_text(json.dumps(index, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          readme_path = pathlib.Path('README.md')
+          readme = readme_path.read_text(encoding='utf-8')
+          readme = readme.replace('当前正式版：**v1.2.0**', '当前正式版：**v1.2.1**')
+          readme = readme.replace('install v1.2.0 ota', 'install v1.2.1 ota')
+          readme_path.write_text(readme, encoding='utf-8')
+
+          changelog_path = pathlib.Path('CHANGELOG.md')
+          changelog = changelog_path.read_text(encoding='utf-8')
+          heading = '## v1.2.1 — 2026-08-01'
+          if heading not in changelog:
+              entry = '''## v1.2.1 — 2026-08-01
+
+### 音乐胶囊行为回退
+- 音乐胶囊发送给独立播放宿主的曲目队列恢复为 v1.1.9 的最多 1200 首，撤销 v1.2.0 对胶囊完整曲库队列的改动
+- 仪表盘音乐卡片和服务器仍保留完整曲库，曲目列表继续按 300 首分段渲染
+- 保留 v1.1.9 的存储分流、歌曲同目录歌词/封面，以及 v1.2.0 的后台索引和歌词时间校准
+
+'''
+              changelog = changelog.replace('# Theme Music Changelog\n\n', '# Theme Music Changelog\n\n' + entry, 1)
+          changelog_path.write_text(changelog, encoding='utf-8')
+
+          plg_path = pathlib.Path('theme.music.plg')
+          plg = plg_path.read_text(encoding='utf-8')
+          plg = re.sub(r'(<!ENTITY\s+version\s+")[^"]+(">)', r'\g<1>v1.2.1\2', plg, count=1)
+          plg = re.sub(r'(<!ENTITY\s+ver\s+")[^"]+(">)', r'\g<1>v1.2.1\2', plg, count=1)
+          marker = '\t\t## Theme Music\n'
+          note = ('\t\t### v1.2.1\n'
+                  '\t\t- 音乐胶囊恢复 v1.1.9 的 1200 首宿主队列行为\n'
+                  '\t\t- 完整后台索引、300 首分段渲染和歌词校准保持不变\n')
+          if '\t\t### v1.2.1\n' not in plg:
+              plg = plg.replace(marker, marker + note, 1)
+          plg_path.write_text(plg, encoding='utf-8')
+          PY
+
+          ./scripts/build-release.sh v1.2.1 snapshot
+          ./scripts/verify-release.sh
+          ./scripts/verify-release.sh v1.2.1
+
+      - name: 提交 v1.2.1
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/ucwc-music.js README.md CHANGELOG.md theme.music.plg versions/index.json versions/v1.2.1
+          git commit -m '发布 Theme Music v1.2.1：回退音乐胶囊队列行为'
+          git push origin HEAD:main
