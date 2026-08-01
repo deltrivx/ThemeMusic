@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.1.7",
-  "latest_version": "v1.1.7",
+  "default": "v1.1.8",
+  "latest_version": "v1.1.8",
   "versions": [
+    {
+      "id": "v1.1.8",
+      "label": "正式版 v1.1.8：单一音乐宿主跨刷新续播；离开 Tower 自动暂停；禁止循环开窗",
+      "channel": "stable",
+      "released_at": "2026-08-01",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.1.7",
       "label": "正式版 v1.1.7：非商业许可；更新日志自动换行；首次安装手动开启",

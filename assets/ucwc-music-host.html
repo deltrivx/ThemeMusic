@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Theme Music 音频宿主</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: rgba(8, 14, 28, .98);
+      color: #eef6ff;
+      font: 12px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    body { display: flex; align-items: center; justify-content: center; padding: 8px; box-sizing: border-box; }
+    #host-chip {
+      width: 100%;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      box-sizing: border-box;
+      border: 2px solid rgba(0, 243, 255, .85);
+      border-radius: 16px;
+      background: rgba(8, 14, 28, .98);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .6), 0 0 22px rgba(0, 243, 255, .28);
+      user-select: none;
+    }
+    .ico { flex: 0 0 auto; font-size: 14px; opacity: .9; }
+    .meta { flex: 1 1 auto; min-width: 0; }
+    .title, .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .title { color: #fff; font-weight: 600; }
+    .sub { min-height: 14px; margin-top: 2px; color: #9fefff; font-size: 11px; opacity: .75; }
+    .buttons { display: inline-flex; gap: 4px; flex: 0 0 auto; }
+    button {
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: 1px solid rgba(255, 255, 255, .14);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .06);
+      color: #eef6ff;
+      cursor: pointer;
+    }
+    button.primary { border-color: rgba(0, 243, 255, .42); background: rgba(0, 243, 255, .18); }
+    button:hover { background: rgba(0, 243, 255, .16); }
+    svg { width: 13px; height: 13px; display: block; pointer-events: none; }
+    audio { position: fixed; width: 0; height: 0; left: -999px; opacity: 0; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div id="host-chip" role="region" aria-label="Theme Music 持久音频宿主">
+    <span class="ico" aria-hidden="true">♪</span>
+    <div class="meta">
+      <div class="title" id="title">Theme Music</div>
+      <div class="sub" id="sub">等待 Tower 胶囊连接</div>
+    </div>
+    <div class="buttons">
+      <button type="button" id="prev" title="上一首" aria-label="上一首"></button>
+      <button type="button" id="play" class="primary" title="播放" aria-label="播放"></button>
+      <button type="button" id="next" title="下一首" aria-label="下一首"></button>
+    </div>
+  </div>
+  <audio id="audio" preload="auto" playsinline></audio>
+  <script>
+  (function () {
+    "use strict";
+
+    var PROTOCOL = 2;
+    var HOST_NAME = "ucwc_theme_music_host_v2";
+    var CHANNEL = "ucwc-theme-music-host-v2";
+    var API = "/plugins/theme.music/ucwc-music-api.php";
+    var PLAY_KEY = "ucwc_music_play_v1";
+    var HEART_KEY = "ucwc_music_host_v2_heartbeat";
+    var CLIENT_STALE_MS = 12000;
+    var SHUTDOWN_GRACE_MS = 12000;
+    var NAVIGATION_GRACE_MS = 4000;
+    var HIDDEN_DELAY_MS = 420;
+    var hostId = "host-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 9);
+    var audio = document.getElementById("audio");
+    var titleEl = document.getElementById("title");
+    var subEl = document.getElementById("sub");
+    var playEl = document.getElementById("play");
+    var tracks = [];
+    var index = 0;
+    var volume = 0.7;
+    var shuffle = false;
+    var repeat = "off";
+    var lastId = "";
+    var pendingSeek = 0;
+    var autoPaused = false;
+    var userPaused = false;
+    var wasPlayingBeforeAutoPause = false;
+    var clients = Object.create(null);
+    var lastClientAt = Date.now();
+    var navigationGraceUntil = 0;
+    var hiddenTimer = 0;
+    var closing = false;
+    var bc = null;
+
+    try { window.name = HOST_NAME; } catch (e0) {}
+    try { audio.setAttribute("webkit-playsinline", "true"); audio.playsInline = true; } catch (e1) {}
+    try { bc = new BroadcastChannel(CHANNEL); } catch (e2) { bc = null; }
+
+    function svg(name) {
+      var a = ' xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+      if (name === "play") return "<svg" + a + '><polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"/></svg>';
+      if (name === "pause") return "<svg" + a + '><rect x="6" y="5" width="4" height="14" fill="currentColor" stroke="none"/><rect x="14" y="5" width="4" height="14" fill="currentColor" stroke="none"/></svg>';
+      if (name === "prev") return "<svg" + a + '><polygon points="19 20 9 12 19 4 19 20" fill="currentColor" stroke="none"/><line x1="5" y1="4" x2="5" y2="20"/></svg>';
+      if (name === "next") return "<svg" + a + '><polygon points="5 4 15 12 5 20 5 4" fill="currentColor" stroke="none"/><line x1="19" y1="4" x2="19" y2="20"/></svg>';
+      return "";
+    }
+
+    function current() {
+      if (!tracks.length) return null;
+      if (index < 0) index = 0;
+      if (index >= tracks.length) index = 0;
+      return tracks[index] || null;
+    }
+
+    function resolveIndex(data) {
+      var nextIndex = typeof data.index === "number" ? data.index : index;
+      if (data.id && tracks.length) {
+        for (var i = 0; i < tracks.length; i++) {
+          if (tracks[i] && tracks[i].id === data.id) { nextIndex = i; break; }
+        }
+      }
+      if (!tracks.length) return 0;
+      return ((nextIndex % tracks.length) + tracks.length) % tracks.length;
+    }
+
+    function trackUrl(id) {
+      var v = 1;
+      try { v = encodeURIComponent(String(id || "")).length || 1; } catch (e0) {}
+      return API + "?action=stream&id=" + encodeURIComponent(id) + "&_v=" + v;
+    }
+
+    function snapshot(type) {
+      var t = current();
+      return {
+        protocol: PROTOCOL,
+        from: "host",
+        type: type || "state",
+        hostId: hostId,
+        playing: !!(audio && !audio.paused),
+        autoPaused: !!autoPaused,
+        userPaused: !!userPaused,
+        intent: !!(!userPaused && (autoPaused || (audio && !audio.paused))),
+        index: index,
+        id: t && t.id ? t.id : lastId,
+        title: t && t.title ? t.title : "",
+        artist: t && t.artist ? t.artist : "",
+        t: audio && isFinite(audio.currentTime) ? audio.currentTime : pendingSeek,
+        duration: audio && isFinite(audio.duration) ? audio.duration : 0,
+        volume: volume,
+        shuffle: shuffle,
+        repeat: repeat,
+        tracks: tracks.length,
+        ts: Date.now()
+      };
+    }
+
+    function post(msg) {
+      msg = msg || snapshot();
+      msg.protocol = PROTOCOL;
+      msg.from = "host";
+      msg.hostId = hostId;
+      msg.ts = Date.now();
+      try {
+        if (bc) {
+          bc.postMessage(msg);
+          return;
+        }
+      } catch (e0) {}
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage(Object.assign({ channel: CHANNEL }, msg), location.origin);
+        }
+      } catch (e1) {}
+    }
+
+    function saveSession() {
+      try {
+        var s = snapshot();
+        var payload = JSON.stringify({
+          playing: s.playing,
+          intent: s.intent,
+          index: s.index,
+          t: s.t,
+          id: s.id,
+          vol: s.volume,
+          sitewide: true,
+          host: true,
+          ts: Date.now()
+        });
+        localStorage.setItem(PLAY_KEY, payload);
+      } catch (e0) {}
+    }
+
+    function paint() {
+      var t = current();
+      titleEl.textContent = (t && t.title) || "Theme Music";
+      if (audio && !audio.paused) subEl.textContent = (t && t.artist ? t.artist + " · " : "") + "播放中";
+      else if (autoPaused) subEl.textContent = "Tower 不可见 · 已暂停";
+      else if (t) subEl.textContent = (t.artist ? t.artist + " · " : "") + "已暂停";
+      else subEl.textContent = "等待 Tower 胶囊连接";
+      playEl.innerHTML = audio && !audio.paused ? svg("pause") : svg("play");
+      playEl.title = audio && !audio.paused ? "暂停" : "播放";
+      playEl.setAttribute("aria-label", playEl.title);
+    }
+
+    function pushState(type) {
+      paint();
+      saveSession();
+      post(snapshot(type));
+    }
+
+    function applyConfig(data) {
+      if (Array.isArray(data.tracks) && data.tracks.length) {
+        tracks = data.tracks.slice(0, 1200);
+        index = resolveIndex(data);
+      }
+      if (typeof data.volume === "number") {
+        volume = Math.max(0, Math.min(1, data.volume));
+        audio.volume = volume;
+      }
+      if (typeof data.shuffle === "boolean") shuffle = data.shuffle;
+      if (data.repeat === "off" || data.repeat === "one" || data.repeat === "all") repeat = data.repeat;
+    }
+
+    function applySeek(target) {
+      if (!(typeof target === "number" && isFinite(target) && target >= 0)) return;
+      pendingSeek = target;
+      try {
+        if (isFinite(audio.duration) && audio.duration > 0) {
+          audio.currentTime = Math.min(target, Math.max(0, audio.duration - .25));
+          pendingSeek = 0;
+        } else if (target <= 3) {
+          audio.currentTime = target;
+        }
+      } catch (e0) {
+        pendingSeek = 0;
+      }
+    }
+
+    function tryPlay() {
+      userPaused = false;
+      autoPaused = false;
+      audio.muted = false;
+      audio.volume = volume;
+      var p;
+      try { p = audio.play(); } catch (e0) { p = null; }
+      if (p && typeof p.catch === "function") {
+        p.catch(function (err) {
+          post({ type: "blocked", error: String((err && err.name) || "NotAllowedError") });
+          pushState();
+        });
+      }
+    }
+
+    function playAt(data) {
+      applyConfig(data || {});
+      if (!tracks.length) {
+        return loadList().then(function () {
+          if (tracks.length) playAt(data || {});
+          else pushState();
+        });
+      }
+      index = resolveIndex(data || {});
+      var t = current();
+      if (!t) return;
+      var seek = data && typeof data.t === "number" ? data.t : 0;
+      if (lastId !== t.id || !audio.src) {
+        lastId = t.id;
+        try { audio.pause(); } catch (e0) {}
+        audio.src = trackUrl(t.id);
+        try { audio.load(); } catch (e1) {}
+      }
+      applySeek(seek);
+      if (data && data.autoPlay === false) pushState();
+      else tryPlay();
+      pushState();
+    }
+
+    function pause(userAction) {
+      if (userAction) {
+        userPaused = true;
+        autoPaused = false;
+        wasPlayingBeforeAutoPause = false;
+      }
+      try { audio.pause(); } catch (e0) {}
+      pushState();
+    }
+
+    function toggle(data) {
+      applyConfig(data || {});
+      if (!audio.src || lastId !== ((current() && current().id) || "")) {
+        playAt(Object.assign({}, data || {}, { autoPlay: true }));
+      } else if (audio.paused) {
+        if (data && typeof data.t === "number") applySeek(data.t);
+        tryPlay();
+        pushState();
+      } else {
+        pause(true);
+      }
+    }
+
+    function next(fromEnded) {
+      if (!tracks.length) return;
+      var n = index + 1;
+      if (shuffle && tracks.length > 1) {
+        n = index;
+        var guard = 0;
+        while (n === index && guard++ < 20) n = Math.floor(Math.random() * tracks.length);
+      } else if (n >= tracks.length) {
+        if (repeat === "all" || !fromEnded) n = 0;
+        else { pause(false); return; }
+      }
+      playAt({ index: n, autoPlay: true, t: 0 });
+    }
+
+    function prev() {
+      if (!tracks.length) return;
+      var n = index - 1;
+      if (n < 0) n = tracks.length - 1;
+      playAt({ index: n, autoPlay: true, t: 0 });
+    }
+
+    function anyVisibleClient() {
+      var now = Date.now();
+      for (var id in clients) {
+        if (!Object.prototype.hasOwnProperty.call(clients, id)) continue;
+        var c = clients[id];
+        if (c && c.visible && now - c.lastSeen < CLIENT_STALE_MS) return true;
+      }
+      return false;
+    }
+
+    function scheduleHiddenPause() {
+      if (hiddenTimer) clearTimeout(hiddenTimer);
+      hiddenTimer = setTimeout(function () {
+        hiddenTimer = 0;
+        if (Date.now() < navigationGraceUntil || anyVisibleClient()) return;
+        if (audio && !audio.paused) {
+          wasPlayingBeforeAutoPause = true;
+          autoPaused = true;
+          userPaused = false;
+          try { audio.pause(); } catch (e0) {}
+          pushState("auto-paused");
+        }
+      }, HIDDEN_DELAY_MS);
+    }
+
+    function resumeFromVisibility() {
+      if (hiddenTimer) { clearTimeout(hiddenTimer); hiddenTimer = 0; }
+      navigationGraceUntil = 0;
+      if (!autoPaused || !wasPlayingBeforeAutoPause || userPaused) return;
+      autoPaused = false;
+      wasPlayingBeforeAutoPause = false;
+      tryPlay();
+      pushState("auto-resumed");
+    }
+
+    function touchClient(data) {
+      var id = String((data && data.clientId) || "unknown");
+      var c = clients[id] || { visible: false, lastSeen: 0 };
+      c.lastSeen = Date.now();
+      if (typeof data.visible === "boolean") c.visible = data.visible;
+      clients[id] = c;
+      lastClientAt = Date.now();
+    }
+
+    function handle(data) {
+      if (!data || data.from === "host" || data.protocol !== PROTOCOL) return;
+      touchClient(data);
+      var type = data.type || data.cmd;
+      if (type === "hello" || type === "heartbeat" || type === "sync") {
+        applyConfig(data);
+        if (data.visible) resumeFromVisibility();
+        post(snapshot(type === "hello" ? "host-ready" : "state"));
+        return;
+      }
+      if (type === "navigation") {
+        navigationGraceUntil = Date.now() + NAVIGATION_GRACE_MS;
+        if (hiddenTimer) { clearTimeout(hiddenTimer); hiddenTimer = 0; }
+        setTimeout(function () {
+          if (!anyVisibleClient()) scheduleHiddenPause();
+        }, NAVIGATION_GRACE_MS + 20);
+        return;
+      }
+      if (type === "visibility") {
+        if (data.visible) resumeFromVisibility();
+        else scheduleHiddenPause();
+        return;
+      }
+      if (type === "config") { applyConfig(data); pushState(); return; }
+      if (type === "playAt") { playAt(data); return; }
+      if (type === "toggle") { toggle(data); return; }
+      if (type === "play" || type === "resume") {
+        if (!audio.src) playAt(Object.assign({}, data, { autoPlay: true }));
+        else { applyConfig(data); tryPlay(); pushState(); }
+        return;
+      }
+      if (type === "pause") { pause(data.userAction !== false); return; }
+      if (type === "next") { applyConfig(data); next(false); return; }
+      if (type === "prev") { applyConfig(data); prev(); return; }
+      if (type === "seek") { applySeek(Number(data.t)); pushState(); return; }
+      if (type === "shutdown") {
+        pause(true);
+        closing = true;
+        post({ type: "host-gone" });
+        try { window.close(); } catch (e0) {}
+      }
+    }
+
+    function loadList() {
+      return fetch(API + "?action=list&_ts=" + Date.now(), {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+        cache: "no-store"
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        tracks = j && j.ok && Array.isArray(j.tracks) ? j.tracks.slice(0, 1200) : [];
+        if (index >= tracks.length) index = 0;
+        pushState();
+        return tracks;
+      }).catch(function () { tracks = []; pushState(); return tracks; });
+    }
+
+    document.getElementById("prev").innerHTML = svg("prev");
+    document.getElementById("next").innerHTML = svg("next");
+    playEl.innerHTML = svg("play");
+    document.getElementById("prev").addEventListener("click", prev);
+    document.getElementById("next").addEventListener("click", function () { next(false); });
+    playEl.addEventListener("click", function () { toggle({}); });
+
+    audio.addEventListener("play", function () { autoPaused = false; userPaused = false; pushState(); });
+    audio.addEventListener("pause", function () { pushState(); });
+    audio.addEventListener("loadedmetadata", function () { applySeek(pendingSeek); pushState(); });
+    audio.addEventListener("seeked", function () { pendingSeek = 0; pushState(); });
+    audio.addEventListener("timeupdate", function () { paint(); post(snapshot()); saveSession(); });
+    audio.addEventListener("ended", function () {
+      if (repeat === "one") playAt({ index: index, autoPlay: true, t: 0 });
+      else next(true);
+    });
+    audio.addEventListener("error", function () { post({ type: "error", code: audio.error ? audio.error.code : 0 }); pushState(); });
+
+    if (bc) bc.onmessage = function (ev) { handle(ev && ev.data); };
+    window.addEventListener("message", function (ev) {
+      if (ev.origin !== location.origin || !ev.data || ev.data.channel !== CHANNEL) return;
+      handle(ev.data);
+    });
+    window.addEventListener("beforeunload", function () { saveSession(); post({ type: "host-gone" }); });
+
+    setInterval(function () {
+      var now = Date.now();
+      try { localStorage.setItem(HEART_KEY, JSON.stringify({ hostId: hostId, ts: now })); } catch (e0) {}
+      for (var id in clients) {
+        if (Object.prototype.hasOwnProperty.call(clients, id) && now - clients[id].lastSeen > CLIENT_STALE_MS) delete clients[id];
+      }
+      var openerAlive = false;
+      try { openerAlive = !!(window.opener && !window.opener.closed); } catch (e1) {}
+      var hasRecentClient = Object.keys(clients).length > 0;
+      if (!closing && !openerAlive && !hasRecentClient && now - lastClientAt > SHUTDOWN_GRACE_MS) {
+        closing = true;
+        try { audio.pause(); } catch (e2) {}
+        saveSession();
+        post({ type: "host-gone" });
+        try { window.close(); } catch (e3) {}
+      }
+    }, 1000);
+
+    try {
+      if (navigator.mediaSession) {
+        navigator.mediaSession.setActionHandler("play", function () { toggle({}); });
+        navigator.mediaSession.setActionHandler("pause", function () { pause(true); });
+        navigator.mediaSession.setActionHandler("previoustrack", prev);
+        navigator.mediaSession.setActionHandler("nexttrack", function () { next(false); });
+      }
+    } catch (e3) {}
+
+    post(snapshot("host-ready"));
+    loadList().then(function () { post(snapshot("host-ready")); pushState(); });
+  })();
+  </script>
+</body>
+</html>

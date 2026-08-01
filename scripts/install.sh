@@ -400,6 +400,7 @@ install_version() {
     ucwc-music-api.php \
     theme-music-save.php \
     theme-music-update.php \
+    assets/ucwc-music-host.html \
     assets/ucwc-music.js \
     assets/ucwc-music.css \
     assets/theme-music-settings.css \
@@ -430,6 +431,7 @@ install_version() {
   install_pair "$tmp/ucwc-music-api.php" "$PERSIST_DIR/ucwc-music-api.php" "$RUNTIME_DIR/ucwc-music-api.php"
   install_pair "$tmp/theme-music-save.php" "$PERSIST_DIR/theme-music-save.php" "$RUNTIME_DIR/theme-music-save.php"
   install_pair "$tmp/theme-music-update.php" "$PERSIST_DIR/theme-music-update.php" "$RUNTIME_DIR/theme-music-update.php"
+  install_pair "$tmp/assets/ucwc-music-host.html" "$PERSIST_DIR/assets/ucwc-music-host.html" "$RUNTIME_DIR/assets/ucwc-music-host.html"
   install_pair "$tmp/assets/ucwc-music.js" "$PERSIST_DIR/assets/ucwc-music.js" "$RUNTIME_DIR/assets/ucwc-music.js"
   install_pair "$tmp/assets/ucwc-music.css" "$PERSIST_DIR/assets/ucwc-music.css" "$RUNTIME_DIR/assets/ucwc-music.css"
   install_pair "$tmp/assets/theme-music-settings.css" "$PERSIST_DIR/assets/theme-music-settings.css" "$RUNTIME_DIR/assets/theme-music-settings.css"
@@ -507,6 +509,7 @@ uninstall_plugin() {
     "$PERSIST_DIR/ucwc-music-api.php" "$RUNTIME_DIR/ucwc-music-api.php" \
     "$PERSIST_DIR/theme-music-save.php" "$RUNTIME_DIR/theme-music-save.php" \
     "$PERSIST_DIR/theme-music-update.php" "$RUNTIME_DIR/theme-music-update.php" \
+    "$PERSIST_DIR/assets/ucwc-music-host.html" "$RUNTIME_DIR/assets/ucwc-music-host.html" \
     "$PERSIST_DIR/assets/ucwc-music.js" "$RUNTIME_DIR/assets/ucwc-music.js" \
     "$PERSIST_DIR/assets/ucwc-music.css" "$RUNTIME_DIR/assets/ucwc-music.css" \
     "$PERSIST_DIR/assets/theme-music-settings.css" "$RUNTIME_DIR/assets/theme-music-settings.css" \

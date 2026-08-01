@@ -24,6 +24,7 @@ RUNTIME_FILES=(
   assets/theme-music-settings.css
   assets/theme-music-settings.js
   assets/ucwc-music.css
+  assets/ucwc-music-host.html
   assets/ucwc-music.js
   theme-music-save.php
   theme-music-update.php
