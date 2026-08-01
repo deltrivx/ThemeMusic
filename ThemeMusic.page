@@ -33,6 +33,9 @@ function tm_defaults() {
         "MUSIC_RUN_MODE" => "card",
         "MUSIC_UI" => "card",
         "MUSIC_SOURCE" => "local",
+        "MUSIC_FNOS_HOST" => "192.168.31.5",
+        "MUSIC_FNOS_DB" => "/usr/local/apps/@appdata/trim.music/db/music.db",
+        "MUSIC_FNOS_MUSIC_DIR" => "/vol2/1000/Music",
         "MUSIC_LOCAL_DIR" => "",
         "MUSIC_NAVIDROME_URL" => "http://127.0.0.1:4533",
         "MUSIC_NAVIDROME_USER" => "",
@@ -245,6 +248,9 @@ if (!empty($_POST) && (isset($_POST["SAVE_THEME_MUSIC"]) || isset($_POST["SAVE_T
             }
         }
     }
+    if (isset($_POST["MUSIC_FNOS_HOST"])) $fx["MUSIC_FNOS_HOST"] = trim((string)($_POST["MUSIC_FNOS_HOST"] ?? "192.168.31.5"));
+    if (isset($_POST["MUSIC_FNOS_DB"])) $fx["MUSIC_FNOS_DB"] = trim((string)($_POST["MUSIC_FNOS_DB"] ?? "/usr/local/apps/@appdata/trim.music/db/music.db"));
+    if (isset($_POST["MUSIC_FNOS_MUSIC_DIR"])) $fx["MUSIC_FNOS_MUSIC_DIR"] = trim((string)($_POST["MUSIC_FNOS_MUSIC_DIR"] ?? "/vol2/1000/Music"));
     if (isset($_POST["MUSIC_SOURCE"])) {
         $src = strtolower(trim((string)($_POST["MUSIC_SOURCE"] ?? "local")));
         $fx["MUSIC_SOURCE"] = in_array($src, ["local", "navidrome"], true) ? $src : "local";
@@ -382,6 +388,7 @@ window.__TM_BOOT__ = {
 : <select name="MUSIC_SOURCE" size="1" id="tm-music-source">
   <?=mk_option($fx["MUSIC_SOURCE"] ?? "local", "local", "本地目录")?>
   <?=mk_option($fx["MUSIC_SOURCE"] ?? "local", "navidrome", "Navidrome")?>
+  <?=mk_option($fx["MUSIC_SOURCE"] ?? "local", "fnos", "飞牛音乐(FnOS)")?>
   </select>
 
 本地音乐目录:
@@ -403,6 +410,27 @@ Navidrome 连接:
 : <span class="tm-inline-actions">
     <button type="button" id="tm-btn-test-navidrome" class="tm-pill-btn" title="直接使用当前填写内容测试，不必先应用">测试连接</button>
     <span id="tm-navidrome-status" class="tm-muted"><?=is_file($navidrome_secret_path) && filesize($navidrome_secret_path) > 0 ? "密码已保存" : "尚未保存密码"?></span>
+      </div>
+      <div class="tm-source-config tm-source-fnos" id="tm-fnos-config" style="display:none;margin-top:8px;">
+        <div class="tm-label-row">
+          <span class="tm-label">飞牛音乐</span>
+        </div>
+        <div class="tm-field">
+          <span class="tm-hint">通过 SSH 读取飞牛音乐数据库，需要已配置免密登录</span>
+        </div>
+        <div class="tm-field">
+          <label>宿主机地址：</label>
+          <input type="text" id="tm-fnos-host" name="MUSIC_FNOS_HOST" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_FNOS_HOST"] ?? "192.168.31.5")?>" placeholder="192.168.31.5" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="tm-field">
+          <label>数据库路径：</label>
+          <input type="text" id="tm-fnos-db" name="MUSIC_FNOS_DB" maxlength="256" value="<?=htmlspecialchars($fx["MUSIC_FNOS_DB"] ?? "/usr/local/apps/@appdata/trim.music/db/music.db")?>" placeholder="/usr/local/apps/@appdata/trim.music/db/music.db" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="tm-field">
+          <label>音乐目录：</label>
+          <input type="text" id="tm-fnos-music-dir" name="MUSIC_FNOS_MUSIC_DIR" maxlength="256" value="<?=htmlspecialchars($fx["MUSIC_FNOS_MUSIC_DIR"] ?? "/vol2/1000/Music")?>" placeholder="/vol2/1000/Music" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
   </span>
 
 存储准备:
