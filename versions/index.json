@@ -1,12 +1,20 @@
 {
   "schema": 1,
-  "default": "v1.2.0",
-  "latest_version": "v1.2.0",
+  "default": "v1.2.1",
+  "latest_version": "v1.2.1",
   "versions": [
+    {
+      "id": "v1.2.1",
+      "label": "移除音频宿主弹窗，胶囊改用内联音频",
+      "channel": "latest",
+      "released_at": "2026-08-01",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.2.0",
       "label": "正式版 v1.2.0：本地大曲库后台完整索引；歌词时间校准；缓存按钮居中；自动正式发布",
-      "channel": "latest",
+      "channel": "history",
       "released_at": "2026-08-01",
       "music": true,
       "ota": true

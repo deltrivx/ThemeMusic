@@ -1,0 +1,2853 @@
+<?php
+/**
+ * ThemeMusic music API
+ * Local directory and Navidrome/OpenSubsonic library, media, cover and lyrics proxy.
+ */
+header("X-Content-Type-Options: nosniff");
+
+$persist = "/boot/config/plugins/theme.music";
+if (PHP_SAPI === "cli") {
+    $testPersist = trim((string)getenv("THEMEMUSIC_PERSIST"));
+    if ($testPersist !== "" && strpos($testPersist, "/tmp/") === 0) $persist = rtrim($testPersist, "/");
+}
+$fx_path = "$persist/theme-music.cfg";
+$navidrome_secret_path = "$persist/navidrome.secret";
+$dash_pos_path = "$persist/dash-pos.json";
+$log_path = "/tmp/ucwc-music-api.log";
+
+function mlog($msg) {
+    global $log_path;
+    @file_put_contents($log_path, date("Y-m-d H:i:s") . " " . $msg . "\n", FILE_APPEND);
+}
+
+function mjson($data, $code = 200) {
+    http_response_code($code);
+    header("Content-Type: application/json; charset=utf-8");
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+function mcfg_resolve_run_mode($d) {
+    $mode = strtolower(trim((string)($d["MUSIC_RUN_MODE"] ?? "")));
+    if (in_array($mode, ["card", "chip", "both"], true)) return $mode;
+    if (($d["MUSIC_ENABLE"] ?? "no") !== "yes") return "card";
+    return (($d["MUSIC_DASH_ONLY"] ?? "yes") === "no") ? "both" : "card";
+}
+
+function mcfg_load($path) {
+    $d = [
+        "MUSIC_ENABLE" => "no",
+        "MUSIC_RUN_MODE" => "card",
+        "MUSIC_UI" => "card",
+        "MUSIC_SOURCE" => "local",
+        "MUSIC_LOCAL_DIR" => "",
+        "MUSIC_NAVIDROME_URL" => "http://127.0.0.1:4533",
+        "MUSIC_NAVIDROME_USER" => "",
+        "MUSIC_VOLUME" => "70",
+        "MUSIC_AUTOPLAY" => "no",
+        "MUSIC_SHUFFLE" => "no",
+        "MUSIC_REPEAT" => "off",
+        "MUSIC_DASH_ONLY" => "yes",
+        "MUSIC_RUN_MODE_MOBILE" => "same",
+        "MUSIC_VOLUME_MOBILE" => "70",
+        "MUSIC_AUTOPLAY_MOBILE" => "no",
+        "MUSIC_SHUFFLE_MOBILE" => "no",
+        "MUSIC_REPEAT_MOBILE" => "off",
+    ];
+    $had_run_mode = false;
+    $had_mobile = false;
+    if (is_file($path)) {
+        $raw = @parse_ini_file($path);
+        if (is_array($raw)) {
+            foreach ($d as $k => $v) {
+                if (isset($raw[$k]) && $raw[$k] !== "") $d[$k] = (string)$raw[$k];
+            }
+            $had_run_mode = isset($raw["MUSIC_RUN_MODE"]) && trim((string)$raw["MUSIC_RUN_MODE"]) !== "";
+            $had_mobile = isset($raw["MUSIC_RUN_MODE_MOBILE"]) && trim((string)$raw["MUSIC_RUN_MODE_MOBILE"]) !== "";
+        }
+    }
+    if (!$had_run_mode) unset($d["MUSIC_RUN_MODE"]);
+    if (!$had_mobile) $d["MUSIC_RUN_MODE_MOBILE"] = "same";
+    $mode = mcfg_resolve_run_mode($d);
+    $d["MUSIC_RUN_MODE"] = $mode;
+    $d["MUSIC_UI"] = $mode;
+    $d["MUSIC_DASH_ONLY"] = ($mode === "card") ? "yes" : "no";
+    $src = strtolower(trim((string)($d["MUSIC_SOURCE"] ?? "local")));
+    $d["MUSIC_SOURCE"] = in_array($src, ["local", "navidrome"], true) ? $src : "local";
+    $ndUrl = rtrim(trim((string)($d["MUSIC_NAVIDROME_URL"] ?? "")), "/");
+    if ($ndUrl === "" || !preg_match('#^https?://#i', $ndUrl)) $ndUrl = "http://127.0.0.1:4533";
+    $d["MUSIC_NAVIDROME_URL"] = $ndUrl;
+    $d["MUSIC_NAVIDROME_USER"] = substr(trim(str_replace(["\0", "\r", "\n"], "", (string)($d["MUSIC_NAVIDROME_USER"] ?? ""))), 0, 128);
+    $mm = strtolower(trim((string)($d["MUSIC_RUN_MODE_MOBILE"] ?? "same")));
+    $d["MUSIC_RUN_MODE_MOBILE"] = in_array($mm, ["same", "card", "chip", "both"], true) ? $mm : "same";
+    return $d;
+}
+
+function m_realpath_dir($dir) {
+    $dir = trim((string)$dir);
+    if ($dir === "") return "";
+    // normalize slashes
+    $dir = str_replace("\\", "/", $dir);
+    $dir = rtrim($dir, "/");
+    if ($dir === "" || $dir[0] !== "/") return "";
+    // only allow common Unraid mount roots
+    $okRoots = ["/mnt/", "/boot/config/plugins/theme.music/"];
+    $allowed = false;
+    foreach ($okRoots as $r) {
+        if (strpos($dir . "/", $r) === 0) { $allowed = true; break; }
+    }
+    if (!$allowed) return "";
+    if (!is_dir($dir)) return "";
+    $real = realpath($dir);
+    if ($real === false || !is_dir($real)) return "";
+    $real = str_replace("\\", "/", $real);
+    foreach ($okRoots as $r) {
+        if (strpos($real . "/", $r) === 0) return $real;
+    }
+    return "";
+}
+
+function m_ext_ok($name) {
+    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    return in_array($ext, ["mp3", "flac", "m4a", "aac", "ogg", "opus", "wav", "wma"], true);
+}
+
+function m_mime($path) {
+    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+    $map = [
+        "mp3" => "audio/mpeg",
+        "flac" => "audio/flac",
+        "m4a" => "audio/mp4",
+        "aac" => "audio/aac",
+        "ogg" => "audio/ogg",
+        "opus" => "audio/ogg",
+        "wav" => "audio/wav",
+        "wma" => "audio/x-ms-wma",
+    ];
+    return $map[$ext] ?? "application/octet-stream";
+}
+
+function m_rel_under($root, $file) {
+    $root = rtrim(str_replace("\\", "/", $root), "/");
+    $file = str_replace("\\", "/", $file);
+    if (strpos($file, $root . "/") !== 0 && $file !== $root) return "";
+    $rel = substr($file, strlen($root) + 1);
+    $rel = str_replace("\\", "/", $rel);
+    if ($rel === false || $rel === "" || strpos($rel, "..") !== false) return "";
+    return $rel;
+}
+
+function m_abs_from_rel($root, $rel) {
+    $root = rtrim(str_replace("\\", "/", $root), "/");
+    $rel = str_replace("\\", "/", (string)$rel);
+    $rel = ltrim($rel, "/");
+    if ($rel === "" || strpos($rel, "..") !== false || strpos($rel, "\0") !== false) return "";
+    $full = $root . "/" . $rel;
+    $real = realpath($full);
+    if ($real === false || !is_file($real)) return "";
+    $real = str_replace("\\", "/", $real);
+    if (strpos($real, $root . "/") !== 0) return "";
+    return $real;
+}
+
+/**
+ * Wake the storage behind a music path before the media response starts.
+ *
+ * - Unraid array / UD devices: ask emhttp to spin up the backing device.
+ * - CIFS/NFS mounts: a one-byte probe blocks until the remote filesystem has
+ *   woken its disk, so the browser's first media range request does not time out.
+ * - Per-track cooldown prevents range storms from repeatedly running probes.
+ */
+function m_findmnt_value($path, $field) {
+    if (!is_executable("/bin/findmnt") || !in_array($field, ["FSTYPE", "SOURCE", "TARGET"], true)) return "";
+    $cmd = "/bin/findmnt -T " . escapeshellarg($path) . " -n -o " . $field . " 2>/dev/null";
+    return substr(trim((string)@shell_exec($cmd)), 0, 512);
+}
+
+function m_redact_mount_source($source) {
+    $source = str_replace(["\0", "\r", "\n"], "", (string)$source);
+    return preg_replace('#^(//)[^/@:]+(?::[^/@]*)?@#', '$1', $source);
+}
+
+function m_unraid_disk_device($disk) {
+    if (!preg_match('/^disk\d+$/', (string)$disk)) return "";
+    $ini = @parse_ini_file("/var/local/emhttp/disks.ini", true, INI_SCANNER_RAW);
+    $device = is_array($ini) ? trim((string)($ini[$disk]["device"] ?? "")) : "";
+    return preg_match('/^[a-zA-Z0-9._-]+$/', $device) ? $device : "";
+}
+
+/** Detect the actual storage strategy without waking or reading the source. */
+function m_detect_storage_source($root, $candidate) {
+    $root = rtrim(str_replace("\\", "/", (string)$root), "/");
+    $candidate = str_replace("\\", "/", (string)$candidate);
+    $fstype = strtolower(m_findmnt_value($candidate, "FSTYPE"));
+    $mountSource = m_findmnt_value($candidate, "SOURCE");
+    $target = m_findmnt_value($candidate, "TARGET");
+    $base = [
+        "strategy" => "local_filesystem",
+        "fs_type" => $fstype,
+        "source" => m_redact_mount_source($mountSource),
+        "target" => $target,
+        "disk" => "",
+        "device" => "",
+    ];
+    if ($candidate === "" || ($candidate !== $root && strpos($candidate, $root . "/") !== 0)) {
+        $base["strategy"] = "invalid";
+        return $base;
+    }
+    if (in_array($fstype, ["cifs", "smb", "smb2", "smb3"], true)) {
+        $base["strategy"] = "smb";
+        return $base;
+    }
+    if (in_array($fstype, ["nfs", "nfs4"], true)) {
+        $base["strategy"] = "nfs";
+        return $base;
+    }
+    if (preg_match('#^/mnt/disk(\d+)(?:/|$)#', $candidate, $m)) {
+        $base["strategy"] = "local_disk";
+        $base["disk"] = "disk" . $m[1];
+        $base["device"] = m_unraid_disk_device($base["disk"]);
+        return $base;
+    }
+    // /mnt/user is FUSE. Unraid exposes the backing array disk via system.LOCATION.
+    if (strpos($candidate, "/mnt/user/") === 0) {
+        $getfattr = is_executable("/usr/bin/getfattr") ? "/usr/bin/getfattr" : (is_executable("/bin/getfattr") ? "/bin/getfattr" : "");
+        if ($getfattr !== "") {
+            $loc = trim((string)@shell_exec($getfattr . " --absolute-names --only-values -n system.LOCATION " . escapeshellarg($candidate) . " 2>/dev/null"));
+            if (preg_match('/\bdisk(\d+)\b/i', $loc, $m)) {
+                $base["strategy"] = "local_disk";
+                $base["disk"] = "disk" . $m[1];
+                $base["device"] = m_unraid_disk_device($base["disk"]);
+                return $base;
+            }
+        }
+        $base["strategy"] = "local_share";
+        return $base;
+    }
+    if (preg_match('#^/dev/([a-zA-Z0-9._-]+)#', $mountSource, $m)) {
+        $base["strategy"] = "local_disk";
+        $base["device"] = preg_replace('/p?\d+$/', '', $m[1]);
+    }
+    return $base;
+}
+
+function m_storage_label($info, $ok = true) {
+    $strategy = (string)($info["strategy"] ?? "invalid");
+    if (!$ok) {
+        if ($strategy === "smb") return "SMB 远端存储未就绪";
+        if ($strategy === "nfs") return "NFS 远端存储未就绪";
+        if ($strategy === "local_disk") return "本地磁盘唤醒失败";
+        return "存储读取失败";
+    }
+    if ($strategy === "smb") return "SMB 远端存储已就绪";
+    if ($strategy === "nfs") return "NFS 远端存储已就绪";
+    if ($strategy === "local_disk") return (($info["disk"] ?? "") !== "" ? $info["disk"] : "本地磁盘") . " 已唤醒";
+    if ($strategy === "local_share") return "Unraid 用户共享已就绪";
+    return "本地存储已就绪";
+}
+
+function m_storage_publish_status($status, $candidate = "") {
+    $safe = [
+        "ok" => !empty($status["ok"]),
+        "status" => (string)($status["status"] ?? "idle"),
+        "strategy" => (string)($status["strategy"] ?? "unknown"),
+        "label" => (string)($status["label"] ?? "等待播放自动检测"),
+        "disk" => (string)($status["disk"] ?? ""),
+        "fs_type" => (string)($status["fs_type"] ?? ""),
+        "source" => m_redact_mount_source((string)($status["source"] ?? "")),
+        "elapsed_ms" => intval($status["elapsed_ms"] ?? 0),
+        "cached" => !empty($status["cached"]),
+        "ts" => intval($status["ts"] ?? time()),
+    ];
+    $json = json_encode($safe, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) return;
+    $paths = ["/tmp/theme-music-storage-status.json"];
+    if ($candidate !== "") $paths[] = "/tmp/theme-music-storage-" . sha1($candidate) . ".json";
+    foreach ($paths as $path) {
+        $tmp = $path . "." . getmypid() . ".tmp";
+        if (@file_put_contents($tmp, $json . "\n", LOCK_EX) !== false) @rename($tmp, $path);
+        else @unlink($tmp);
+    }
+}
+
+/** Prepare local disks and remote mounts using separate, auto-detected paths. */
+function m_wake_source_path($root, $candidate) {
+    $root = rtrim(str_replace("\\", "/", (string)$root), "/");
+    $candidate = str_replace("\\", "/", (string)$candidate);
+    $info = m_detect_storage_source($root, $candidate);
+    if (($info["strategy"] ?? "invalid") === "invalid") {
+        return ["ok" => false, "status" => "failed", "strategy" => "invalid", "mode" => "invalid", "label" => "存储路径无效"];
+    }
+
+    $marker = "/tmp/theme-music-storage-" . sha1($candidate) . ".json";
+    if (is_file($marker) && (time() - (int)@filemtime($marker)) < 20) {
+        $cached = json_decode((string)@file_get_contents($marker), true);
+        if (is_array($cached) && !empty($cached["ok"])) {
+            $cached["cached"] = true;
+            $cached["ts"] = time();
+            m_storage_publish_status($cached, $candidate);
+            return $cached;
+        }
+    }
+
+    $started = microtime(true);
+    $strategy = (string)$info["strategy"];
+    if ($strategy === "local_disk" && ($info["device"] ?? "") !== "" && is_executable("/usr/local/sbin/emcmd")) {
+        @exec("/usr/local/sbin/emcmd cmdSpinup=" . escapeshellarg($info["device"]) . " >/dev/null 2>&1");
+    }
+    // SMB/NFS never calls emcmd: its own blocking read is the remote wake/readiness check.
+    $fp = @fopen($candidate, "rb");
+    $probe = false;
+    if ($fp) {
+        $probe = @fread($fp, 1);
+        @fclose($fp);
+    }
+    $ok = ($fp && $probe !== false);
+    $result = array_merge($info, [
+        "ok" => $ok,
+        "status" => $ok ? "ready" : "failed",
+        "mode" => $strategy,
+        "label" => m_storage_label($info, $ok),
+        "elapsed_ms" => (int)round((microtime(true) - $started) * 1000),
+        "cached" => false,
+        "ts" => time(),
+    ]);
+    m_storage_publish_status($result, $candidate);
+    return $result;
+}
+
+/**
+ * Resolve sidecar LRC path for an audio absolute path.
+ * Priority: same stem .lrc (case variants) → lyrics/ or Lyrics/ sibling dir.
+ */
+function m_find_lrc($audioAbs) {
+    $audioAbs = str_replace("\\", "/", (string)$audioAbs);
+    if ($audioAbs === "" || !is_file($audioAbs)) return "";
+    $dir = str_replace("\\", "/", dirname($audioAbs));
+    $stem = pathinfo($audioAbs, PATHINFO_FILENAME);
+    if ($stem === "") return "";
+    $cands = [
+        $dir . "/" . $stem . ".lrc",
+        $dir . "/" . $stem . ".LRC",
+        $dir . "/lyrics/" . $stem . ".lrc",
+        $dir . "/Lyrics/" . $stem . ".lrc",
+        $dir . "/lyric/" . $stem . ".lrc",
+    ];
+    foreach ($cands as $p) {
+        if (is_file($p)) {
+            $real = realpath($p);
+            if ($real !== false && is_file($real)) return str_replace("\\", "/", $real);
+        }
+    }
+    // case-insensitive scan of same directory only (small dirs)
+    if (is_dir($dir)) {
+        $want = strtolower($stem) . ".lrc";
+        $dh = @opendir($dir);
+        if ($dh) {
+            while (($name = readdir($dh)) !== false) {
+                if ($name === "." || $name === "..") continue;
+                if (strtolower($name) === $want && is_file($dir . "/" . $name)) {
+                    closedir($dh);
+                    $real = realpath($dir . "/" . $name);
+                    return $real ? str_replace("\\", "/", $real) : ($dir . "/" . $name);
+                }
+            }
+            closedir($dh);
+        }
+    }
+    return "";
+}
+
+function m_has_lrc($audioAbs) {
+    return m_find_lrc($audioAbs) !== "";
+}
+
+/**
+ * Normalize title/artist for fuzzy LRC matching.
+ */
+function m_norm_lyric_key($s) {
+    $s = m_strtolower(trim((string)$s));
+    if ($s === "") return "";
+    $s = str_replace(["　", "–", "—", "－", "_"], [" ", "-", "-", "-", " "], $s);
+    $s = preg_replace('/\s*[\(\[（【].*?[\)\]）】]\s*/u', " ", $s);
+    $s = preg_replace('/\b(feat\.?|ft\.?|with)\b.*$/iu', "", $s);
+    $s = preg_replace('/[^\p{L}\p{N}\s]+/u', "", $s);
+    $s = preg_replace('/\s+/u', "", $s);
+    return (string)$s;
+}
+
+/**
+ * Extract non-empty timed lyric body lines (skip credit-ish rows).
+ */
+function m_lrc_body_texts($text, $limit = 12) {
+    $out = [];
+    $text = str_replace(["\r\n", "\r"], "\n", (string)$text);
+    foreach (explode("\n", $text) as $row) {
+        $row = trim($row);
+        if ($row === "") continue;
+        if (preg_match('/^\[(ti|ar|al|by|offset|re|ve|length):/iu', $row)) continue;
+        if (!preg_match_all('/\[(\d{1,3}):(\d{1,2})(?:[\.:](\d{1,3}))?\]/', $row, $ts, PREG_SET_ORDER)) continue;
+        $part = $row;
+        foreach ($ts as $tm) $part = str_replace($tm[0], "", $part);
+        $part = trim($part);
+        if ($part === "") continue;
+        if (preg_match('/^(作词|作曲|编曲|制作|混音|和声|词[:：]|曲[:：]|编[:：])/u', $part)) continue;
+        $out[] = $part;
+        if (count($out) >= max(1, (int)$limit)) break;
+    }
+    return $out;
+}
+
+/**
+ * Does LRC text plausibly belong to this track?
+ * Returns [ok(bool), reason(string)].
+ */
+function m_lrc_matches_track($text, $artist, $title) {
+    $text = (string)$text;
+    $title = trim((string)$title);
+    $artist = trim((string)$artist);
+    if ($text === "" || strpos($text, "[") === false) return [false, "empty"];
+    $tKey = m_norm_lyric_key($title);
+    if ($tKey === "") return [true, "no-title"];
+
+    [$offset, $meta, $lines] = m_parse_lrc($text);
+    unset($offset, $lines);
+    $ti = trim((string)($meta["ti"] ?? ""));
+    $ar = trim((string)($meta["ar"] ?? ""));
+    $tiKey = m_norm_lyric_key($ti);
+    $aKey = m_norm_lyric_key($artist);
+    $arKey = m_norm_lyric_key($ar);
+
+    if ($tiKey !== "" && $tiKey !== $tKey) {
+        $tiHas = ($tKey !== "" && (strpos($tiKey, $tKey) !== false || strpos($tKey, $tiKey) !== false));
+        if (!$tiHas) {
+            $lenRatio = min(strlen($tiKey), strlen($tKey)) / max(strlen($tiKey), strlen($tKey));
+            if ($lenRatio < 0.72) {
+                return [false, "ti-mismatch:" . $ti];
+            }
+        }
+    }
+
+    $bodies = m_lrc_body_texts($text, 10);
+    if (!count($bodies)) {
+        if ($tiKey !== "" && ($tiKey === $tKey || strpos($tiKey, $tKey) !== false || strpos($tKey, $tiKey) !== false)) {
+            return [true, "meta-only"];
+        }
+        return [false, "no-body"];
+    }
+
+    $blob = m_norm_lyric_key(implode(" ", $bodies));
+    $first = $bodies[0];
+    $firstKey = m_norm_lyric_key($first);
+
+    if (preg_match('/^\s*(.+?)\s*[-–—]\s*(.+?)\s*$/u', $first, $bm)) {
+        $bannerTitle = m_norm_lyric_key($bm[2]);
+        if ($bannerTitle !== "" && $bannerTitle !== $tKey
+            && strpos($bannerTitle, $tKey) === false && strpos($tKey, $bannerTitle) === false) {
+            if (function_exists("mb_strlen") ? mb_strlen($bm[2], "UTF-8") <= 24 : strlen($bannerTitle) <= 18) {
+                return [false, "body-banner:" . $bm[2]];
+            }
+        }
+    }
+
+    $titleInBody = ($tKey !== "" && strpos($blob, $tKey) !== false);
+    $titleInFirst = ($tKey !== "" && strpos($firstKey, $tKey) !== false);
+    $tiOk = ($tiKey === "" || $tiKey === $tKey || strpos($tiKey, $tKey) !== false || strpos($tKey, $tiKey) !== false);
+
+    if (!$titleInFirst && $aKey !== "" && strlen($firstKey) > strlen($aKey) + 2) {
+        if (strpos($firstKey, $aKey) === 0) {
+            $rest = substr($firstKey, strlen($aKey));
+            if ($rest !== "" && $rest !== $tKey && strpos($rest, $tKey) === false && strpos($tKey, $rest) === false
+                && strlen($rest) >= 4 && strlen($rest) <= 24) {
+                return [false, "body-glued-title:" . $first];
+            }
+        }
+    }
+
+    // Scan early lines for "歌手-其他歌名" even when [ti] was forged to the filename title
+    foreach (array_slice($bodies, 0, 3) as $bline) {
+        if (!preg_match('/^\s*(.+?)\s*[-–—]\s*(.+?)\s*$/u', $bline, $bm2)) continue;
+        $bt = m_norm_lyric_key($bm2[2]);
+        if ($bt === "" || $bt === $tKey) continue;
+        if (strpos($bt, $tKey) !== false || strpos($tKey, $bt) !== false) continue;
+        $blen = function_exists("mb_strlen") ? mb_strlen($bm2[2], "UTF-8") : strlen($bt);
+        if ($blen <= 24) {
+            return [false, "early-banner:" . $bm2[2]];
+        }
+    }
+
+    if ($tiOk) return [true, "ti-ok"];
+    if ($titleInBody || $titleInFirst) return [true, "body-has-title"];
+    if (strlen($tKey) <= 12) {
+        return [false, "title-absent"];
+    }
+    if ($aKey !== "" && $arKey !== "" && ($arKey === $aKey || strpos($arKey, $aKey) !== false || strpos($aKey, $arKey) !== false)) {
+        return [true, "artist-fallback"];
+    }
+    return [false, "weak-match"];
+}
+
+/**
+ * Quarantine a bad sidecar/cache LRC so it is not reused.
+ */
+function m_quarantine_lrc($lrcAbs, $reason = "mismatch") {
+    $lrcAbs = str_replace("\\", "/", (string)$lrcAbs);
+    if ($lrcAbs === "" || !is_file($lrcAbs)) return "";
+    $reason = preg_replace('/[^a-z0-9._-]+/i', "_", (string)$reason);
+    if ($reason === "") $reason = "mismatch";
+    $dest = $lrcAbs . ".bad-" . $reason . "-" . date("YmdHis");
+    if (strlen($dest) > 240) $dest = $lrcAbs . ".bad";
+    if (@rename($lrcAbs, $dest)) {
+        mlog("lrc-quarantine from={$lrcAbs} to={$dest}");
+        return str_replace("\\", "/", $dest);
+    }
+    if (@unlink($lrcAbs)) {
+        mlog("lrc-quarantine-unlink path={$lrcAbs} reason={$reason}");
+        return "";
+    }
+    mlog("lrc-quarantine-fail path={$lrcAbs} reason={$reason}");
+    return "";
+}
+
+/**
+ * Find sidecar LRC only if content matches track meta.
+ * On mismatch, quarantine the file and return "".
+ */
+function m_find_matching_lrc($audioAbs, $rel = "") {
+    $path = m_find_lrc($audioAbs);
+    if ($path === "") return "";
+    [$artist, $title] = m_guess_meta($audioAbs, $rel);
+    $raw = @file_get_contents($path);
+    if ($raw === false || $raw === "") {
+        m_quarantine_lrc($path, "empty");
+        return "";
+    }
+    $text = m_lrc_decode($raw);
+    [$ok, $why] = m_lrc_matches_track($text, $artist, $title);
+    if ($ok) return $path;
+    mlog("lrc-mismatch path={$path} title={$title} reason={$why}");
+    m_quarantine_lrc($path, "mismatch");
+    return "";
+}
+
+
+/** Resolve Unraid outgoing proxy (same sources as ucwc-update.php). */
+function m_outgoing_proxy() {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+    $cached = "";
+    foreach (["/var/local/emhttp/proxy.ini", "/usr/local/emhttp/state/proxy.ini", "/usr/local/emhttp/proxy.ini"] as $p) {
+        if (!is_file($p)) continue;
+        $cfg = @parse_ini_file($p, true);
+        if (!is_array($cfg)) $cfg = @parse_ini_file($p, false);
+        if (!is_array($cfg)) continue;
+        $https = $cfg["https_proxy"] ?? ($cfg["proxy"]["https_proxy"] ?? "");
+        $http = $cfg["http_proxy"] ?? ($cfg["proxy"]["http_proxy"] ?? "");
+        $url = trim((string)($https !== "" ? $https : $http));
+        if ($url !== "") { $cached = $url; break; }
+    }
+    if ($cached === "") {
+        $env = getenv("https_proxy") ?: getenv("HTTPS_PROXY") ?: getenv("http_proxy") ?: getenv("HTTP_PROXY");
+        if (is_string($env) && trim($env) !== "") $cached = trim($env);
+    }
+    if ($cached === "" && is_file("/boot/config/plugins/dynamix/outgoingproxy.cfg")) {
+        $op = @parse_ini_file("/boot/config/plugins/dynamix/outgoingproxy.cfg");
+        if (is_array($op) && !empty($op["proxy_active"])) {
+            $i = (string)$op["proxy_active"];
+            $u = trim((string)($op["proxy_url_$i"] ?? ""));
+            if ($u !== "") $cached = $u;
+        }
+    }
+    return $cached;
+}
+
+/** Simple HTTP GET (curl preferred, proxy-aware). Returns [body|false, err, httpCode]. */
+function m_http_get($url, $timeout = 10, $accept = "application/json") {
+    $url = trim((string)$url);
+    if ($url === "" || !preg_match('#^https?://#i', $url)) return [false, "bad url", 0];
+    $accept = trim((string)$accept);
+    if ($accept === "") $accept = "*/*";
+    $proxy = m_outgoing_proxy();
+    $ua = "ThemeMusic/2.6";
+    if (function_exists("curl_init")) {
+        $ch = curl_init($url);
+        $opts = [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 5,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => max(5, (int)$timeout),
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_USERAGENT => $ua,
+            CURLOPT_HTTPHEADER => ["Accept: $accept"],
+            CURLOPT_PROTOCOLS => defined("CURLPROTO_HTTPS") ? (CURLPROTO_HTTP | CURLPROTO_HTTPS) : 3,
+            CURLOPT_IPRESOLVE => defined("CURL_IPRESOLVE_V4") ? CURL_IPRESOLVE_V4 : 1,
+        ];
+        if ($proxy !== "") {
+            $opts[CURLOPT_PROXY] = $proxy;
+            $opts[CURLOPT_HTTPPROXYTUNNEL] = true;
+            if (defined("CURLPROXY_HTTP")) $opts[CURLOPT_PROXYTYPE] = CURLPROXY_HTTP;
+        }
+        curl_setopt_array($ch, $opts);
+        $data = curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+        if ($data === false || $data === "") {
+            $hint = $proxy !== "" ? "" : "（未检测到出站代理）";
+            return [false, ($err !== "" ? $err : "empty") . $hint, $code];
+        }
+        if ($code >= 400) return [false, "HTTP $code", $code];
+        return [$data, "", $code];
+    }
+    $hdr = "Accept: $accept\r\nUser-Agent: $ua\r\n";
+    $http = ["timeout" => max(5, (int)$timeout), "header" => $hdr];
+    if ($proxy !== "") $http["proxy"] = $proxy;
+    $ctx = stream_context_create([
+        "http" => $http,
+        "ssl" => ["verify_peer" => false, "verify_peer_name" => false],
+    ]);
+    $data = @file_get_contents($url, false, $ctx);
+    if ($data === false || $data === "") return [false, "file_get_contents failed" . ($proxy === "" ? "（无代理）" : ""), 0];
+    return [$data, "", 200];
+}
+
+function m_navidrome_password() {
+    global $navidrome_secret_path;
+    if (!is_file($navidrome_secret_path)) return "";
+    $v = @file_get_contents($navidrome_secret_path);
+    if ($v === false) return "";
+    return substr(str_replace(["\0", "\r", "\n"], "", (string)$v), 0, 256);
+}
+
+function m_navidrome_url($cfg, $endpoint, $params = [], $passwordOverride = null) {
+    $base = rtrim(trim((string)($cfg["MUSIC_NAVIDROME_URL"] ?? "")), "/");
+    $user = trim((string)($cfg["MUSIC_NAVIDROME_USER"] ?? ""));
+    $password = $passwordOverride === null ? m_navidrome_password() : substr(str_replace(["\0", "\r", "\n"], "", (string)$passwordOverride), 0, 256);
+    if ($base === "" || !preg_match('#^https?://#i', $base) || $user === "" || $password === "") return "";
+    $salt = bin2hex(random_bytes(8));
+    $auth = [
+        "u" => $user,
+        "t" => md5($password . $salt),
+        "s" => $salt,
+        "v" => "1.16.1",
+        "c" => "ThemeMusic",
+        "f" => "json",
+    ];
+    $query = array_merge($auth, is_array($params) ? $params : []);
+    return $base . "/rest/" . preg_replace('/[^A-Za-z0-9]/', '', (string)$endpoint) . ".view?" . http_build_query($query, "", "&", PHP_QUERY_RFC3986);
+}
+
+function m_navidrome_response($cfg, $endpoint, $params = [], $timeout = 15, $passwordOverride = null) {
+    $url = m_navidrome_url($cfg, $endpoint, $params, $passwordOverride);
+    if ($url === "") return [null, "Navidrome 地址、用户名或密码未配置", 0];
+    if (!function_exists("curl_init")) return [null, "PHP cURL 不可用", 0];
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 3,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => max(5, (int)$timeout),
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => 0,
+        CURLOPT_USERAGENT => "ThemeMusic/1.1",
+        CURLOPT_HTTPHEADER => ["Accept: application/json"],
+        CURLOPT_PROXY => "",
+    ]);
+    $raw = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err = curl_error($ch);
+    curl_close($ch);
+    if ($raw === false || $raw === "") return [null, $err !== "" ? $err : "Navidrome 返回空响应", $code];
+    $json = json_decode((string)$raw, true);
+    if (!is_array($json)) return [null, "Navidrome 返回了无效 JSON", $code];
+    $resp = $json["subsonic-response"] ?? null;
+    if (!is_array($resp)) return [null, "Navidrome 响应格式无效", $code];
+    if (($resp["status"] ?? "failed") !== "ok") {
+        $msg = (string)($resp["error"]["message"] ?? "Navidrome 请求失败");
+        return [null, $msg, $code];
+    }
+    return [$resp, "", $code];
+}
+
+function m_array_list($v) {
+    if (!is_array($v)) return [];
+    if ($v === []) return [];
+    $keys = array_keys($v);
+    return ($keys === range(0, count($v) - 1)) ? $v : [$v];
+}
+
+function m_navidrome_track($song) {
+    if (!is_array($song) || empty($song["id"])) return null;
+    $id = (string)$song["id"];
+    $suffix = strtolower((string)($song["suffix"] ?? ""));
+    if ($suffix === "" && !empty($song["path"])) $suffix = strtolower(pathinfo((string)$song["path"], PATHINFO_EXTENSION));
+    return [
+        "id" => "nd:" . $id,
+        "title" => (string)($song["title"] ?? "未命名曲目"),
+        "artist" => (string)($song["artist"] ?? ""),
+        "album" => (string)($song["album"] ?? ""),
+        "ext" => $suffix,
+        "size" => intval($song["size"] ?? 0),
+        "duration" => intval($song["duration"] ?? 0),
+        "bitrate" => intval($song["bitRate"] ?? 0),
+        "has_lrc" => false,
+        "has_cover" => !empty($song["coverArt"]),
+        "cover_art" => (string)($song["coverArt"] ?? ""),
+    ];
+}
+
+function m_navidrome_id($id) {
+    $id = (string)$id;
+    if (strpos($id, "nd:") === 0) $id = substr($id, 3);
+    if ($id === "" || strlen($id) > 256 || preg_match('/[\x00-\x1F]/', $id)) return "";
+    return $id;
+}
+
+function m_navidrome_songs($cfg, $limit = 50000, $passwordOverride = null, $progress = null) {
+    $limit = max(1, min(100000, (int)$limit));
+    $songs = [];
+    $offset = 0;
+    while (count($songs) < $limit) {
+        $pageSize = min(500, $limit - count($songs));
+        [$resp, $err] = m_navidrome_response($cfg, "search3", [
+            "query" => "",
+            "artistCount" => 0,
+            "albumCount" => 0,
+            "songCount" => $pageSize,
+            "songOffset" => $offset,
+        ], 20, $passwordOverride);
+        if (!is_array($resp)) return [null, $err, false];
+        $page = m_array_list($resp["searchResult3"]["song"] ?? []);
+        foreach ($page as $song) {
+            $mapped = m_navidrome_track($song);
+            if ($mapped !== null) $songs[] = $mapped;
+            if (count($songs) >= $limit) break;
+        }
+        $got = count($page);
+        if (is_callable($progress)) {
+            $progress(count($songs), $offset + $got, $limit);
+        }
+        if ($got < $pageSize || $got === 0) return [$songs, "", false];
+        $offset += $got;
+    }
+    return [$songs, "", true];
+}
+
+function m_navidrome_song($cfg, $id) {
+    $id = m_navidrome_id($id);
+    if ($id === "") return [null, "曲目 ID 无效"];
+    [$resp, $err] = m_navidrome_response($cfg, "getSong", ["id" => $id]);
+    if (!is_array($resp)) return [null, $err];
+    $song = $resp["song"] ?? null;
+    return is_array($song) ? [$song, ""] : [null, "Navidrome 未返回曲目"];
+}
+
+function m_navidrome_proxy($cfg, $endpoint, $params, $kind = "audio") {
+    $url = m_navidrome_url($cfg, $endpoint, $params);
+    if ($url === "" || !function_exists("curl_init")) {
+        http_response_code(503);
+        header("Content-Type: text/plain; charset=utf-8");
+        echo "Navidrome 未配置或 PHP cURL 不可用";
+        exit;
+    }
+    if (function_exists("session_status") && session_status() === PHP_SESSION_ACTIVE) @session_write_close();
+    if (function_exists("apache_setenv")) @apache_setenv("no-gzip", "1");
+    @ini_set("zlib.output_compression", "0");
+    while (ob_get_level() > 0) @ob_end_clean();
+    @ignore_user_abort(true);
+
+    $headers = [];
+    $code = 200;
+    $sent = false;
+    $blocked = false;
+    $blockedMessage = "";
+    $ch = curl_init($url);
+    $requestHeaders = ["Accept: " . ($kind === "image" ? "image/*,*/*;q=0.8" : "audio/*,*/*;q=0.8")];
+    if (!empty($_SERVER["HTTP_RANGE"])) $requestHeaders[] = "Range: " . (string)$_SERVER["HTTP_RANGE"];
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => false,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 3,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_TIMEOUT => 0,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => 0,
+        CURLOPT_USERAGENT => "ThemeMusic/1.1",
+        CURLOPT_HTTPHEADER => $requestHeaders,
+        CURLOPT_PROXY => "",
+        CURLOPT_HEADERFUNCTION => function ($ch, $line) use (&$headers, &$code) {
+            $trim = trim((string)$line);
+            if (preg_match('#^HTTP/\S+\s+(\d+)#i', $trim, $m)) {
+                $code = intval($m[1]);
+                $headers = [];
+            } elseif ($trim !== "" && strpos($trim, ":") !== false) {
+                [$name, $value] = array_map("trim", explode(":", $trim, 2));
+                $headers[strtolower($name)] = [$name, $value];
+            }
+            return strlen($line);
+        },
+        CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$headers, &$code, &$sent, &$blocked, &$blockedMessage, $kind) {
+            if (!$sent) {
+                $sent = true;
+                $ct = strtolower((string)($headers["content-type"][1] ?? ""));
+                $badType = strpos($ct, "json") !== false || strpos($ct, "xml") !== false || strpos($ct, "text/") === 0;
+                if ($code >= 400 || $badType) {
+                    $blocked = true;
+                    http_response_code($code >= 400 ? $code : 502);
+                    header("Content-Type: text/plain; charset=utf-8");
+                } else {
+                    http_response_code($code > 0 ? $code : 200);
+                    foreach (["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified"] as $key) {
+                        if (isset($headers[$key])) header($headers[$key][0] . ": " . $headers[$key][1]);
+                    }
+                    if ($kind === "audio") header("Accept-Ranges: bytes");
+                    header("Cache-Control: private, max-age=" . ($kind === "image" ? "3600" : "120"));
+                    header("X-Content-Type-Options: nosniff");
+                    header("X-Accel-Buffering: no");
+                }
+            }
+            if ($blocked) {
+                if (strlen($blockedMessage) < 1024) $blockedMessage .= substr((string)$data, 0, 1024 - strlen($blockedMessage));
+            } else {
+                echo $data;
+                @flush();
+            }
+            return strlen($data);
+        },
+    ]);
+    $ok = curl_exec($ch);
+    $err = curl_error($ch);
+    curl_close($ch);
+    if ($blocked) {
+        echo "Navidrome 媒体请求失败";
+        exit;
+    }
+    if ($ok === false && !$sent) {
+        http_response_code(502);
+        header("Content-Type: text/plain; charset=utf-8");
+        echo $err !== "" ? $err : "Navidrome 媒体连接失败";
+    }
+    exit;
+}
+
+/** Legacy boot-cache paths are retained only for explicit migration cleanup. */
+function m_lrc_cache_dir() {
+    return "/boot/config/plugins/theme.music/lyrics-cache";
+}
+
+function m_strtolower($s) {
+    $s = (string)$s;
+    if (function_exists("mb_strtolower")) return mb_strtolower($s, "UTF-8");
+    return strtolower($s);
+}
+function m_lrc_cache_key($artist, $title) {
+    return substr(sha1(m_strtolower(trim($artist) . "|" . trim($title))), 0, 24);
+}
+
+function m_cover_cache_dir() {
+    return "/boot/config/plugins/theme.music/cover-cache";
+}
+
+function m_cover_cache_key($artist, $title, $album = "") {
+    return substr(sha1(m_strtolower(trim($artist) . "|" . trim($album) . "|" . trim($title))), 0, 24);
+}
+
+function m_atomic_sidecar_write($path, $data) {
+    $path = str_replace("\\", "/", (string)$path);
+    $dir = dirname($path);
+    if ($path === "" || !is_dir($dir) || !is_writable($dir)) return [false, "歌曲目录不可写"];
+    try {
+        $suffix = bin2hex(random_bytes(4));
+    } catch (Throwable $e) {
+        $suffix = dechex(mt_rand());
+    }
+    $tmp = $dir . "/." . basename($path) . ".thememusic-" . getmypid() . "-" . $suffix . ".tmp";
+    $bytes = @file_put_contents($tmp, $data, LOCK_EX);
+    if ($bytes === false || $bytes !== strlen($data)) {
+        @unlink($tmp);
+        return [false, "歌曲目录写入失败"];
+    }
+    @chmod($tmp, 0644);
+    if (!@rename($tmp, $path)) {
+        @unlink($tmp);
+        return [false, "附属文件原子替换失败"];
+    }
+    @chmod($path, 0644);
+    return [is_file($path) && @filesize($path) > 0, ""];
+}
+
+/** Convert downloaded or embedded art to real JPEG bytes for Song.jpg. */
+function m_cover_jpeg_bytes($data) {
+    if (!is_string($data) || !m_is_cover_bytes($data)) return "";
+    if (substr($data, 0, 3) === "\xFF\xD8\xFF") return $data;
+    if (!function_exists("imagecreatefromstring") || !function_exists("imagejpeg")) return "";
+    $src = @imagecreatefromstring($data);
+    if (!$src) return "";
+    $w = imagesx($src);
+    $h = imagesy($src);
+    $dst = @imagecreatetruecolor($w, $h);
+    if (!$dst) {
+        imagedestroy($src);
+        return "";
+    }
+    $white = imagecolorallocate($dst, 255, 255, 255);
+    imagefill($dst, 0, 0, $white);
+    imagecopy($dst, $src, 0, 0, 0, 0, $w, $h);
+    ob_start();
+    $ok = @imagejpeg($dst, null, 90);
+    $jpg = (string)ob_get_clean();
+    imagedestroy($dst);
+    imagedestroy($src);
+    return ($ok && substr($jpg, 0, 3) === "\xFF\xD8\xFF") ? $jpg : "";
+}
+
+/** Common cover basenames (lowercase). */
+function m_cover_basenames() {
+    return [
+        "cover.jpg", "cover.jpeg", "cover.png", "cover.webp", "cover.gif",
+        "folder.jpg", "folder.jpeg", "folder.png", "folder.webp",
+        "album.jpg", "album.jpeg", "album.png", "album.webp",
+        "front.jpg", "front.jpeg", "front.png", "front.webp",
+        "artwork.jpg", "artwork.png", "art.jpg", "art.png",
+        "albumart.jpg", "albumart.png", "albumartsmall.jpg",
+        "scan.jpg", "booklet.jpg",
+    ];
+}
+
+/**
+ * Look for cover image inside one directory (sidecar stem + common names).
+ */
+function m_find_cover_in_dir($dir, $stem = "") {
+    $dir = rtrim(str_replace("\\", "/", (string)$dir), "/");
+    if ($dir === "" || !is_dir($dir)) return "";
+    $cands = [];
+    if ($stem !== "") {
+        foreach (["jpg", "jpeg", "png", "webp", "gif"] as $ex) {
+            $cands[] = $dir . "/" . $stem . "." . $ex;
+        }
+    }
+    foreach (["Cover.jpg", "Cover.png", "Folder.jpg", "AlbumArt.jpg", "AlbumArtSmall.jpg", "Art.jpg", "Front.jpg"] as $n) {
+        $cands[] = $dir . "/" . $n;
+    }
+    foreach (m_cover_basenames() as $n) {
+        $cands[] = $dir . "/" . $n;
+    }
+    foreach ($cands as $p) {
+        if (is_file($p) && @filesize($p) > 64) return str_replace("\\", "/", $p);
+    }
+    $want = m_cover_basenames();
+    $stemL = $stem !== "" ? strtolower($stem) : "";
+    $dh = @opendir($dir);
+    if ($dh) {
+        while (($name = readdir($dh)) !== false) {
+            if ($name === "." || $name === "..") continue;
+            $ln = strtolower($name);
+            $fp = $dir . "/" . $name;
+            if (!is_file($fp) || @filesize($fp) <= 64) continue;
+            if (in_array($ln, $want, true)) {
+                closedir($dh);
+                return str_replace("\\", "/", $fp);
+            }
+            if ($stemL !== "") {
+                foreach ([".jpg", ".jpeg", ".png", ".webp", ".gif"] as $ex) {
+                    if ($ln === $stemL . $ex) {
+                        closedir($dh);
+                        return str_replace("\\", "/", $fp);
+                    }
+                }
+            }
+            // loose: *cover*.jpg / *front*.png in folder
+            if (preg_match('/(cover|folder|front|albumart|artwork)/i', $ln) && preg_match('/\.(jpe?g|png|webp|gif)$/i', $ln)) {
+                closedir($dh);
+                return str_replace("\\", "/", $fp);
+            }
+        }
+        closedir($dh);
+    }
+    return "";
+}
+
+/**
+ * Local cover next to audio, then parent album folder (CD1/CD2 layouts), then grandparent.
+ */
+function m_find_local_cover($audioAbs) {
+    $audioAbs = str_replace("\\", "/", (string)$audioAbs);
+    if ($audioAbs === "" || !is_file($audioAbs)) return "";
+    $dir = str_replace("\\", "/", dirname($audioAbs));
+    $stem = pathinfo($audioAbs, PATHINFO_FILENAME);
+    $hit = m_find_cover_in_dir($dir, $stem);
+    if ($hit !== "") return $hit;
+    // Multi-disc: .../Album/CD1/track.flac → cover often on Album/
+    $parent = str_replace("\\", "/", dirname($dir));
+    if ($parent !== "" && $parent !== $dir && $parent !== "." && $parent !== "/") {
+        $hit = m_find_cover_in_dir($parent, "");
+        if ($hit !== "") return $hit;
+        $gparent = str_replace("\\", "/", dirname($parent));
+        if ($gparent !== "" && $gparent !== $parent && $gparent !== "." && $gparent !== "/") {
+            $hit = m_find_cover_in_dir($gparent, "");
+            if ($hit !== "") return $hit;
+        }
+    }
+    return "";
+}
+
+/**
+ * Parse one FLAC METADATA_BLOCK_PICTURE payload into image bytes.
+ * Layout: type(4) mimeLen(4) mime descLen(4) desc width(4) height(4) depth(4) colors(4) dataLen(4) data
+ */
+function m_flac_picture_payload($block) {
+    if (!is_string($block) || strlen($block) < 32) return "";
+    $n = strlen($block);
+    $mimeLen = (ord($block[4]) << 24) | (ord($block[5]) << 16) | (ord($block[6]) << 8) | ord($block[7]);
+    if ($mimeLen < 0 || $mimeLen > 128 || 8 + $mimeLen + 4 > $n) return "";
+    $o = 8 + $mimeLen;
+    $descLen = (ord($block[$o]) << 24) | (ord($block[$o + 1]) << 16) | (ord($block[$o + 2]) << 8) | ord($block[$o + 3]);
+    $o += 4;
+    if ($descLen < 0 || $descLen > 4096 || $o + $descLen + 20 > $n) return "";
+    $o += $descLen; // skip description
+    $o += 16; // width/height/depth/colors
+    if ($o + 4 > $n) return "";
+    $dlen = (ord($block[$o]) << 24) | (ord($block[$o + 1]) << 16) | (ord($block[$o + 2]) << 8) | ord($block[$o + 3]);
+    $o += 4;
+    if ($dlen < 64 || $dlen > 4 * 1024 * 1024 || $o + $dlen > $n) return "";
+    $blob = substr($block, $o, $dlen);
+    return m_is_cover_bytes($blob) ? $blob : "";
+}
+
+/**
+ * Stream-walk FLAC metadata blocks (handles large PICTURE without loading whole file).
+ * Prefers picture type 3 (front cover), else first valid image.
+ */
+function m_extract_flac_picture($fp, $fileSize) {
+    if (!$fp) return "";
+    @fseek($fp, 0, SEEK_SET);
+    $magic = @fread($fp, 4);
+    if ($magic !== "fLaC") return "";
+    $pos = 4;
+    $guard = 0;
+    $fallback = "";
+    while ($pos + 4 <= $fileSize && $guard++ < 64) {
+        @fseek($fp, $pos, SEEK_SET);
+        $hdr = @fread($fp, 4);
+        if ($hdr === false || strlen($hdr) < 4) break;
+        $b0 = ord($hdr[0]);
+        $last = ($b0 & 0x80) !== 0;
+        $type = $b0 & 0x7F;
+        $blen = (ord($hdr[1]) << 16) | (ord($hdr[2]) << 8) | ord($hdr[3]);
+        $pos += 4;
+        if ($blen < 0 || $blen > 8 * 1024 * 1024 || $pos + $blen > $fileSize) break;
+        if ($type === 6 && $blen > 40) {
+            $block = @fread($fp, $blen);
+            if (is_string($block) && strlen($block) === $blen) {
+                $picType = (ord($block[0]) << 24) | (ord($block[1]) << 16) | (ord($block[2]) << 8) | ord($block[3]);
+                $img = m_flac_picture_payload($block);
+                if ($img !== "") {
+                    if ($picType === 3) return $img; // front cover
+                    if ($fallback === "") $fallback = $img;
+                }
+            }
+        }
+        $pos += $blen;
+        if ($last) break;
+    }
+    return $fallback;
+}
+
+/** Extract embedded art and persist it only as Song.jpg beside the audio file. */
+function m_extract_embedded_cover($audioAbs, $cacheKey = "") {
+    $audioAbs = str_replace("\\", "/", (string)$audioAbs);
+    if ($audioAbs === "" || !is_file($audioAbs)) return "";
+    $size = @filesize($audioAbs);
+    if ($size === false || $size < 512 || $size > 200 * 1024 * 1024) return "";
+    $fp = @fopen($audioAbs, "rb");
+    if (!$fp) return "";
+
+    $img = "";
+    // FLAC: stream metadata (covers large PICTURE blocks beyond old 8MB fread cap)
+    $head = @fread($fp, 4);
+    @fseek($fp, 0, SEEK_SET);
+    if ($head === "fLaC") {
+        $img = m_extract_flac_picture($fp, $size);
+    }
+
+    // MP3/ID3 or generic: scan head + optional tail for JPEG/PNG signatures
+    if ($img === "") {
+        @fseek($fp, 0, SEEK_SET);
+        $readMax = (int)min($size, 12 * 1024 * 1024);
+        $data = @fread($fp, $readMax);
+        if (is_string($data) && strlen($data) >= 64) {
+            $img = m_scan_image_bytes($data);
+        }
+        // APEv2 / some tags live near EOF — peek last 1.5MB
+        if ($img === "" && $size > 2 * 1024 * 1024) {
+            $tailN = (int)min($size, 1536 * 1024);
+            @fseek($fp, -$tailN, SEEK_END);
+            $tail = @fread($fp, $tailN);
+            if (is_string($tail) && strlen($tail) >= 64) {
+                $img = m_scan_image_bytes($tail);
+            }
+        }
+    }
+    fclose($fp);
+
+    if ($img === "" || !m_is_cover_bytes($img)) return "";
+    if (strlen($img) > 4 * 1024 * 1024) $img = substr($img, 0, 4 * 1024 * 1024);
+    if (!m_is_cover_bytes($img)) return "";
+
+    $jpg = m_cover_jpeg_bytes($img);
+    if ($jpg === "") return "";
+    $dst = dirname($audioAbs) . "/" . pathinfo($audioAbs, PATHINFO_FILENAME) . ".jpg";
+    [$ok, $writeErr] = m_atomic_sidecar_write($dst, $jpg);
+    if ($ok) {
+        mlog("cover-embed ok dst=$dst bytes=" . strlen($jpg));
+        return str_replace("\\", "/", $dst);
+    }
+    mlog("cover-embed write-failed dst=$dst err=$writeErr");
+    return "";
+}
+
+/** Find first plausible JPEG/PNG inside a binary buffer. */
+function m_scan_image_bytes($data) {
+    if (!is_string($data) || strlen($data) < 64) return "";
+    $n = strlen($data);
+    $limit = min($n, 12 * 1024 * 1024);
+    for ($i = 0; $i + 3 < $limit; $i++) {
+        $b0 = ord($data[$i]);
+        if ($b0 === 0xFF && ord($data[$i + 1]) === 0xD8 && ord($data[$i + 2]) === 0xFF) {
+            $maxLen = min(3 * 1024 * 1024, $n - $i);
+            $blob = substr($data, $i, $maxLen);
+            $eoi = false;
+            $blen = strlen($blob);
+            for ($j = min($blen - 2, 3 * 1024 * 1024); $j > 128; $j--) {
+                if (ord($blob[$j]) === 0xFF && ord($blob[$j + 1]) === 0xD9) {
+                    $eoi = $j + 2;
+                    break;
+                }
+            }
+            if ($eoi !== false) $blob = substr($blob, 0, $eoi);
+            if (m_is_cover_bytes($blob) && strlen($blob) > 200) return $blob;
+        }
+        if ($b0 === 0x89 && $i + 8 < $n && ord($data[$i + 1]) === 0x50 && ord($data[$i + 2]) === 0x4E && ord($data[$i + 3]) === 0x47) {
+            $blob = substr($data, $i, min(3 * 1024 * 1024, $n - $i));
+            if (m_is_cover_bytes($blob) && strlen($blob) > 200) return $blob;
+        }
+    }
+    return "";
+}
+
+function m_is_cover_bytes($data) {
+    if ($data === false || $data === null || strlen($data) < 24) return false;
+    if (strlen($data) > 4 * 1024 * 1024) return false;
+    $h = substr($data, 0, 12);
+    if (substr($h, 0, 3) === "\xFF\xD8\xFF") return true;
+    if (substr($h, 0, 8) === "\x89PNG\r\n\x1a\n") return true;
+    if (substr($h, 0, 4) === "RIFF" && substr($data, 8, 4) === "WEBP") return true;
+    if (substr($h, 0, 6) === "GIF87a" || substr($h, 0, 6) === "GIF89a") return true;
+    return false;
+}
+
+function m_cover_ext_from_bytes($data) {
+    $h = substr($data, 0, 12);
+    if (substr($h, 0, 3) === "\xFF\xD8\xFF") return "jpg";
+    if (substr($h, 0, 8) === "\x89PNG\r\n\x1a\n") return "png";
+    if (substr($h, 0, 4) === "RIFF" && substr($data, 8, 4) === "WEBP") return "webp";
+    return "jpg";
+}
+
+function m_fetch_itunes_cover_url($artist, $title, $album = "") {
+    // Try several query shapes — folder noise used to poison a single long term
+    $queries = [];
+    $a = trim((string)$artist);
+    $t = trim((string)$title);
+    $al = trim((string)$album);
+    if ($a !== "" && $t !== "") $queries[] = $a . " " . $t;
+    if ($a !== "" && $al !== "") $queries[] = $a . " " . $al;
+    if ($t !== "" && $al !== "") $queries[] = $t . " " . $al;
+    if ($t !== "") $queries[] = $t;
+    if ($a !== "" && $t !== "" && $al !== "") $queries[] = $a . " " . $al . " " . $t;
+    $queries = array_values(array_unique(array_filter($queries)));
+    if (!count($queries)) return "";
+
+    $tNorm = m_strtolower($t);
+    $aNorm = m_strtolower($a);
+    foreach ($queries as $term) {
+        $url = "https://itunes.apple.com/search?" . http_build_query([
+            "term" => $term,
+            "media" => "music",
+            "entity" => "song",
+            "limit" => 8,
+            "country" => "cn",
+        ], "", "&", PHP_QUERY_RFC3986);
+        [$body, $err, $code] = m_http_get($url, 12);
+        if ($body === false || $body === "") {
+            // retry without country
+            $url2 = "https://itunes.apple.com/search?" . http_build_query([
+                "term" => $term,
+                "media" => "music",
+                "entity" => "song",
+                "limit" => 8,
+            ], "", "&", PHP_QUERY_RFC3986);
+            [$body, $err, $code] = m_http_get($url2, 12);
+        }
+        if ($body === false || $body === "") {
+            mlog("itunes-cover fail term=$term err=$err");
+            continue;
+        }
+        $json = json_decode($body, true);
+        $results = $json["results"] ?? null;
+        if (!is_array($results) || !count($results)) continue;
+        $best = null;
+        foreach ($results as $row) {
+            if (!is_array($row)) continue;
+            $nm = m_strtolower((string)($row["trackName"] ?? ""));
+            $ar = m_strtolower((string)($row["artistName"] ?? ""));
+            $titleHit = $tNorm === "" || ($nm !== "" && ($nm === $tNorm || strpos($nm, $tNorm) !== false || strpos($tNorm, $nm) !== false));
+            $artistHit = $aNorm === "" || ($ar !== "" && ($ar === $aNorm || strpos($ar, $aNorm) !== false || strpos($aNorm, $ar) !== false));
+            if ($titleHit && $artistHit) {
+                $best = $row;
+                break;
+            }
+            if ($best === null && $titleHit) $best = $row;
+        }
+        if (!$best) $best = $results[0];
+        $art = (string)($best["artworkUrl100"] ?? $best["artworkUrl60"] ?? "");
+        if ($art === "") continue;
+        $art = preg_replace('/\/\d+x\d+bb/', "/600x600bb", $art);
+        $art = str_replace(["100x100", "60x60"], "600x600", $art);
+        return $art;
+    }
+    return "";
+}
+
+function m_fetch_netease_cover_url($artist, $title, $album = "") {
+    $queries = [];
+    $a = trim((string)$artist);
+    $t = trim((string)$title);
+    $al = trim((string)$album);
+    if ($a !== "" && $t !== "") $queries[] = $a . " " . $t;
+    if ($t !== "") $queries[] = $t;
+    if ($a !== "" && $al !== "") $queries[] = $a . " " . $al;
+    $queries = array_values(array_unique(array_filter($queries)));
+    if (!count($queries)) return "";
+    $tNorm = m_strtolower($t);
+    $aNorm = m_strtolower($a);
+    foreach ($queries as $q) {
+        $searchUrl = "https://music.163.com/api/search/get/web?" . http_build_query([
+            "s" => $q,
+            "type" => 1,
+            "limit" => 8,
+            "offset" => 0,
+        ], "", "&", PHP_QUERY_RFC3986);
+        [$body, $err, $code] = m_http_get($searchUrl, 12, "application/json,text/plain,*/*;q=0.8");
+        if ($body === false || $body === "") {
+            mlog("netease-cover search fail q=$q err=$err");
+            continue;
+        }
+        $json = json_decode($body, true);
+        $songs = $json["result"]["songs"] ?? null;
+        if (!is_array($songs) || !count($songs)) continue;
+        $song = null;
+        foreach ($songs as $s) {
+            if (!is_array($s)) continue;
+            $nm = m_strtolower((string)($s["name"] ?? ""));
+            $ar0 = "";
+            if (!empty($s["artists"][0]["name"])) $ar0 = m_strtolower((string)$s["artists"][0]["name"]);
+            $titleHit = $tNorm === "" || ($nm !== "" && ($nm === $tNorm || strpos($nm, $tNorm) !== false || strpos($tNorm, $nm) !== false));
+            $artistHit = $aNorm === "" || ($ar0 !== "" && (strpos($ar0, $aNorm) !== false || strpos($aNorm, $ar0) !== false));
+            if ($titleHit && $artistHit) {
+                $song = $s;
+                break;
+            }
+            if ($song === null && $titleHit) $song = $s;
+        }
+        if (!$song) $song = $songs[0];
+        $pic = (string)($song["album"]["picUrl"] ?? "");
+        if ($pic === "") continue;
+        if (strpos($pic, "?") === false) $pic .= "?param=600y600";
+        else $pic = preg_replace('/param=\d+y\d+/', "param=600y600", $pic);
+        return $pic;
+    }
+    return "";
+}
+
+/**
+ * Resolve cover: local → embedded → network download to Song.jpg.
+ * When download succeeds but disk write fails, still returns remote URL via third channel:
+ * @return array{0:string,1:string,2:string,3?:string} [absPath, source, err, remoteUrl?]
+ */
+function m_resolve_cover($audioAbs, $rel = "", $doFetch = true) {
+    $audioAbs = str_replace("\\", "/", (string)$audioAbs);
+    $local = m_find_local_cover($audioAbs);
+    if ($local !== "") return [$local, "local", "", ""];
+
+    $meta = m_guess_meta($audioAbs, $rel);
+    $artist = $meta[0] ?? "";
+    $title = $meta[1] ?? "";
+    $album = $meta[2] ?? "";
+    // Disc folders must not become album name
+    if ($album !== "" && m_is_disc_folder($album)) $album = "";
+    // Embedded album art (no network)
+    $embed = m_extract_embedded_cover($audioAbs);
+    if ($embed !== "") return [$embed, "embedded", "", ""];
+
+    if (!$doFetch) return ["", "none", $title === "" ? "no title" : "no cover", ""];
+    // Allow network even if title empty — use filename stem
+    $qTitle = $title !== "" ? $title : pathinfo($audioAbs, PATHINFO_FILENAME);
+    if ($qTitle === "") return ["", "none", "no title", ""];
+
+    $url = m_fetch_itunes_cover_url($artist, $qTitle, $album);
+    $srcTag = "itunes";
+    if ($url === "") {
+        $url = m_fetch_netease_cover_url($artist, $qTitle, $album);
+        $srcTag = "netease";
+    }
+    if ($url === "") return ["", "none", "未匹配到封面", ""];
+
+    // Image bytes — do NOT send Accept: application/json (CDN may 406 / return HTML)
+    [$data, $err, $code] = m_http_get($url, 18, "image/*,*/*;q=0.8");
+    if ($data === false || !m_is_cover_bytes($data)) {
+        mlog("cover-download fail src=$srcTag err=$err code=$code");
+        if ($srcTag === "itunes") {
+            $url2 = m_fetch_netease_cover_url($artist, $qTitle, $album);
+            if ($url2 !== "" && $url2 !== $url) {
+                [$data, $err, $code] = m_http_get($url2, 18, "image/*,*/*;q=0.8");
+                $srcTag = "netease";
+                if ($data !== false && m_is_cover_bytes($data)) $url = $url2;
+            }
+        }
+        if ($data === false || !m_is_cover_bytes($data)) {
+            mlog("cover-download fail2 src=$srcTag err=$err — fallback remote url");
+            // Browser may still load CDN directly
+            return ["", "remote:" . $srcTag, $err !== "" ? $err : "封面下载失败", $url];
+        }
+    }
+    $jpg = m_cover_jpeg_bytes($data);
+    if ($jpg === "") {
+        mlog("cover-convert fail src=$srcTag title=$qTitle");
+        return ["", "remote:" . $srcTag, "封面不是 JPEG，且系统缺少可用的图片转换组件", $url];
+    }
+    $dir = str_replace("\\", "/", dirname($audioAbs));
+    $stem = pathinfo($audioAbs, PATHINFO_FILENAME);
+    $side = $dir . "/" . $stem . ".jpg";
+    [$writeOk, $writeErr] = m_atomic_sidecar_write($side, $jpg);
+    if (!$writeOk) {
+        mlog("cover-write fail dst=$side src=$srcTag err=$writeErr");
+        return ["", "remote:" . $srcTag, $writeErr . "；未写入启动盘", $url];
+    }
+    $written = str_replace("\\", "/", $side);
+    mlog("cover-ok src=$srcTag title=$qTitle dst=$written bytes=" . strlen($jpg));
+    return [$written, "downloaded:" . $srcTag, "", ""];
+}
+
+function m_stream_image($abs) {
+    $size = @filesize($abs);
+    if ($size === false || $size <= 0) {
+        http_response_code(404);
+        exit;
+    }
+    $ext = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
+    $map = ["jpg" => "image/jpeg", "jpeg" => "image/jpeg", "png" => "image/png", "webp" => "image/webp", "gif" => "image/gif"];
+    $mime = $map[$ext] ?? "image/jpeg";
+    header("Content-Type: $mime");
+    header("Content-Length: $size");
+    header("Cache-Control: private, max-age=86400");
+    header("X-Content-Type-Options: nosniff");
+    if (function_exists("session_status") && session_status() === PHP_SESSION_ACTIVE) @session_write_close();
+    readfile($abs);
+    exit;
+}
+
+
+/**
+ * Clean release-folder noise: "张信哲 - 世纪之声精选辑 (2010) FLAC" → artist/album.
+ * @return array{0:string,1:string} [artist, album]
+ */
+function m_parse_release_folder($name) {
+    $name = trim((string)$name);
+    if ($name === "") return ["", ""];
+    $artist = "";
+    $album = $name;
+    if (preg_match('/^\s*(.+?)\s+[-–—]\s+(.+?)\s*$/u', $name, $m)) {
+        $artist = trim($m[1]);
+        $album = trim($m[2]);
+    }
+    // drop codec / year / disc tags from album side
+    $album = preg_replace('/\s*[\(\[\{]?\s*(19|20)\d{2}\s*[\)\]\}]?\s*/u', " ", $album);
+    $album = preg_replace('/\b(FLAC|ALAC|WAV|APE|DSD|Hi[- ]?Res|24bit|16bit|44\.1kHz|48kHz|96kHz|CD|CUE|Scan|Vinyl|WEB|MP3|320|CD1|CD2|Disc\s*\d+)\b/iu', " ", $album);
+    $album = preg_replace('/\s{2,}/u', " ", $album);
+    $album = trim($album, " \t-–—_.");
+    $artist = preg_replace('/\b(FLAC|ALAC|WAV|APE|MP3)\b/iu', " ", $artist);
+    $artist = preg_replace('/\s{2,}/u', " ", trim($artist));
+    return [trim((string)$artist), trim((string)$album)];
+}
+
+/** True if folder name looks like disc partition (CD1 / Disc 2). */
+function m_is_disc_folder($name) {
+    $n = trim((string)$name);
+    if ($n === "") return false;
+    if (preg_match('/^(CD|Disc|DISK|碟)\s*[-_.]?\s*\d{1,2}$/iu', $n)) return true;
+    if (preg_match('/^(CD|Disc)\d{1,2}$/iu', $n)) return true;
+    return false;
+}
+
+/**
+ * Guess title/artist/album from filename + path.
+ * Handles: .../Artist - Album (2010) FLAC/CD1/02.Title.flac
+ * @return array{0:string,1:string,2:string} [artist, title, album]
+ */
+function m_guess_meta($audioAbs, $rel = "") {
+    $base = pathinfo($audioAbs, PATHINFO_FILENAME);
+    $artist = "";
+    $title = $base;
+    $album = "";
+    if (preg_match('/^\s*(.+?)\s+[-–—]\s+(.+?)\s*$/u', $base, $m)) {
+        $artist = trim($m[1]);
+        $title = trim($m[2]);
+    }
+    // strip track numbers: "02.从开始到现在" / "02 - Title"
+    $title = preg_replace('/^\s*\d{1,3}[\s._\-]+/u', "", $title);
+    $title = trim((string)$title);
+
+    $pathForDir = $rel !== "" ? $rel : $audioAbs;
+    $dir = str_replace("\\", "/", dirname($pathForDir));
+    $parts = [];
+    if ($dir !== "" && $dir !== ".") {
+        $parts = array_values(array_filter(explode("/", $dir), function ($p) {
+            return $p !== "" && $p !== ".";
+        }));
+    }
+    // Walk up: skip disc folders, parse "Artist - Album …" release folder
+    for ($i = count($parts) - 1; $i >= 0; $i--) {
+        $seg = $parts[$i];
+        if (m_is_disc_folder($seg)) continue;
+        [$a, $al] = m_parse_release_folder($seg);
+        if ($album === "" && $al !== "") $album = $al;
+        if ($artist === "" && $a !== "") $artist = $a;
+        // If segment had no "Artist - ", treat whole cleaned name as album when still empty
+        if ($album === "" && $a === "" && $al === "" && $seg !== "") {
+            [, $al2] = m_parse_release_folder($seg);
+            if ($al2 !== "") $album = $al2;
+            elseif (!m_is_disc_folder($seg)) $album = $seg;
+        }
+        // One meaningful release folder is enough
+        if ($artist !== "" || $album !== "") break;
+    }
+    // If artist still empty but album folder was pure album name, try parent as artist
+    if ($artist === "" && count($parts) >= 2) {
+        $idx = count($parts) - 1;
+        if (m_is_disc_folder($parts[$idx]) && $idx >= 1) $idx--;
+        if ($idx >= 1) {
+            $parent = $parts[$idx - 1];
+            if (!m_is_disc_folder($parent)) {
+                [$pa, $pal] = m_parse_release_folder($parent);
+                if ($pa !== "") $artist = $pa;
+                elseif ($artist === "" && $pal === "" && $parent !== "") $artist = $parent;
+            }
+        }
+    }
+    return [trim((string)$artist), trim((string)$title), trim((string)$album)];
+}
+
+
+/**
+ * Netease cloud search → first song id → lyric LRC text.
+ * Returns lrc text or "".
+ */
+/**
+ * Netease cloud search → best matching song id → lyric LRC text.
+ * Returns [lrcText, resolvedTitle, resolvedArtist] or ["","",""].
+ * Never blindly uses the first search hit (avoids wrong sidecar like 回来→别怕我伤心).
+ */
+function m_fetch_netease_lrc($artist, $title) {
+    $q = trim(($artist !== "" ? $artist . " " : "") . $title);
+    if ($q === "") return ["", "", ""];
+    $searchUrl = "https://music.163.com/api/search/get/web?" . http_build_query([
+        "s" => $q,
+        "type" => 1,
+        "limit" => 8,
+        "offset" => 0,
+    ], "", "&", PHP_QUERY_RFC3986);
+    [$body, $err, $code] = m_http_get($searchUrl, 12);
+    if ($body === false || $body === "") {
+        mlog("netease-search fail: $err");
+        return ["", "", ""];
+    }
+    $json = json_decode($body, true);
+    $songs = $json["result"]["songs"] ?? null;
+    if (!is_array($songs) || !count($songs)) return ["", "", ""];
+    $tKey = m_norm_lyric_key($title);
+    $aKey = m_norm_lyric_key($artist);
+    $bestId = 0;
+    $bestScore = -1;
+    $bestName = "";
+    $bestArtist = "";
+    foreach ($songs as $s) {
+        if (!is_array($s)) continue;
+        $nm = trim((string)($s["name"] ?? ""));
+        $nmKey = m_norm_lyric_key($nm);
+        if ($nmKey === "") continue;
+        $score = 0;
+        if ($nmKey === $tKey) $score += 100;
+        elseif ($tKey !== "" && (strpos($nmKey, $tKey) !== false || strpos($tKey, $nmKey) !== false)) {
+            $ratio = min(strlen($nmKey), strlen($tKey)) / max(strlen($nmKey), strlen($tKey));
+            if ($ratio >= 0.75) $score += 55;
+            else $score += 15;
+        } else {
+            continue;
+        }
+        $arts = $s["artists"] ?? ($s["ar"] ?? []);
+        $artJoined = "";
+        if (is_array($arts)) {
+            $names = [];
+            foreach ($arts as $a) {
+                if (is_array($a) && !empty($a["name"])) $names[] = (string)$a["name"];
+                elseif (is_string($a)) $names[] = $a;
+            }
+            $artJoined = implode(" / ", $names);
+        }
+        $artKey = m_norm_lyric_key($artJoined);
+        if ($aKey !== "" && $artKey !== "") {
+            if ($artKey === $aKey || strpos($artKey, $aKey) !== false || strpos($aKey, $artKey) !== false) $score += 40;
+            else $score -= 10;
+        }
+        if ($score > $bestScore) {
+            $bestScore = $score;
+            $bestId = intval($s["id"] ?? 0);
+            $bestName = $nm;
+            $bestArtist = $artJoined !== "" ? $artJoined : $artist;
+        }
+    }
+    if ($bestId <= 0 || $bestScore < 55) {
+        mlog("netease-search no-strong-match q={$q} bestScore={$bestScore}");
+        return ["", "", ""];
+    }
+    $lyricUrl = "https://music.163.com/api/song/lyric?" . http_build_query([
+        "id" => $bestId,
+        "lv" => 1,
+        "kv" => 1,
+        "tv" => -1,
+    ], "", "&", PHP_QUERY_RFC3986);
+    [$lbody, $lerr, $lcode] = m_http_get($lyricUrl, 12);
+    if ($lbody === false || $lbody === "") {
+        mlog("netease-lyric fail id=$bestId err=$lerr");
+        return ["", "", ""];
+    }
+    $lj = json_decode($lbody, true);
+    $lrc = trim((string)($lj["lrc"]["lyric"] ?? ""));
+    if ($lrc === "" || strpos($lrc, "[") === false) return ["", "", ""];
+    return [$lrc, $bestName, $bestArtist];
+}
+
+function m_fetch_and_save_lrc($audioAbs, $rel = "", $force = false) {
+    $audioAbs = str_replace("\\", "/", (string)$audioAbs);
+    if ($audioAbs === "" || !is_file($audioAbs)) return [false, "", "no audio", ""];
+    // Only reuse existing if content matches this track (quarantines mismatches)
+    // force=true skips local reuse so network re-match can run
+    if (!$force) {
+        $existing = m_find_matching_lrc($audioAbs, $rel);
+        if ($existing !== "") return [true, $existing, "", ""];
+    }
+
+    [$artist, $title] = m_guess_meta($audioAbs, $rel);
+    if ($title === "") return [false, "", "no title", ""];
+
+    $queries = [];
+    $queries[] = ["track_name" => $title, "artist_name" => $artist !== "" ? $artist : "Unknown"];
+    if ($artist !== "") $queries[] = ["q" => $artist . " " . $title];
+    $queries[] = ["q" => $title];
+    $title2 = preg_replace('/\s*[\(\[].*?[\)\]]\s*/u', " ", $title);
+    $title2 = trim(preg_replace('/\s+/u', " ", (string)$title2));
+    if ($title2 !== "" && $title2 !== $title) {
+        $queries[] = ["track_name" => $title2, "artist_name" => $artist !== "" ? $artist : "Unknown"];
+        $queries[] = ["q" => $title2];
+    }
+
+    $body = false;
+    $err = "";
+    $code = 0;
+    foreach ($queries as $q) {
+        $url = "https://lrclib.net/api/search?" . http_build_query($q, "", "&", PHP_QUERY_RFC3986);
+        [$body, $err, $code] = m_http_get($url, 14);
+        if ($body !== false && $body !== "") {
+            $jsonTry = json_decode($body, true);
+            if (is_array($jsonTry) && count($jsonTry)) break;
+        }
+        $body = false;
+    }
+    $text = "";
+    $srcTag = "lrclib";
+    if ($body !== false && $body !== "") {
+        $json = json_decode($body, true);
+        if (is_array($json) && count($json)) {
+            $best = null;
+            $bestScore = -1;
+            $tKey = m_norm_lyric_key($title);
+            $aKey = m_norm_lyric_key($artist);
+            foreach ($json as $row) {
+                if (!is_array($row)) continue;
+                $synced = trim((string)($row["syncedLyrics"] ?? ""));
+                if ($synced === "") continue;
+                $rt = m_norm_lyric_key(trim((string)($row["trackName"] ?? "")));
+                $ra = m_norm_lyric_key(trim((string)($row["artistName"] ?? "")));
+                $score = 0;
+                if ($rt !== "" && $rt === $tKey) $score += 100;
+                elseif ($rt !== "" && $tKey !== "" && (strpos($rt, $tKey) !== false || strpos($tKey, $rt) !== false)) {
+                    $ratio = min(strlen($rt), strlen($tKey)) / max(strlen($rt), strlen($tKey));
+                    $score += ($ratio >= 0.75) ? 60 : 20;
+                } else {
+                    continue;
+                }
+                if ($aKey !== "" && $ra !== "" && ($ra === $aKey || strpos($ra, $aKey) !== false || strpos($aKey, $ra) !== false)) $score += 35;
+                if (!empty($row["instrumental"])) $score -= 20;
+                if ($score > $bestScore) { $bestScore = $score; $best = $row; }
+            }
+            if ($best !== null && $bestScore >= 60) {
+                $synced = trim((string)$best["syncedLyrics"]);
+                $hdr = "";
+                $ti = trim((string)($best["trackName"] ?? $title));
+                $ar = trim((string)($best["artistName"] ?? $artist));
+                $al = trim((string)($best["albumName"] ?? ""));
+                if ($ti !== "") $hdr .= "[ti:{$ti}]\n";
+                if ($ar !== "") $hdr .= "[ar:{$ar}]\n";
+                if ($al !== "") $hdr .= "[al:{$al}]\n";
+                $hdr .= "[by:ThemeMusic/lrclib]\n";
+                $cand = $hdr . $synced;
+                if (substr($cand, -1) !== "\n") $cand .= "\n";
+                [$mok, $mwhy] = m_lrc_matches_track($cand, $artist, $title);
+                if ($mok) {
+                    $text = $cand;
+                } else {
+                    mlog("lrclib-reject title={$title} reason={$mwhy} score={$bestScore}");
+                }
+            } elseif ($best !== null) {
+                mlog("lrclib-weak-score title={$title} score={$bestScore}");
+            }
+        }
+    }
+    // Fallback: NetEase Cloud Music (often reachable in CN)
+    if ($text === "" || strpos($text, "[") === false) {
+        [$ne, $neTitle, $neArtist] = m_fetch_netease_lrc($artist, $title);
+        if ($ne !== "") {
+            $hdr = "";
+            $tiUse = $neTitle !== "" ? $neTitle : $title;
+            $arUse = $neArtist !== "" ? $neArtist : $artist;
+            if ($tiUse !== "") $hdr .= "[ti:{$tiUse}]\n";
+            if ($arUse !== "") $hdr .= "[ar:{$arUse}]\n";
+            $hdr .= "[by:ThemeMusic/netease]\n";
+            $cand = $hdr . $ne;
+            if (substr($cand, -1) !== "\n") $cand .= "\n";
+            [$nok, $nwhy] = m_lrc_matches_track($cand, $artist, $title);
+            if ($nok) {
+                $text = $cand;
+                $srcTag = "netease";
+            } else {
+                mlog("netease-reject title={$title} resolved={$neTitle} reason={$nwhy}");
+            }
+        }
+    }
+    if ($text === "" || strpos($text, "[") === false) {
+        $msg = $err !== "" ? "歌词网络请求失败: $err" : "未找到匹配歌词";
+        return [false, "", $msg, ""];
+    }
+
+    [$fok, $fwhy] = m_lrc_matches_track($text, $artist, $title);
+    if (!$fok) {
+        mlog("lrc-download final-reject title={$title} reason={$fwhy}");
+        return [false, "", "下载到的歌词与曲目不匹配", ""];
+    }
+
+    $dir = str_replace("\\", "/", dirname($audioAbs));
+    $stem = pathinfo($audioAbs, PATHINFO_FILENAME);
+    $dst = $dir . "/" . $stem . ".lrc";
+    [$writeOk, $writeErr] = m_atomic_sidecar_write($dst, $text);
+    if ($writeOk) {
+        $written = str_replace("\\", "/", $dst);
+        mlog("lrc-download ok src={$srcTag} title={$title} artist={$artist} dst={$written} bytes=" . strlen($text));
+        return [true, $written, "", $text];
+    }
+    mlog("lrc-download memory-only title={$title} err={$writeErr}");
+    return [true, "", $writeErr . "；未写入启动盘", $text];
+}
+
+/** Decode LRC bytes: UTF-8 / UTF-8 BOM / UTF-16 / GBK fallback. */
+function m_lrc_decode($raw) {
+    if ($raw === false || $raw === null || $raw === "") return "";
+    if (substr($raw, 0, 3) === "\xEF\xBB\xBF") {
+        return substr($raw, 3);
+    }
+    if (substr($raw, 0, 2) === "\xFF\xFE") {
+        $s = @mb_convert_encoding($raw, "UTF-8", "UTF-16LE");
+        return is_string($s) ? $s : "";
+    }
+    if (substr($raw, 0, 2) === "\xFE\xFF") {
+        $s = @mb_convert_encoding($raw, "UTF-8", "UTF-16BE");
+        return is_string($s) ? $s : "";
+    }
+    if (function_exists("mb_check_encoding") && mb_check_encoding($raw, "UTF-8")) {
+        return $raw;
+    }
+    if (function_exists("mb_convert_encoding")) {
+        $try = @mb_convert_encoding($raw, "UTF-8", "GB18030,GBK,GB2312,Big5,UTF-8");
+        if (is_string($try) && $try !== "") return $try;
+    }
+    return $raw;
+}
+
+/**
+ * Parse standard LRC text → [offset_ms, meta{}, lines[{t,text}]].
+ */
+function m_parse_lrc($text) {
+    $offset = 0;
+    $meta = [];
+    $lines = [];
+    $text = str_replace(["\r\n", "\r"], "\n", (string)$text);
+    foreach (explode("\n", $text) as $row) {
+        $row = trim($row);
+        if ($row === "") continue;
+        if (preg_match('/^\[(ti|ar|al|by|offset|re|ve|length):\s*([^\]]*)\]$/iu', $row, $mm)) {
+            $key = strtolower($mm[1]);
+            $val = trim($mm[2]);
+            if ($key === "offset") {
+                $offset = intval($val);
+            } else {
+                $meta[$key] = $val;
+            }
+            continue;
+        }
+        // One or more timestamps then text: [mm:ss.xx][mm:ss.xx]text
+        if (!preg_match_all('/\[(\d{1,3}):(\d{1,2})(?:[\.:](\d{1,3}))?\]/', $row, $ts, PREG_SET_ORDER)) {
+            continue;
+        }
+        $textPart = $row;
+        foreach ($ts as $tmatch) {
+            $textPart = str_replace($tmatch[0], "", $textPart);
+        }
+        $textPart = trim($textPart);
+        // skip pure meta-looking leftovers
+        if ($textPart === "" && count($ts) === 1) {
+            // allow empty lines as beat markers? skip empty text
+            continue;
+        }
+        if ($textPart === "") continue;
+        foreach ($ts as $tmatch) {
+            $m = intval($tmatch[1]);
+            $s = intval($tmatch[2]);
+            $frac = isset($tmatch[3]) ? $tmatch[3] : "0";
+            if (strlen($frac) === 1) $fracMs = intval($frac) * 100;
+            elseif (strlen($frac) === 2) $fracMs = intval($frac) * 10;
+            else $fracMs = intval(substr($frac, 0, 3));
+            $tMs = $m * 60000 + $s * 1000 + $fracMs;
+            $lines[] = ["t" => $tMs, "text" => $textPart];
+        }
+    }
+    usort($lines, function ($a, $b) {
+        if ($a["t"] === $b["t"]) return 0;
+        return ($a["t"] < $b["t"]) ? -1 : 1;
+    });
+    return [$offset, $meta, $lines];
+}
+
+/**
+ * Complete local library scan for the detached CLI worker.
+ *
+ * The v1.1.4 scanner correctly removed symlink traversal and per-track
+ * cover/LRC directory rescans, but its 1200-track/3-second web-request budget
+ * made large libraries incomplete. v1.2.0 keeps the one-read-per-directory
+ * algorithm and moves it out of php-fpm. The generous limits below are only
+ * emergency guards against corrupt/cyclic mounts; normal libraries complete.
+ *
+ * @return array{0:?array,1:string,2:array} [tracks|null, error, meta]
+ */
+function m_scan_complete($root, $progress = null) {
+    $out = [];
+    $root = rtrim(str_replace("\\", "/", (string)$root), "/");
+    $maxTracks = 100000;
+    $maxDepth = 32;
+    $maxDirs = 200000;
+    $maxEntries = 4000000;
+    $started = microtime(true);
+    $dirsScanned = 0;
+    $entriesScanned = 0;
+    $truncated = false;
+    $stopReason = "";
+    $depthSkipped = false;
+    $queue = new SplQueue();
+    $queue->enqueue([$root, 0]);
+    $seen = [];
+    $skipDirs = ["@eadir" => true, "#recycle" => true, ".recycle.bin" => true, "lost+found" => true];
+    $coverNames = array_fill_keys(m_cover_basenames(), true);
+
+    try {
+        while (!$queue->isEmpty()) {
+            if ($dirsScanned >= $maxDirs) {
+                $truncated = true;
+                $stopReason = "emergency_directory_limit";
+                break;
+            }
+            [$dir, $depth] = $queue->dequeue();
+            $dirReal = @realpath($dir);
+            if ($dirReal === false || !is_dir($dirReal)) continue;
+            $dirReal = str_replace("\\", "/", $dirReal);
+            if (isset($seen[$dirReal])) continue;
+            $seen[$dirReal] = true;
+            $dirsScanned++;
+
+            $audioFiles = [];
+            $lrcStems = [];
+            $imageStems = [];
+            $hasCommonCover = false;
+            $subDirs = [];
+            $dirIt = new DirectoryIterator($dirReal);
+            foreach ($dirIt as $file) {
+                if ($file->isDot()) continue;
+                $base = $file->getFilename();
+                if ($base === "" || $base[0] === ".") continue;
+                $entriesScanned++;
+                if ($entriesScanned >= $maxEntries) {
+                    $truncated = true;
+                    $stopReason = "emergency_entry_limit";
+                    break 2;
+                }
+                if ($file->isLink()) continue;
+                if ($file->isDir()) {
+                    $lowerDir = strtolower($base);
+                    if (!isset($skipDirs[$lowerDir])) {
+                        if ($depth < $maxDepth) {
+                            $subDirs[] = str_replace("\\", "/", $file->getPathname());
+                        } else {
+                            $depthSkipped = true;
+                        }
+                    }
+                    continue;
+                }
+                if (!$file->isFile()) continue;
+                $ext = strtolower(pathinfo($base, PATHINFO_EXTENSION));
+                $stemLower = strtolower(pathinfo($base, PATHINFO_FILENAME));
+                if ($ext === "lrc") {
+                    $lrcStems[$stemLower] = true;
+                } elseif (in_array($ext, ["jpg", "jpeg", "png", "webp", "gif"], true)) {
+                    $imageStems[$stemLower] = true;
+                    if (isset($coverNames[strtolower($base)])) $hasCommonCover = true;
+                } elseif (m_ext_ok($base)) {
+                    $audioFiles[] = [
+                        "path" => str_replace("\\", "/", $file->getPathname()),
+                        "base" => $base,
+                        "stem" => $stemLower,
+                        "ext" => $ext,
+                        "size" => (int)$file->getSize(),
+                    ];
+                }
+            }
+
+            foreach ($subDirs as $subDir) $queue->enqueue([$subDir, $depth + 1]);
+            foreach ($audioFiles as $item) {
+                if (count($out) >= $maxTracks) {
+                    $truncated = true;
+                    $stopReason = "emergency_track_limit";
+                    break 2;
+                }
+                $rel = m_rel_under($root, $item["path"]);
+                if ($rel === "") continue;
+                $meta = m_guess_meta($item["path"], $rel);
+                $artist = $meta[0] ?? "";
+                $title = $meta[1] ?? pathinfo($item["base"], PATHINFO_FILENAME);
+                $album = $meta[2] ?? "";
+                if ($title === "") $title = pathinfo($item["base"], PATHINFO_FILENAME);
+                $out[] = [
+                    "id" => $rel,
+                    "title" => $title,
+                    "artist" => $artist,
+                    "album" => $album,
+                    "ext" => $item["ext"],
+                    "size" => $item["size"],
+                    "has_lrc" => isset($lrcStems[$item["stem"]]),
+                    "has_cover" => $hasCommonCover || isset($imageStems[$item["stem"]]),
+                ];
+            }
+            if (($dirsScanned % 8) === 0) {
+                if (is_callable($progress)) {
+                    $progress([
+                        "count" => count($out),
+                        "dirs_scanned" => $dirsScanned,
+                        "entries_scanned" => $entriesScanned,
+                        "elapsed_ms" => (int)round((microtime(true) - $started) * 1000),
+                    ]);
+                }
+                // nice(10) lowers CPU priority; a short cooperative yield also
+                // prevents a huge cached share from monopolising storage I/O.
+                $pauseUs = 20000;
+                if (function_exists("sys_getloadavg")) {
+                    $load = sys_getloadavg();
+                    if (is_array($load) && isset($load[0]) && $load[0] > 2.0) {
+                        $pauseUs = min(250000, 20000 + (int)(($load[0] - 2.0) * 30000));
+                    }
+                }
+                usleep($pauseUs);
+            }
+        }
+        if (($depthSkipped || !$queue->isEmpty()) && !$truncated) {
+            $truncated = true;
+            $stopReason = "depth_limit";
+        }
+    } catch (Throwable $e) {
+        mlog("scan error: " . $e->getMessage());
+        return [null, $e->getMessage(), [
+            "truncated" => false, "limit" => $maxTracks, "max_depth" => $maxDepth,
+            "count" => 0, "dirs_scanned" => $dirsScanned, "entries_scanned" => $entriesScanned,
+        ]];
+    }
+    usort($out, function ($a, $b) {
+        $ka = strtolower(($a["artist"] ?? "") . "\0" . ($a["album"] ?? "") . "\0" . ($a["title"] ?? ""));
+        $kb = strtolower(($b["artist"] ?? "") . "\0" . ($b["album"] ?? "") . "\0" . ($b["title"] ?? ""));
+        return $ka <=> $kb;
+    });
+    return [$out, "", [
+        "truncated" => $truncated,
+        "limit" => $maxTracks,
+        "max_depth" => $maxDepth,
+        "count" => count($out),
+        "dirs_scanned" => $dirsScanned,
+        "entries_scanned" => $entriesScanned,
+        "elapsed_ms" => (int)round((microtime(true) - $started) * 1000),
+        "stop_reason" => $stopReason,
+    ]];
+}
+
+function m_atomic_json_write($path, $data) {
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) return false;
+    $tmp = $path . ".tmp." . getmypid() . "." . substr(sha1(uniqid("", true)), 0, 8);
+    if (@file_put_contents($tmp, $json, LOCK_EX) === false) return false;
+    if (!@rename($tmp, $path)) {
+        @unlink($tmp);
+        return false;
+    }
+    return true;
+}
+
+function m_library_cache_path($scope) {
+    return "/tmp/theme-music-library-v3-" . sha1((string)$scope) . ".json";
+}
+
+function m_library_cache_read($scope) {
+    $path = m_library_cache_path($scope);
+    if (!is_file($path)) return null;
+    $data = json_decode((string)@file_get_contents($path), true);
+    if (!is_array($data) || !isset($data["tracks"]) || !is_array($data["tracks"])) return null;
+    return $data;
+}
+
+function m_library_cache_write($scope, $tracks, $scanMeta) {
+    $path = m_library_cache_path($scope);
+    $data = [
+        "tracks" => is_array($tracks) ? $tracks : [],
+        "scan" => is_array($scanMeta) ? $scanMeta : [],
+        "created_at" => time(),
+    ];
+    return m_atomic_json_write($path, $data);
+}
+
+function m_scan_paths($source, $scope) {
+    $id = sha1((string)$source . "\0" . (string)$scope);
+    $base = "/tmp/theme-music-scan-" . $id;
+    return [
+        "state" => $base . ".json",
+        "lock" => $base . ".lock",
+        "start_lock" => $base . ".start.lock",
+    ];
+}
+
+function m_scan_state_read($source, $scope) {
+    $paths = m_scan_paths($source, $scope);
+    if (!is_file($paths["state"])) return [];
+    $state = json_decode((string)@file_get_contents($paths["state"]), true);
+    return is_array($state) ? $state : [];
+}
+
+function m_scan_state_write($source, $scope, $state) {
+    $paths = m_scan_paths($source, $scope);
+    $state["source"] = $source;
+    $state["updated_at"] = time();
+    m_atomic_json_write($paths["state"], $state);
+}
+
+function m_scan_process_alive($pid) {
+    $pid = (int)$pid;
+    if ($pid <= 1) return false;
+    if (is_dir("/proc/" . $pid)) return true;
+    return function_exists("posix_kill") ? @posix_kill($pid, 0) : false;
+}
+
+function m_scan_state_active($state) {
+    if (!is_array($state)) return false;
+    $status = (string)($state["status"] ?? "");
+    if ($status !== "queued" && $status !== "running") return false;
+    $pid = (int)($state["pid"] ?? 0);
+    if ($pid > 1 && m_scan_process_alive($pid)) return true;
+    return (time() - (int)($state["updated_at"] ?? 0)) < 20;
+}
+
+function m_scan_worker($source, $scope, $cfg) {
+    $paths = m_scan_paths($source, $scope);
+    $lock = @fopen($paths["lock"], "c");
+    if (!$lock || !@flock($lock, LOCK_EX | LOCK_NB)) return;
+    $started = microtime(true);
+    $state = [
+        "status" => "running", "pid" => getmypid(), "count" => 0,
+        "dirs_scanned" => 0, "entries_scanned" => 0, "started_at" => time(),
+    ];
+    m_scan_state_write($source, $scope, $state);
+    try {
+        if ($source === "local") {
+            $root = m_realpath_dir($scope);
+            if ($root === "") throw new RuntimeException("本地音乐目录无效或不可访问");
+            [$tracks, $err, $meta] = m_scan_complete($root, function ($progress) use ($source, $scope, &$state) {
+                $state = array_merge($state, $progress, ["status" => "running", "pid" => getmypid()]);
+                m_scan_state_write($source, $scope, $state);
+            });
+        } else {
+            [$tracks, $err, $truncated] = m_navidrome_songs($cfg, 100000, null, function ($count, $offset, $limit) use ($source, $scope, &$state) {
+                $state = array_merge($state, [
+                    "status" => "running", "pid" => getmypid(), "count" => $count,
+                    "entries_scanned" => $offset, "limit" => $limit,
+                ]);
+                m_scan_state_write($source, $scope, $state);
+            });
+            $meta = [
+                "truncated" => (bool)$truncated, "limit" => 100000, "max_depth" => 0,
+                "count" => is_array($tracks) ? count($tracks) : 0,
+                "elapsed_ms" => (int)round((microtime(true) - $started) * 1000),
+                "stop_reason" => $truncated ? "emergency_track_limit" : "",
+            ];
+        }
+        if (!is_array($tracks)) throw new RuntimeException($err !== "" ? $err : "曲库索引失败");
+        if (!m_library_cache_write($scope, $tracks, $meta)) throw new RuntimeException("曲库索引写入失败");
+        $state = array_merge($state, $meta, [
+            "status" => "done", "pid" => getmypid(), "count" => count($tracks),
+            "finished_at" => time(), "error" => "",
+        ]);
+        m_scan_state_write($source, $scope, $state);
+    } catch (Throwable $e) {
+        mlog("library worker error: " . $e->getMessage());
+        $state = array_merge($state, [
+            "status" => "error", "pid" => getmypid(), "error" => $e->getMessage(),
+            "finished_at" => time(),
+        ]);
+        m_scan_state_write($source, $scope, $state);
+    }
+    @flock($lock, LOCK_UN);
+    @fclose($lock);
+}
+
+function m_start_scan_worker($source, $scope) {
+    $current = m_scan_state_read($source, $scope);
+    if (m_scan_state_active($current)) return $current;
+    $paths = m_scan_paths($source, $scope);
+    $startLock = @fopen($paths["start_lock"], "c");
+    if (!$startLock || !@flock($startLock, LOCK_EX | LOCK_NB)) return m_scan_state_read($source, $scope);
+    $current = m_scan_state_read($source, $scope);
+    if (m_scan_state_active($current)) {
+        @flock($startLock, LOCK_UN); @fclose($startLock);
+        return $current;
+    }
+    $queued = ["status" => "queued", "pid" => 0, "count" => (int)($current["count"] ?? 0), "error" => ""];
+    m_scan_state_write($source, $scope, $queued);
+    $runner = escapeshellarg(__FILE__);
+    $cmd = "nohup nice -n 10 php " . $runner
+        . " theme-music-scan-worker " . escapeshellarg($source)
+        . " " . escapeshellarg(base64_encode($scope))
+        . " >/dev/null 2>&1 & echo $!";
+    $pid = "";
+    if (function_exists("shell_exec")) $pid = trim((string)@shell_exec($cmd));
+    if ($pid === "" && function_exists("exec")) {
+        $out = []; @exec($cmd, $out); $pid = trim((string)($out[0] ?? ""));
+    }
+    if ($pid === "" && function_exists("popen")) {
+        $handle = @popen($cmd, "r");
+        if (is_resource($handle)) { $pid = trim((string)@stream_get_contents($handle)); @pclose($handle); }
+    }
+    if ($pid !== "" && ctype_digit($pid)) {
+        $fresh = m_scan_state_read($source, $scope);
+        if (($fresh["status"] ?? "") !== "running") {
+            $queued["pid"] = (int)$pid;
+            m_scan_state_write($source, $scope, $queued);
+        }
+    } else {
+        $queued["status"] = "error";
+        $queued["error"] = "无法启动低优先级曲库索引任务";
+        m_scan_state_write($source, $scope, $queued);
+    }
+    @flock($startLock, LOCK_UN); @fclose($startLock);
+    return m_scan_state_read($source, $scope);
+}
+
+/** Delete files under a plugin cache dir (non-recursive flat + one-level quarantine). */
+function m_clear_cache_dir($dir, $extAllow = null) {
+    $dir = str_replace("\\", "/", (string)$dir);
+    if ($dir === "" || !is_dir($dir)) return [0, 0, "missing"];
+    $removed = 0;
+    $bytes = 0;
+    $allow = is_array($extAllow) ? $extAllow : null;
+    try {
+        $it = new DirectoryIterator($dir);
+        foreach ($it as $f) {
+            if ($f->isDot()) continue;
+            $name = $f->getFilename();
+            $path = str_replace("\\", "/", $f->getPathname());
+            if ($f->isDir()) {
+                // quarantine / bad subdirs: wipe files one level deep only
+                if ($name === "" || $name[0] === ".") continue;
+                try {
+                    $sub = new DirectoryIterator($path);
+                    foreach ($sub as $sf) {
+                        if ($sf->isDot() || !$sf->isFile()) continue;
+                        $sz = (int)$sf->getSize();
+                        if (@unlink($sf->getPathname())) {
+                            $removed++;
+                            $bytes += max(0, $sz);
+                        }
+                    }
+                } catch (Throwable $eSub) {}
+                @rmdir($path);
+                continue;
+            }
+            if (!$f->isFile()) continue;
+            if ($allow !== null) {
+                $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+                if (!in_array($ext, $allow, true)) continue;
+            }
+            $sz = (int)$f->getSize();
+            if (@unlink($path)) {
+                $removed++;
+                $bytes += max(0, $sz);
+            }
+        }
+    } catch (Throwable $e) {
+        return [$removed, $bytes, $e->getMessage()];
+    }
+    return [$removed, $bytes, ""];
+}
+
+function m_stream($abs) {
+    $size = filesize($abs);
+    if ($size === false) {
+        http_response_code(404);
+        exit;
+    }
+    $mime = m_mime($abs);
+    $start = 0;
+    $end = $size - 1;
+    $status = 200;
+    if (isset($_SERVER["HTTP_RANGE"]) && preg_match('/bytes=(\d*)-(\d*)/', $_SERVER["HTTP_RANGE"], $m)) {
+        if ($m[1] !== "") $start = (int)$m[1];
+        if ($m[2] !== "") $end = (int)$m[2];
+        if ($end >= $size) $end = $size - 1;
+        if ($start > $end || $start < 0) {
+            http_response_code(416);
+            header("Content-Range: bytes */$size");
+            exit;
+        }
+        $status = 206;
+    }
+    $length = $end - $start + 1;
+    // free session early so concurrent range requests are not serialized on the lock
+    if (function_exists("session_status") && session_status() === PHP_SESSION_ACTIVE) {
+        @session_write_close();
+    }
+    // Disable output compression / buffering for media (breaks Content-Length + range)
+    if (function_exists("apache_setenv")) {
+        @apache_setenv("no-gzip", "1");
+    }
+    @ini_set("zlib.output_compression", "0");
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    http_response_code($status);
+    header("Content-Type: $mime");
+    header("Accept-Ranges: bytes");
+    header("Content-Length: $length");
+    if ($status === 206) header("Content-Range: bytes $start-$end/$size");
+    // short private cache helps mobile demuxer re-fetch metadata ranges
+    header("Cache-Control: private, max-age=120");
+    header("X-Content-Type-Options: nosniff");
+    header("X-Accel-Buffering: no");
+    // free session if any (again, defensive)
+    if (function_exists("session_status") && session_status() === PHP_SESSION_ACTIVE) {
+        @session_write_close();
+    }
+    $fp = @fopen($abs, "rb");
+    if (!$fp) {
+        http_response_code(500);
+        exit;
+    }
+    // Prefer binary + ignore user abort mid-stream (client range cancel is normal)
+    @ignore_user_abort(true);
+    if ($start > 0) {
+        // CIFS: fseek is fine; if it fails, fall back to sequential skip
+        if (@fseek($fp, $start) !== 0) {
+            $skipped = 0;
+            while ($skipped < $start && !feof($fp)) {
+                $need = min(81920, $start - $skipped);
+                $buf = fread($fp, $need);
+                if ($buf === false || $buf === "") break;
+                $skipped += strlen($buf);
+            }
+            if ($skipped < $start) {
+                fclose($fp);
+                http_response_code(500);
+                exit;
+            }
+        }
+    }
+    $remaining = $length;
+    // Larger chunks reduce SMB round-trips for FLAC demuxer range storms
+    $chunkMax = 262144;
+    while ($remaining > 0 && !feof($fp)) {
+        $chunk = ($remaining > $chunkMax) ? $chunkMax : $remaining;
+        $data = fread($fp, $chunk);
+        if ($data === false || $data === "") break;
+        echo $data;
+        $remaining -= strlen($data);
+        if (connection_aborted()) break;
+    }
+    fclose($fp);
+    exit;
+}
+
+// --- main ---
+if (function_exists("session_status") && session_status() === PHP_SESSION_ACTIVE) {
+    @session_write_close();
+}
+
+$cfg = mcfg_load($fx_path);
+
+if (PHP_SAPI === "cli" && (string)($argv[1] ?? "") === "theme-music-scan-worker") {
+    $workerSource = strtolower((string)($argv[2] ?? ""));
+    $workerScope = base64_decode((string)($argv[3] ?? ""), true);
+    if (in_array($workerSource, ["local", "navidrome"], true) && is_string($workerScope) && $workerScope !== "") {
+        m_scan_worker($workerSource, $workerScope, $cfg);
+    }
+    exit;
+}
+
+$action = strtolower(trim((string)($_GET["action"] ?? $_POST["action"] ?? "")));
+
+if ($action === "config") {
+    $root = m_realpath_dir($cfg["MUSIC_LOCAL_DIR"] ?? "");
+    $storage = ($cfg["MUSIC_SOURCE"] ?? "local") === "navidrome"
+        ? ["strategy" => "navidrome", "label" => "Navidrome 远端 API", "fs_type" => "http"]
+        : ($root !== "" ? m_detect_storage_source($root, $root) : ["strategy" => "invalid", "label" => "本地音乐目录不可访问", "fs_type" => ""]);
+    if (!isset($storage["label"])) $storage["label"] = m_storage_label($storage, true);
+    unset($storage["device"], $storage["target"]);
+    $run_mode = mcfg_resolve_run_mode($cfg);
+    $mm = strtolower(trim((string)($cfg["MUSIC_RUN_MODE_MOBILE"] ?? "same")));
+    if (!in_array($mm, ["same", "card", "chip", "both"], true)) $mm = "same";
+    mjson([
+        "ok" => true,
+        "enable" => (($cfg["MUSIC_ENABLE"] ?? "no") === "yes"),
+        "run_mode" => $run_mode,
+        "ui" => $run_mode,
+        "source" => $cfg["MUSIC_SOURCE"] ?? "local",
+        "local_dir" => $cfg["MUSIC_LOCAL_DIR"] ?? "",
+        "local_dir_ok" => $root !== "",
+        "navidrome_url" => $cfg["MUSIC_NAVIDROME_URL"] ?? "",
+        "navidrome_user" => $cfg["MUSIC_NAVIDROME_USER"] ?? "",
+        "navidrome_password_set" => m_navidrome_password() !== "",
+        "navidrome_ready" => trim((string)($cfg["MUSIC_NAVIDROME_USER"] ?? "")) !== "" && m_navidrome_password() !== "",
+        "disk_wake" => true,
+        "storage" => $storage,
+        "volume" => intval($cfg["MUSIC_VOLUME"] ?? 70),
+        "autoplay" => (($cfg["MUSIC_AUTOPLAY"] ?? "no") === "yes"),
+        "shuffle" => (($cfg["MUSIC_SHUFFLE"] ?? "no") === "yes"),
+        "repeat" => in_array(($cfg["MUSIC_REPEAT"] ?? "off"), ["off", "one", "all"], true) ? $cfg["MUSIC_REPEAT"] : "off",
+        "dash_only" => ($run_mode === "card"),
+        "mobile" => [
+            "run_mode" => $mm,
+            "volume" => intval($cfg["MUSIC_VOLUME_MOBILE"] ?? 70),
+            "autoplay" => (($cfg["MUSIC_AUTOPLAY_MOBILE"] ?? "no") === "yes"),
+            "shuffle" => (($cfg["MUSIC_SHUFFLE_MOBILE"] ?? "no") === "yes"),
+            "repeat" => in_array(($cfg["MUSIC_REPEAT_MOBILE"] ?? "off"), ["off", "one", "all"], true) ? $cfg["MUSIC_REPEAT_MOBILE"] : "off",
+        ],
+    ]);
+}
+
+if ($action === "storage_status") {
+    $status = null;
+    $path = "/tmp/theme-music-storage-status.json";
+    if (is_file($path)) $status = json_decode((string)@file_get_contents($path), true);
+    if (!is_array($status)) {
+        $status = [
+            "ok" => true,
+            "status" => "idle",
+            "strategy" => "unknown",
+            "label" => "等待播放自动检测",
+            "disk" => "",
+            "fs_type" => "",
+            "source" => "",
+            "elapsed_ms" => 0,
+            "cached" => false,
+            "ts" => 0,
+        ];
+    }
+    mjson($status);
+}
+
+if ($action === "navidrome_test") {
+    $testCfg = $cfg;
+    $urlInput = rtrim(trim((string)($_POST["url"] ?? "")), "/");
+    $userInput = trim(str_replace(["\0", "\r", "\n"], "", (string)($_POST["user"] ?? "")));
+    $passwordInput = substr(str_replace(["\0", "\r", "\n"], "", (string)($_POST["password"] ?? "")), 0, 256);
+    if ($urlInput !== "") {
+        $parts = @parse_url($urlInput);
+        if (!preg_match('#^https?://#i', $urlInput) || !is_array($parts) || empty($parts["host"]) || isset($parts["user"]) || isset($parts["pass"])) {
+            mjson(["ok" => false, "error" => "Navidrome 地址无效"], 400);
+        }
+        $testCfg["MUSIC_NAVIDROME_URL"] = substr($urlInput, 0, 512);
+    }
+    if ($userInput !== "") $testCfg["MUSIC_NAVIDROME_USER"] = substr($userInput, 0, 128);
+    $passwordOverride = $passwordInput !== "" ? $passwordInput : null;
+    [$resp, $err] = m_navidrome_response($testCfg, "ping", [], 15, $passwordOverride);
+    if (!is_array($resp)) {
+        mjson(["ok" => false, "error" => $err !== "" ? $err : "Navidrome 连接失败"], 400);
+    }
+    [$songs, $songErr] = m_navidrome_songs($testCfg, 1, $passwordOverride);
+    if (!is_array($songs)) {
+        mjson(["ok" => false, "error" => $songErr !== "" ? $songErr : "Navidrome 曲库不可访问"], 400);
+    }
+    mjson([
+        "ok" => true,
+        "server_type" => (string)($resp["type"] ?? "navidrome"),
+        "server_version" => (string)($resp["serverVersion"] ?? ""),
+        "open_subsonic" => !empty($resp["openSubsonic"]),
+        "library_access" => true,
+    ]);
+}
+
+if ($action === "dash_pos") {
+    // Cross-browser / reboot-safe dashboard card placement (localStorage alone is per-browser).
+    $method = strtoupper((string)($_SERVER["REQUEST_METHOD"] ?? "GET"));
+    if ($method === "POST" || $method === "PUT") {
+        $raw = file_get_contents("php://input");
+        $o = json_decode((string)$raw, true);
+        if (!is_array($o)) {
+            // also accept form field
+            if (isset($_POST["pos"])) $o = json_decode((string)$_POST["pos"], true);
+        }
+        if (!is_array($o)) mjson(["ok" => false, "error" => "invalid json"], 400);
+        $clean = [
+            "index" => isset($o["index"]) ? intval($o["index"]) : 0,
+            "total" => isset($o["total"]) ? intval($o["total"]) : 0,
+            "parentId" => substr(preg_replace('/[^\w\-.:#]/', '', (string)($o["parentId"] ?? "")), 0, 80),
+            "parentTag" => substr(preg_replace('/[^a-z0-9]/', '', strtolower((string)($o["parentTag"] ?? ""))), 0, 32),
+            "parentClass" => substr((string)($o["parentClass"] ?? ""), 0, 120),
+            "prevId" => substr(preg_replace('/[^\w\-.:#]/', '', (string)($o["prevId"] ?? "")), 0, 80),
+            "prevTag" => substr(preg_replace('/[^a-z0-9]/', '', strtolower((string)($o["prevTag"] ?? ""))), 0, 32),
+            "nextId" => substr(preg_replace('/[^\w\-.:#]/', '', (string)($o["nextId"] ?? "")), 0, 80),
+            "nextTag" => substr(preg_replace('/[^a-z0-9]/', '', strtolower((string)($o["nextTag"] ?? ""))), 0, 32),
+            "ts" => isset($o["ts"]) ? intval($o["ts"]) : (int)round(microtime(true) * 1000),
+            "v" => 3,
+        ];
+        // Refuse obvious "snapped to first slot" overwrites of a better prior save
+        $prev = null;
+        if (is_file($dash_pos_path)) {
+            $prev = json_decode((string)@file_get_contents($dash_pos_path), true);
+        }
+        if (
+            is_array($prev)
+            && isset($prev["index"])
+            && intval($prev["index"]) > 0
+            && $clean["index"] === 0
+            && ($clean["prevId"] === "" && $clean["nextId"] === "")
+            && isset($prev["ts"])
+            && ($clean["ts"] - intval($prev["ts"])) < 15000
+        ) {
+            mjson(["ok" => true, "saved" => false, "pos" => $prev, "reason" => "reject-top-race"]);
+        }
+        if (!is_dir($persist)) @mkdir($persist, 0755, true);
+        $json = json_encode($clean, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $ok = $json !== false && @file_put_contents($dash_pos_path, $json . "\n") !== false;
+        mjson(["ok" => $ok, "saved" => $ok, "pos" => $clean]);
+    }
+    // GET
+    $pos = null;
+    if (is_file($dash_pos_path)) {
+        $pos = json_decode((string)@file_get_contents($dash_pos_path), true);
+        if (!is_array($pos)) $pos = null;
+    }
+    mjson(["ok" => true, "pos" => $pos]);
+}
+
+if ($action === "list") {
+    if (($cfg["MUSIC_ENABLE"] ?? "no") !== "yes") {
+        mjson(["ok" => false, "error" => "音乐组件未开启", "tracks" => []], 400);
+    }
+    $source = strtolower((string)($cfg["MUSIC_SOURCE"] ?? "local"));
+    $forceScan = ((string)($_GET["refresh"] ?? "") === "1");
+    if ($source === "navidrome") {
+        $scope = "navidrome|" . ($cfg["MUSIC_NAVIDROME_URL"] ?? "") . "|" . ($cfg["MUSIC_NAVIDROME_USER"] ?? "");
+        $cached = m_library_cache_read($scope);
+        $stale = !is_array($cached) || (time() - (int)($cached["created_at"] ?? 0)) > 21600;
+        $job = ($forceScan || $stale) ? m_start_scan_worker($source, $scope) : m_scan_state_read($source, $scope);
+        // A small library may finish between the first cache read and worker
+        // status response; re-read so the client never misses that completion.
+        $cached = m_library_cache_read($scope);
+        $scanning = m_scan_state_active($job);
+        $tracks = is_array($cached) ? $cached["tracks"] : [];
+        $scanMeta = is_array($cached) ? ($cached["scan"] ?? []) : [];
+        $truncated = !empty($scanMeta["truncated"]);
+        $limit = intval($scanMeta["limit"] ?? 100000);
+        if (!$tracks && !$scanning && ($job["status"] ?? "") === "error") {
+            mjson(["ok" => false, "error" => "Navidrome 曲库索引失败：" . ($job["error"] ?? "未知错误"), "tracks" => []], 503);
+        }
+        mjson([
+            "ok" => true,
+            "source" => "navidrome",
+            "count" => count($tracks),
+            "tracks" => $tracks,
+            "truncated" => $truncated,
+            "limit" => $limit,
+            "max_depth" => 0,
+            "cached" => is_array($cached),
+            "scanning" => $scanning,
+            "scan" => $job,
+            "tip" => $truncated ? "Navidrome 曲库达到 100000 首紧急保护上限。" : "",
+        ]);
+    }
+    $root = m_realpath_dir($cfg["MUSIC_LOCAL_DIR"] ?? "");
+    if ($root === "") {
+        mjson([
+            "ok" => false,
+            "error" => "本地音乐目录无效或不可访问。请在「Theme Music」设置中配置如 /mnt/user/Music",
+            "tracks" => [],
+            "dir" => $cfg["MUSIC_LOCAL_DIR"] ?? "",
+        ], 400);
+    }
+    // Never scan a local share in php-fpm. Serve the last complete immutable
+    // index immediately while one low-priority CLI worker refreshes it.
+    $cached = m_library_cache_read($root);
+    $stale = !is_array($cached) || (time() - (int)($cached["created_at"] ?? 0)) > 21600;
+    $job = ($forceScan || $stale) ? m_start_scan_worker("local", $root) : m_scan_state_read("local", $root);
+    $cached = m_library_cache_read($root);
+    $scanning = m_scan_state_active($job);
+    $tracks = is_array($cached) ? $cached["tracks"] : [];
+    $scanMeta = is_array($cached) ? ($cached["scan"] ?? []) : [];
+    if (!$tracks && !$scanning && ($job["status"] ?? "") === "error") {
+        mjson(["ok" => false, "error" => "本地曲库索引失败：" . ($job["error"] ?? "未知错误"), "tracks" => []], 503);
+    }
+    $truncated = !empty($scanMeta["truncated"]);
+    $limit = intval($scanMeta["limit"] ?? 100000);
+    mjson([
+        "ok" => true,
+        "dir" => $root,
+        "count" => count($tracks),
+        "tracks" => $tracks,
+        "truncated" => $truncated,
+        "limit" => $limit,
+        "max_depth" => intval($scanMeta["max_depth"] ?? 6),
+        "dirs_scanned" => intval($scanMeta["dirs_scanned"] ?? 0),
+        "entries_scanned" => intval($scanMeta["entries_scanned"] ?? 0),
+        "elapsed_ms" => intval($scanMeta["elapsed_ms"] ?? 0),
+        "stop_reason" => (string)($scanMeta["stop_reason"] ?? ""),
+        "cached" => is_array($cached),
+        "scanning" => $scanning,
+        "scan" => $job,
+        "tip" => $truncated
+            ? ("曲库达到紧急保护上限：已保留 " . count($tracks) . " 首，请检查目录层级或异常挂载。")
+            : "",
+    ]);
+}
+
+if ($action === "clear_cache") {
+    // Settings-page maintenance; allow even if player temporarily disabled.
+    $wh = strtolower(trim((string)($_GET["what"] ?? $_POST["what"] ?? "all")));
+    if (!in_array($wh, ["lyrics", "cover", "all"], true)) $wh = "all";
+    $out = ["ok" => true, "what" => $wh, "lyrics" => null, "cover" => null];
+    if ($wh === "lyrics" || $wh === "all") {
+        $ld = m_lrc_cache_dir();
+        [$n, $b, $e] = m_clear_cache_dir($ld, ["lrc", "txt", "bak", "bad"]);
+        $out["lyrics"] = ["dir" => $ld, "removed" => $n, "bytes" => $b, "error" => $e !== "" ? $e : null];
+    }
+    if ($wh === "cover" || $wh === "all") {
+        $cd = m_cover_cache_dir();
+        [$n, $b, $e] = m_clear_cache_dir($cd, ["jpg", "jpeg", "png", "webp", "gif", "bin", "img"]);
+        $out["cover"] = ["dir" => $cd, "removed" => $n, "bytes" => $b, "error" => $e !== "" ? $e : null];
+    }
+    mjson($out);
+}
+
+if ($action === "stream") {
+    if (($cfg["MUSIC_ENABLE"] ?? "no") !== "yes") {
+        http_response_code(403);
+        header("Content-Type: text/plain; charset=utf-8");
+        echo "music disabled";
+        exit;
+    }
+    if (($cfg["MUSIC_SOURCE"] ?? "local") === "navidrome") {
+        $id = m_navidrome_id($_GET["id"] ?? $_GET["path"] ?? "");
+        if ($id === "") {
+            http_response_code(404);
+            exit;
+        }
+        m_navidrome_proxy($cfg, "stream", ["id" => $id, "format" => "raw", "maxBitRate" => 0], "audio");
+    }
+    $root = m_realpath_dir($cfg["MUSIC_LOCAL_DIR"] ?? "");
+    if ($root === "") {
+        http_response_code(400);
+        header("Content-Type: text/plain; charset=utf-8");
+        echo "bad music dir";
+        exit;
+    }
+    $rel = (string)($_GET["id"] ?? $_GET["path"] ?? "");
+    $relClean = ltrim(str_replace("\\", "/", $rel), "/");
+    if ($relClean === "" || strpos($relClean, "..") !== false || strpos($relClean, "\0") !== false) {
+        http_response_code(404);
+        exit;
+    }
+    $wake = m_wake_source_path($root, rtrim($root, "/") . "/" . $relClean);
+    if (empty($wake["ok"])) {
+        mlog("wake failed mode=" . ($wake["mode"] ?? "unknown") . " id=" . $relClean);
+    }
+    $abs = m_abs_from_rel($root, $rel);
+    if ($abs === "" || !m_ext_ok($abs)) {
+        http_response_code(404);
+        header("Content-Type: text/plain; charset=utf-8");
+        echo "not found";
+        exit;
+    }
+    m_stream($abs);
+}
+
+if ($action === "lyrics") {
+    if (($cfg["MUSIC_ENABLE"] ?? "no") !== "yes") {
+        mjson(["ok" => false, "error" => "音乐组件未开启", "lines" => []], 400);
+    }
+    if (($cfg["MUSIC_SOURCE"] ?? "local") === "navidrome") {
+        $rel = (string)($_GET["id"] ?? $_GET["path"] ?? "");
+        $id = m_navidrome_id($rel);
+        if ($id === "") mjson(["ok" => false, "error" => "曲目 ID 无效", "lines" => []], 404);
+        $lines = [];
+        $unsynced = false;
+        $meta = [];
+        [$resp, $err] = m_navidrome_response($cfg, "getLyricsBySongId", ["id" => $id]);
+        if (is_array($resp)) {
+            $sets = m_array_list($resp["lyricsList"]["structuredLyrics"] ?? []);
+            $chosen = null;
+            foreach ($sets as $set) {
+                if (!is_array($set)) continue;
+                if ($chosen === null || !empty($set["synced"])) $chosen = $set;
+                if (!empty($set["synced"])) break;
+            }
+            if (is_array($chosen)) {
+                $unsynced = empty($chosen["synced"]);
+                $meta = [
+                    "lang" => (string)($chosen["lang"] ?? ""),
+                    "display_artist" => (string)($chosen["displayArtist"] ?? ""),
+                    "display_title" => (string)($chosen["displayTitle"] ?? ""),
+                ];
+                foreach (m_array_list($chosen["line"] ?? []) as $i => $line) {
+                    if (!is_array($line)) continue;
+                    $text = trim((string)($line["value"] ?? ""));
+                    if ($text === "") continue;
+                    $start = isset($line["start"]) && is_numeric($line["start"]) ? intval($line["start"]) : intval($i);
+                    $lines[] = ["t" => $start, "text" => $text];
+                }
+            }
+        }
+        if (!$lines) {
+            [$song, $songErr] = m_navidrome_song($cfg, $id);
+            if (is_array($song)) {
+                [$classic, $classicErr] = m_navidrome_response($cfg, "getLyrics", [
+                    "artist" => (string)($song["artist"] ?? ""),
+                    "title" => (string)($song["title"] ?? ""),
+                ]);
+                $body = is_array($classic) ? (string)($classic["lyrics"]["value"] ?? "") : "";
+                if ($body !== "") {
+                    [$offset, $classicMeta, $parsed] = m_parse_lrc($body);
+                    if ($parsed) {
+                        $lines = $parsed;
+                        $meta = $classicMeta;
+                    } else {
+                        $unsynced = true;
+                        foreach (preg_split('/\R/u', $body) as $i => $text) {
+                            $text = trim((string)$text);
+                            if ($text !== "") $lines[] = ["t" => intval($i), "text" => $text];
+                        }
+                    }
+                }
+            }
+        }
+        mjson([
+            "ok" => true,
+            "id" => $rel,
+            "source" => "navidrome",
+            "offset_ms" => 0,
+            "meta" => $meta ?: new stdClass(),
+            "lines" => $lines,
+            "unsynced" => $unsynced,
+            "empty" => count($lines) === 0,
+            "download_error" => count($lines) === 0 ? ($err !== "" ? $err : "Navidrome 未返回歌词") : null,
+        ]);
+    }
+    $root = m_realpath_dir($cfg["MUSIC_LOCAL_DIR"] ?? "");
+    if ($root === "") {
+        mjson(["ok" => false, "error" => "本地音乐目录无效", "lines" => []], 400);
+    }
+    $rel = (string)($_GET["id"] ?? $_GET["path"] ?? "");
+    $abs = m_abs_from_rel($root, $rel);
+    if ($abs === "" || !m_ext_ok($abs)) {
+        mjson(["ok" => false, "error" => "曲目不存在", "lines" => []], 404);
+    }
+    $doFetch = isset($_GET["fetch"]) && !in_array(strtolower((string)$_GET["fetch"]), ["0", "no", "false", "off"], true);
+    $force = isset($_GET["force"]) && !in_array(strtolower((string)$_GET["force"]), ["0", "no", "false", "off"], true);
+    $source = "sidecar";
+    $mismatchNote = "";
+    [$a0, $t0] = m_guess_meta($abs, $rel);
+    if ($force) {
+        $doFetch = true;
+    }
+    // Validate sidecar content against track; quarantine wrong LRC (e.g. 回来.lrc body = 别怕我伤心)
+    $lrcAbs = m_find_matching_lrc($abs, $rel);
+    // On force, prefer re-download even if a matching sidecar exists (user asked to re-fetch)
+    if ($force && $lrcAbs !== "") {
+        // Keep valid sidecar as fallback only if network fails later
+        $sidecarKeep = $lrcAbs;
+        $lrcAbs = "";
+        $source = "sidecar";
+    } else {
+        $sidecarKeep = "";
+    }
+    // Auto-download when missing and fetch requested (or force re-fetch)
+    if ($lrcAbs === "" && $doFetch) {
+        [$okDl, $dlPath, $dlErr, $dlText] = m_fetch_and_save_lrc($abs, $rel, $force);
+        if ($okDl && $dlPath !== "") {
+            // Prefer freshly downloaded path; if force kept a sidecar identical path, still mark downloaded when from network cache write
+            $lrcAbs = $dlPath;
+            $source = ($force ? "refetched" : "downloaded");
+            if ($sidecarKeep !== "" && str_replace("\\", "/", $dlPath) === str_replace("\\", "/", $sidecarKeep)) {
+                $source = "sidecar";
+            }
+        } elseif ($dlText !== "") {
+            // in-memory only (should not happen if write ok)
+            $text = m_lrc_decode($dlText);
+            [$offset, $meta, $lines] = m_parse_lrc($text);
+            mjson([
+                "ok" => true,
+                "id" => $rel,
+                "source" => "downloaded-memory",
+                "offset_ms" => $offset,
+                "meta" => $meta ?: new stdClass(),
+                "lines" => $lines,
+                "empty" => count($lines) === 0,
+                "download_error" => $dlErr,
+                "forced" => $force,
+            ]);
+        } else {
+            // Network miss: fall back to previous valid sidecar if any
+            if ($sidecarKeep !== "") {
+                $lrcAbs = $sidecarKeep;
+                $source = "sidecar";
+                $mismatchNote = $dlErr !== "" ? $dlErr : $mismatchNote;
+            } else {
+                mjson([
+                    "ok" => true,
+                    "id" => $rel,
+                    "source" => "none",
+                    "offset_ms" => 0,
+                    "meta" => new stdClass(),
+                    "lines" => [],
+                    "empty" => true,
+                    "download_error" => $dlErr !== "" ? $dlErr : "未找到歌词",
+                    "mismatch" => $mismatchNote,
+                    "forced" => $force,
+                ]);
+            }
+        }
+    }
+    if ($lrcAbs === "") {
+        if ($sidecarKeep !== "") {
+            $lrcAbs = $sidecarKeep;
+            $source = "sidecar";
+        } else {
+            mjson([
+                "ok" => true,
+                "id" => $rel,
+                "source" => "none",
+                "offset_ms" => 0,
+                "meta" => new stdClass(),
+                "lines" => [],
+                "empty" => true,
+                "forced" => $force,
+            ]);
+        }
+    }
+    $lrcReal = str_replace("\\", "/", $lrcAbs);
+    $rootSlash = rtrim($root, "/") . "/";
+    $inRoot = (strpos($lrcReal, $rootSlash) === 0);
+    if (!$inRoot) {
+        $lrcRp = realpath($lrcAbs);
+        $rootRp = realpath($root);
+        $ok = false;
+        if ($lrcRp !== false) {
+            $lrcRp = str_replace("\\", "/", $lrcRp);
+            if ($rootRp !== false && strpos($lrcRp, rtrim(str_replace("\\", "/", $rootRp), "/") . "/") === 0) $ok = true;
+        }
+        if (!$ok) {
+            mjson(["ok" => false, "error" => "歌词路径越权", "lines" => []], 403);
+        }
+        $lrcAbs = $lrcRp;
+    }
+    $size = @filesize($lrcAbs);
+    if ($size === false || $size <= 0) {
+        mjson([
+            "ok" => true,
+            "id" => $rel,
+            "source" => $source,
+            "offset_ms" => 0,
+            "meta" => new stdClass(),
+            "lines" => [],
+            "empty" => true,
+        ]);
+    }
+    if ($size > 512 * 1024) {
+        mjson(["ok" => false, "error" => "LRC 过大（>512KB）", "lines" => []], 400);
+    }
+    $raw = @file_get_contents($lrcAbs);
+    if ($raw === false) {
+        mjson(["ok" => false, "error" => "无法读取 LRC", "lines" => []], 500);
+    }
+    $text = m_lrc_decode($raw);
+    [$offset, $meta, $lines] = m_parse_lrc($text);
+    mjson([
+        "ok" => true,
+        "id" => $rel,
+        "source" => $source,
+        "offset_ms" => $offset,
+        "meta" => $meta ?: new stdClass(),
+        "lines" => $lines,
+        "empty" => count($lines) === 0,
+        "lrc_name" => basename($lrcAbs),
+    ]);
+}
+
+if ($action === "cover") {
+    if (($cfg["MUSIC_ENABLE"] ?? "no") !== "yes") {
+        mjson(["ok" => false, "error" => "音乐组件未开启", "url" => ""], 400);
+    }
+    if (($cfg["MUSIC_SOURCE"] ?? "local") === "navidrome") {
+        $rel = (string)($_GET["id"] ?? $_GET["path"] ?? "");
+        [$song, $songErr] = m_navidrome_song($cfg, $rel);
+        if (!is_array($song)) mjson(["ok" => false, "error" => $songErr, "url" => ""], 404);
+        $coverId = (string)($song["coverArt"] ?? "");
+        if ($coverId === "") {
+            mjson(["ok" => true, "id" => $rel, "url" => "", "source" => "navidrome", "empty" => true]);
+        }
+        $raw = isset($_GET["raw"]) && !in_array(strtolower((string)$_GET["raw"]), ["0", "no", "false", "off"], true);
+        if ($raw) m_navidrome_proxy($cfg, "getCoverArt", ["id" => $coverId, "size" => 600], "image");
+        $url = "/plugins/theme.music/ucwc-music-api.php?action=cover&raw=1&id=" . rawurlencode($rel) . "&_v=" . rawurlencode($coverId);
+        mjson([
+            "ok" => true,
+            "id" => $rel,
+            "url" => $url,
+            "source" => "navidrome",
+            "empty" => false,
+            "error" => null,
+        ]);
+    }
+    $root = m_realpath_dir($cfg["MUSIC_LOCAL_DIR"] ?? "");
+    if ($root === "") {
+        mjson(["ok" => false, "error" => "本地音乐目录无效", "url" => ""], 400);
+    }
+    $rel = (string)($_GET["id"] ?? $_GET["path"] ?? "");
+    $abs = m_abs_from_rel($root, $rel);
+    if ($abs === "" || !m_ext_ok($abs)) {
+        mjson(["ok" => false, "error" => "曲目不存在", "url" => ""], 404);
+    }
+    $doFetch = isset($_GET["fetch"]) && !in_array(strtolower((string)$_GET["fetch"]), ["0", "no", "false", "off"], true);
+    // raw image stream
+    if (isset($_GET["raw"]) && !in_array(strtolower((string)$_GET["raw"]), ["0", "no", "false", "off"], true)) {
+        $pack = m_resolve_cover($abs, $rel, $doFetch);
+        $cpath = $pack[0] ?? "";
+        $src = $pack[1] ?? "";
+        $cerr = $pack[2] ?? "";
+        $remote = $pack[3] ?? "";
+        if (($cpath === "" || !is_file($cpath)) && $remote !== "" && preg_match('#^https?://#i', $remote)) {
+            // proxy remote image through API so browser stays same-origin
+            [$bytes, $rerr, $rcode] = m_http_get($remote, 18, "image/*,*/*;q=0.8");
+            if ($bytes !== false && m_is_cover_bytes($bytes)) {
+                $ext = m_cover_ext_from_bytes($bytes);
+                $map = ["jpg" => "image/jpeg", "jpeg" => "image/jpeg", "png" => "image/png", "webp" => "image/webp", "gif" => "image/gif"];
+                header("Content-Type: " . ($map[$ext] ?? "image/jpeg"));
+                header("Content-Length: " . strlen($bytes));
+                header("Cache-Control: private, max-age=3600");
+                header("X-Content-Type-Options: nosniff");
+                header("X-UCWC-Cover-Source: remote-proxy");
+                if (function_exists("session_status") && session_status() === PHP_SESSION_ACTIVE) @session_write_close();
+                echo $bytes;
+                exit;
+            }
+            http_response_code(404);
+            header("Content-Type: text/plain; charset=utf-8");
+            echo $rerr !== "" ? $rerr : "no cover";
+            exit;
+        }
+        if ($cpath === "" || !is_file($cpath)) {
+            http_response_code(404);
+            header("Content-Type: text/plain; charset=utf-8");
+            echo $cerr !== "" ? $cerr : "no cover";
+            exit;
+        }
+        $ok = false;
+        $cReal = str_replace("\\", "/", realpath($cpath) ?: $cpath);
+        $cNorm = str_replace("\\", "/", $cpath);
+        $rootSlash = rtrim($root, "/") . "/";
+        if (strpos($cReal, $rootSlash) === 0) $ok = true;
+        if (!$ok) {
+            mlog("cover-stream forbid path=$cReal root=$root");
+            http_response_code(403);
+            exit;
+        }
+        m_stream_image($cReal);
+    }
+    $pack = m_resolve_cover($abs, $rel, $doFetch);
+    $cpath = $pack[0] ?? "";
+    $src = $pack[1] ?? "";
+    $cerr = $pack[2] ?? "";
+    $remote = $pack[3] ?? "";
+    if ($cpath === "" || !is_file($cpath)) {
+        if ($remote !== "" && preg_match('#^https?://#i', $remote)) {
+            // same-origin proxy URL (avoids mixed-content / CORS on dashboard)
+            $url = "/plugins/theme.music/ucwc-music-api.php?action=cover&raw=1&fetch=1&id=" . rawurlencode($rel) . "&_v=" . time();
+            mjson([
+                "ok" => true,
+                "id" => $rel,
+                "url" => $url,
+                "source" => $src !== "" ? $src : "remote",
+                "empty" => false,
+                "error" => $cerr !== "" ? $cerr : null,
+                "remote" => true,
+            ]);
+        }
+        mjson([
+            "ok" => true,
+            "id" => $rel,
+            "url" => "",
+            "source" => $src,
+            "empty" => true,
+            "error" => $cerr !== "" ? $cerr : null,
+        ]);
+    }
+    $url = "/plugins/theme.music/ucwc-music-api.php?action=cover&raw=1&fetch=0&id=" . rawurlencode($rel) . "&_v=" . (@filemtime($cpath) ?: time());
+    mjson([
+        "ok" => true,
+        "id" => $rel,
+        "url" => $url,
+        "source" => $src,
+        "empty" => false,
+        "error" => null,
+    ]);
+}
+
+mjson(["ok" => false, "error" => "unknown action"], 400);
