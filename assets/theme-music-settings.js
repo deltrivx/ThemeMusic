@@ -1652,6 +1652,8 @@
       btn.disabled = true;
       out.textContent = "正在连接…";
       var body = "url=" + encodeURIComponent(values.url) + "&user=" + encodeURIComponent(values.user) + "&password=" + encodeURIComponent(values.password);
+      var csrf = csrfToken();
+      if (csrf) body += "&csrf_token=" + encodeURIComponent(csrf);
       fetch("/plugins/theme.music/ucwc-music-api.php?action=fnos_test&_ts=" + Date.now(), {
         method: "POST", credentials: "same-origin", cache: "no-store",
         headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, body: body,
