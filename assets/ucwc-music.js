@@ -2730,98 +2730,48 @@
     state.cover.loading = true;
     if (state.cover.missId && state.cover.missId !== trackId) state.cover.missId = "";
     // Keep previous art visible until the new cover is ready (or confirmed empty).
-    var reqUrl = apiBase + "?action=cover&path=" + encodeURIComponent(trackId) + "&id=" + encodeURIComponent(trackId) + "&fetch=1&_ts=" + Date.now();
-    fetch(reqUrl, {
+    var imageUrl = apiBase + "?action=cover&path=" + encodeURIComponent(trackId) + "&id=" + encodeURIComponent(trackId) + "&fetch=2&_ts=" + Date.now();
+    fetch(imageUrl, {
       credentials: "same-origin",
-      headers: { Accept: "application/json" },
       cache: "no-store",
+      headers: { Accept: "image/*,*/*;q=0.8" },
     })
-      .then(function (r) {
-        return r.json().catch(function () {
-          return null;
-        });
+      .then(function (ir) {
+        if (!ir) throw new Error("img http");
+        var ct = (ir.headers && ir.headers.get && ir.headers.get("content-type")) || "";
+        if (ct.indexOf("application/json") === 0) {
+          return ir.json().then(function (body) {
+            var empty = body && (body.empty || body.no_cover);
+            var err = new Error(empty ? "empty cover" : "cover json");
+            err.coverEmpty = !!empty;
+            throw err;
+          });
+        }
+        if (!ir.ok) throw new Error("img http");
+        if (ct.indexOf("image/") !== 0 && ct.indexOf("octet-stream") === -1) throw new Error("not image");
+        return ir.blob();
       })
-      .then(function (j) {
+      .then(function (blob) {
         if (seq !== state.cover.seq) return;
-        if (!j || !j.ok || j.empty || !j.url) {
-          state.cover.loading = false;
-          // Flaky/empty response must NOT wipe a cover we already painted for this track.
-          if (state.cover.paintedId === trackId && (state.cover.blobUrl || state.cover.url)) {
-            if (!state.cover.url && state.cover.blobUrl) state.cover.url = state.cover.blobUrl;
-            updateMediaSessionMeta();
-            return;
-          }
-          // Confirmed no cover for this track — mark miss so updateMeta won't re-loop clear.
+        state.cover.loading = false;
+        if (!blob || blob.size < 32) throw new Error("empty blob");
+        state.cover.missId = "";
+        if (t && t.id === trackId) t.has_cover = true;
+        if (!applyCoverBlob(blob, trackId, imageUrl)) setCoverUrl(imageUrl, trackId);
+        updateMediaSessionMeta();
+      })
+      .catch(function (err) {
+        if (seq !== state.cover.seq) return;
+        state.cover.loading = false;
+        if (err && err.coverEmpty) {
           state.cover.missId = trackId;
           state.cover.url = "";
           var orphan = state.cover.blobUrl;
           state.cover.blobUrl = "";
           clearCoverDom();
           releaseCoverBlobLater(orphan);
-          updateMediaSessionMeta();
-          return;
         }
-        state.cover.id = trackId;
-        state.cover.missId = "";
-        if (t && t.id === trackId) t.has_cover = true;
-        var imageUrl = absPluginUrl(j.url);
-        if (j.source === "remote") {
-          imageUrl = apiBase + "?action=cover&path=" + encodeURIComponent(trackId) + "&id=" + encodeURIComponent(trackId) + "&fetch=2&_ts=" + Date.now();
-        }
-        // Prefer blob fetch so cookies/auth apply and broken HTML isn't shown as image
-        return fetch(imageUrl, {
-          credentials: "same-origin",
-          cache: "no-store",
-          headers: { Accept: "image/*,*/*;q=0.8" },
-        })
-          .then(function (ir) {
-            if (!ir || !ir.ok) throw new Error("img http");
-            var ct = (ir.headers && ir.headers.get && ir.headers.get("content-type")) || "";
-            if (ct && ct.indexOf("image/") !== 0 && ct.indexOf("octet-stream") === -1) {
-              throw new Error("not image " + ct);
-            }
-            return ir.blob();
-          })
-          .then(function (blob) {
-            if (seq !== state.cover.seq) return;
-            state.cover.loading = false;
-            if (!blob || blob.size < 32) throw new Error("empty blob");
-            if (!applyCoverBlob(blob, trackId, imageUrl)) {
-              state.cover.url = imageUrl;
-              setCoverUrl(imageUrl, trackId);
-            }
-            if (j.source && (String(j.source).indexOf("downloaded") === 0 || String(j.source).indexOf("remote") === 0 || String(j.source) === "embedded")) {
-              var tip =
-                String(j.source).indexOf("downloaded") === 0
-                  ? "已自动下载封面"
-                  : String(j.source) === "embedded"
-                    ? "已读取内嵌封面"
-                    : "";
-              if (tip) {
-                setStatus(tip);
-                setTimeout(function () {
-                  if (state.error === tip) setStatus(libraryStatusText());
-                }, 2200);
-              }
-            }
-            updateMediaSessionMeta();
-          })
-          .catch(function () {
-            if (seq !== state.cover.seq) return;
-            state.cover.loading = false;
-            // Direct URL fallback — still keep prior art until this assignment errors
-            state.cover.url = imageUrl;
-            setCoverUrl(imageUrl, trackId);
-            updateMediaSessionMeta();
-          });
-      })
-      .catch(function () {
-        if (seq !== state.cover.seq) return;
-        state.cover.loading = false;
-        // Network error: keep whatever art is on screen (prior track or cached)
-        if (state.cover.paintedId === trackId && state.cover.blobUrl && !state.cover.url) {
-          state.cover.url = state.cover.blobUrl;
-        }
+        // Transient network errors keep the current pixels; confirmed empty covers do not.
         updateMediaSessionMeta();
       });
   }
