@@ -16,8 +16,19 @@
 .tm-source-control[data-tm-source-row] {
   transition: opacity 0.12s ease;
 }
-.tm-source-control.tm-row-hidden {
+.tm-source-control.tm-row-hidden,
+tr.tm-row-hidden,
+dt.tm-row-hidden,
+dd.tm-row-hidden {
   display: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  visibility: hidden !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  min-height: 0 !important;
 }
 .tm-source-help {
   color: var(--text-muted, rgba(220, 220, 220, 0.68));

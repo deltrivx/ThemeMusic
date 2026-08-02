@@ -1561,9 +1561,16 @@
       var row = el.closest && el.closest("dd, tr");
       if (!row) row = el.parentNode;
       var show = item.kind === value;
-      row.classList.toggle("tm-row-hidden", !show);
-      row.setAttribute("aria-hidden", show ? "false" : "true");
-      row.style.setProperty("display", show ? "" : "none", "important");
+      var rows = [row];
+      if (row && row.tagName && row.tagName.toLowerCase() === "dd") {
+        var label = row.previousElementSibling;
+        if (label && label.tagName && label.tagName.toLowerCase() === "dt") rows.push(label);
+      }
+      rows.forEach(function (part) {
+        part.classList.toggle("tm-row-hidden", !show);
+        part.setAttribute("aria-hidden", show ? "false" : "true");
+        part.style.setProperty("display", show ? "" : "none", "important");
+      });
     });
   }
 

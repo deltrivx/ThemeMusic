@@ -110,6 +110,14 @@ function m_emit_json_file($path) {
     exit;
 }
 
+function m_emit_cover_empty() {
+    http_response_code(404);
+    header("Content-Type: application/json; charset=utf-8");
+    header("Cache-Control: no-store, no-cache, must-revalidate");
+    echo json_encode(["ok" => false, "empty" => true], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 function m_normalize_path($p) {
     $p = (string)$p;
     $p = str_replace("\\", "/", $p);
@@ -552,6 +560,35 @@ function m_track_title_from_path($path) {
     return m_track_text($name) ?: "未知曲目";
 }
 
+function m_local_path_tags($path, $root = "") {
+    $path = str_replace("\\", "/", (string)$path);
+    $root = rtrim(str_replace("\\", "/", (string)$root), "/");
+    $rel = $root !== "" && strpos($path, $root . "/") === 0 ? substr($path, strlen($root) + 1) : basename($path);
+    $parts = array_values(array_filter(explode("/", trim($rel, "/")), function ($v) {
+        return trim((string)$v) !== "";
+    }));
+    $dirs = count($parts) > 1 ? array_slice($parts, 0, -1) : [];
+    $dirs = array_values(array_filter($dirs, function ($v) {
+        return !preg_match('/^(cd|disc|disk)\\s*[-_]?\\s*\\d+$/i', trim((string)$v));
+    }));
+    $artist = "";
+    $album = "";
+    if (count($dirs) >= 2) {
+        $artist = m_track_text($dirs[count($dirs) - 2]);
+        $album = m_track_text($dirs[count($dirs) - 1]);
+    } elseif (count($dirs) === 1) {
+        $album = m_track_text($dirs[0]);
+    }
+    $pairSource = $artist !== "" ? $artist : $album;
+    $pair = preg_split('/\s+-\s+/u', $pairSource, 2);
+    if (count($pair) === 2 && trim($pair[0]) !== "" && trim($pair[1]) !== "") {
+        $artist = m_track_text($pair[0]);
+        $album = m_track_text($pair[1]);
+    }
+
+    return ["artist" => $artist, "album" => $album];
+}
+
 function m_track_normalize(array $item, $source, $fallbackId = "") {
     $source = strtolower(trim((string)$source));
     $id = m_track_text($item["id"] ?? $item["path"] ?? $item["url"] ?? $fallbackId);
@@ -559,12 +596,19 @@ function m_track_normalize(array $item, $source, $fallbackId = "") {
     $title = m_track_text($item["title"] ?? $item["name"] ?? $item["trackName"] ?? $item["songName"] ?? "");
     $artist = m_track_text($item["artist"] ?? $item["artistName"] ?? $item["singer"] ?? $item["author"] ?? "");
     $album = m_track_text($item["album"] ?? $item["albumName"] ?? $item["collectionName"] ?? "");
+    if ($source === "local") {
+        $tags = m_local_path_tags($path, $item["_root"] ?? "");
+            if ($artist === "") $artist = $tags["artist"];
+        if ($album === "") $album = $tags["album"];
+        $album = preg_replace('/\s+(?:FLAC|MP3|CD|DISC)\s*$/iu', '', $album);
+    }
     if ($title === "" && $source === "local") $title = m_track_title_from_path($path !== "" ? $path : $id);
     if ($title === "") $title = "未知曲目";
     $ext = strtolower(pathinfo($path !== "" ? $path : $id, PATHINFO_EXTENSION));
     if ($ext === "" && !empty($item["format"])) $ext = strtolower((string)$item["format"]);
     $cover = $item["coverArt"] ?? $item["coverUrl"] ?? $item["cover"] ?? $item["artwork"] ?? "";
     $out = $item;
+    unset($out["_root"]);
     $out["id"] = $id;
     $out["path"] = $path;
     $out["source"] = $source;
@@ -614,7 +658,7 @@ if ($action === "list") {
         $files = $root !== "" ? m_local_scan_files($root, 6) : [];
         $tracks = [];
         foreach ($files as $path) {
-            $tracks[] = m_track_normalize(["id" => $path, "path" => $path, "size" => @filesize($path)], "local", $path);
+            $tracks[] = m_track_normalize(["id" => $path, "path" => $path, "_root" => $root, "size" => @filesize($path)], "local", $path);
         }
         mjson(["ok" => true, "tracks" => $tracks, "count" => count($tracks), "source" => "local"]);
     }
@@ -962,29 +1006,35 @@ if ($action === "cover") {
         }
     }
     if ($rel === "") {
-        m_emit_json_file("/usr/local/emhttp/plugins/theme.music/assets/img/cover_empty.json");
-        exit;
+        m_emit_cover_empty();
     }
     $candidates = [];
     if ($basename !== "") {
-        $candidates[] = $root . "/" . $basename . ".jpg";
-        $candidates[] = $root . "/" . $basename . ".jpeg";
-        $candidates[] = $root . "/" . $basename . ".png";
+        $trackDir = dirname($rel);
+        foreach (["jpg", "jpeg", "png", "webp"] as $artExt) {
+            $candidates[] = rtrim($trackDir, "/") . "/" . $basename . "." . $artExt;
+            $candidates[] = $root . "/" . $basename . "." . $artExt;
+        }
     }
     /* Album artwork is commonly stored beside the track rather than beside
      * the full library root. Prefer same-name art, then walk up to the track
      * directory and check standard album-art filenames. */
     if ($rel !== "") {
         $dir = dirname($rel);
-        foreach (["cover.jpg", "cover.jpeg", "cover.png", "folder.jpg", "folder.jpeg", "folder.png", "album.jpg", "album.jpeg", "album.png", "front.jpg", "front.jpeg", "front.png"] as $name) {
+        $artNames = ["cover.jpg", "cover.jpeg", "cover.png", "cover.webp", "folder.jpg", "folder.jpeg", "folder.png", "album.jpg", "album.jpeg", "album.png", "front.jpg", "front.jpeg", "front.png"];
+        foreach ($artNames as $name) {
             $candidates[] = rtrim($dir, "/") . "/" . $name;
+        }
+        $parent = dirname($dir);
+        if ($parent !== $dir && $parent !== ".") {
+            foreach ($artNames as $name) $candidates[] = rtrim($parent, "/") . "/" . $name;
         }
     }
     foreach ($candidates as $c) {
         if (is_file($c) && is_readable($c)) {
             $size = filesize($c);
             $ext = strtolower(pathinfo($c, PATHINFO_EXTENSION));
-            $mime = $ext === "png" ? "image/png" : "image/jpeg";
+            $mime = $ext === "png" ? "image/png" : ($ext === "webp" ? "image/webp" : "image/jpeg");
             header("Content-Type: " . $mime);
             header("Content-Length: " . (int)$size);
             header("Cache-Control: public, max-age=3600");
