@@ -4,8 +4,8 @@
   "files": [
     {
       "path": "ThemeMusic.page",
-      "sha256": "4ab669203774916d95c41e86e9f7dda815c5ac86592fd9c9adf7fba76c19f36a",
-      "size": 23838
+      "sha256": "c740f5260ceb9420c9f91b9ebd2fc18daa0eefa29136c7d7022fd8d4fd427153",
+      "size": 25799
     },
     {
       "path": "ThemeMusic_Loader.page",
@@ -59,8 +59,8 @@
     },
     {
       "path": "ucwc-music-api.php",
-      "sha256": "1424bccb2124ba5a284899e8826b368b962602873de2efdbf0799ab06195eede",
-      "size": 119189
+      "sha256": "164d1429df7ff126eadd6b2c611c3f45cf0cf741ad66e3ca30ab34b19c7d9286",
+      "size": 131777
     }
   ]
 }
