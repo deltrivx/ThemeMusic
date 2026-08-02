@@ -6,7 +6,7 @@
     {
       "id": "v1.3.0-beta2",
       "label": "Beta v1.3.0-beta2：修复飞牛音乐(FnOS)音源数据库查询方式",
-      "channel": "pre-latest",
+      "channel": "latest",
       "released_at": "2026-08-02",
       "music": true,
       "ota": true
