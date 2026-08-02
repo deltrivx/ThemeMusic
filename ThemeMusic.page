@@ -1,3 +1,8 @@
+Menu="UserPreferences"
+Title="主题音乐"
+Icon="music"
+Tag="music"
+---
 <?php
 /**
  * ThemeMusic settings page
