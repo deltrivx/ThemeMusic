@@ -1,12 +1,20 @@
 {
   "schema": 1,
-  "default": "v1.3.0-beta6",
-  "latest_version": "v1.3.0-beta6",
+  "default": "v1.3.0-beta7",
+  "latest_version": "v1.3.0-beta7",
   "versions": [
+    {
+      "id": "v1.3.0-beta7",
+      "label": "Beta v1.3.0-beta7：飞牛音乐配置行结构对齐正式版，修复设置页布局错乱",
+      "channel": "latest",
+      "released_at": "2026-08-02",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.3.0-beta6",
       "label": "Beta v1.3.0-beta6：修复飞牛音乐配置布局、默认值与测试按钮",
-      "channel": "latest",
+      "channel": "beta",
       "released_at": "2026-08-02",
       "music": true,
       "ota": true
