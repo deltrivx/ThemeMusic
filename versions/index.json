@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "default": "v1.3.0-beta8",
-  "latest_version": "v1.3.0-beta8",
+  "default": "v1.3.0-beta9",
+  "latest_version": "v1.3.0-beta9",
   "versions": [
     {
-      "id": "v1.3.0-beta8",
-      "label": "Beta v1.3.0-beta8：飞牛测试连接后端补齐；存储检测按策略分流；飞牛三框等宽；移除清理缓存与冗余说明",
+      "id": "v1.3.0-beta9",
+      "label": "Beta v1.3.0-beta9：3 音源设置项独立配置 + 显隐隔离；按当前 MUSIC_SOURCE 收 POST 避免覆盖其它音源字段",
       "channel": "latest",
       "released_at": "2026-08-02",
       "music": true,
