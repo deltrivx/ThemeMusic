@@ -275,6 +275,26 @@ function ucwc_valid_version_id($id) {
     return is_string($id) && preg_match('/^v[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9A-Za-z.]+)?$/', $id);
 }
 
+function ucwc_version_parts($id) {
+    $s = strtolower(ltrim(trim((string)$id), "v"));
+    if (!preg_match('/^(\d+)\.(\d+)(?:\.(\d+))?(?:[-_.]?(alpha|beta|rc|b)(\d*))?/', $s, $m)) return null;
+    $kind = $m[4] ?? "";
+    $rank = $kind === "alpha" ? 1 : ($kind === "beta" || $kind === "b" ? 2 : ($kind === "rc" ? 3 : 100));
+    return [(int)$m[1], (int)$m[2], (int)($m[3] ?? 0), $rank, $rank < 100 ? (int)($m[5] ?? 0) : 0];
+}
+
+function ucwc_version_compare($a, $b) {
+    $pa = ucwc_version_parts($a);
+    $pb = ucwc_version_parts($b);
+    if (!$pa && !$pb) return 0;
+    if (!$pa) return -1;
+    if (!$pb) return 1;
+    for ($i = 0; $i < 5; $i++) {
+        if ($pa[$i] !== $pb[$i]) return $pa[$i] <=> $pb[$i];
+    }
+    return 0;
+}
+
 function ucwc_job_dir() {
     $d = "/tmp/theme-music-jobs";
     if (!is_dir($d)) @mkdir($d, 0755, true);
@@ -868,7 +888,10 @@ if ($action === "status" || $action === "check_update") {
         $versions[] = $nv;
         if ($nv["id"] === $latest) $latest_meta = $nv;
     }
-    $update_available = $local["installed"] && $local["version"] !== "" && $latest !== "" && $local["version"] !== $latest;
+    $update_available = $local["installed"]
+        && ucwc_version_parts($local["version"]) !== null
+        && ucwc_version_parts($latest) !== null
+        && ucwc_version_compare($latest, $local["version"]) > 0;
     ucwc_json_out([
         "ok" => true,
         "action" => $action,

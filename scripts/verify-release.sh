@@ -38,7 +38,10 @@ assert ids, '版本索引为空'
 assert len(ids) == len(set(ids)), '版本索引存在重复 id'
 assert index['default'] == index['latest_version'] == ids[0], '默认、最新和首项不一致'
 latest_channels = [item['id'] for item in index['versions'] if item.get('channel') == 'latest']
-assert latest_channels == [index['latest_version']], f'latest 频道标记错误：{latest_channels}'
+latest_id = index['latest_version']
+latest_item = next(item for item in index['versions'] if item['id'] == latest_id)
+assert latest_channels in ([], [latest_id]), f'latest 频道标记错误：{latest_channels}'
+assert latest_item.get('channel') in ('latest', 'beta'), '最新版本必须属于 latest 或 beta 频道'
 plg = (root / 'theme.music.plg').read_text()
 m = re.search(r'<!ENTITY\s+version\s+"([^"]+)">', plg)
 assert m and m.group(1) == ids[0], 'PLG 版本与索引不一致'
@@ -62,7 +65,8 @@ assert 'listRenderLimit: 300' in player and 'ucwc-music-list-more' in player, '�
 assert 'LYRIC_DRIFT_KEY' in player and 'adjustLyricDrift(500)' in player and 'adjustLyricDrift(-500)' in player, '歌词时间校准不完整'
 assert 'tm-fnos-url' in page and 'fnos_test' in api, 'FnOS 音源设置或连接测试缺失'
 assert 'in_array($src, ["local", "navidrome", "fnos"]' in page, '设置页未保留 FnOS source'
-assert page.count('class="tm-source-config"') == 3, '设置页三套音源 wrapper 不完整'
+assert 'data-tm-source-row="local"' in page and 'data-tm-source-row="navidrome"' in page and 'data-tm-source-row="fnos"' in page, '设置页三套音源行不完整'
+assert 'class="tm-source-config"' not in page and 'class="tm-source-row"' not in page, '设置页仍包含会造成二次偏移的 source wrapper/grid'
 assert 'action === "list"' in api and 'action === "set_service"' in api, '播放器或服务按钮 action 缺失'
 assert 'action === "check_update"' in api and 'action === "changelog"' in api, '版本管理 action 缺失'
 assert '"detected"' in api and '"status"' in api, '存储状态字段契约缺失'

@@ -570,6 +570,17 @@
       }
     }
 
+    /* Unraid themes can place the label text over the visually hidden input.
+     * Keep the whole switch clickable while allowing the native input to
+     * remain available to keyboard and accessibility clients. */
+    if (label) {
+      label.addEventListener("click", function (ev) {
+        if (ev.target === tog) return;
+        ev.preventDefault();
+        tog.click();
+      });
+    }
+
     tog.addEventListener("change", function () {
       var wantOn = !!tog.checked;
       setUi(wantOn, true);
@@ -1530,40 +1541,29 @@
     hideRow(form.querySelector('[name="MUSIC_REPEAT_MOBILE"]'), same);
   }
 
-  /**
-   * ThemeEffects wallpaper-style: local music dir only when source = local.
-   */
+  /** Keep source fields on Unraid's native dt/dd alignment baseline. */
   function syncSourceRows() {
     if (!form) return;
     var src = form.querySelector('select[name="MUSIC_SOURCE"]');
     var value = src ? String(src.value || "local").toLowerCase() : "local";
-    var wrappers = form.querySelectorAll(".tm-source-config[data-tm-source]");
-    for (var wi = 0; wi < wrappers.length; wi++) {
-      var wrapper = wrappers[wi];
-      var want = String(wrapper.getAttribute("data-tm-source") || "").toLowerCase();
-      var hidden = want !== value;
-      wrapper.classList.toggle("tm-hidden", hidden);
-      wrapper.setAttribute("aria-hidden", hidden ? "true" : "false");
-      wrapper.style.setProperty("display", hidden ? "none" : "block", "important");
-    }
     var fields = {
       local: ["tm-music-local-dir"],
       navidrome: ["tm-navidrome-url", "tm-navidrome-user", "tm-navidrome-password", "tm-btn-test-navidrome"],
-      fnos: ["tm-fnos-url", "tm-fnos-user", "tm-fnos-password", "tm-btn-test-fnos"],
+      fnos: ["tm-fnos-url", "tm-fnos-user", "tm-fnos-password", "tm-btn-test-fnos", "tm-fnos-help"],
     };
-    var active = fields[value] || fields.local;
+    var all = [];
     Object.keys(fields).forEach(function (kind) {
-      fields[kind].forEach(function (id) {
-        var el = document.getElementById(id);
-        if (!el) return;
-        var row = el.closest && el.closest(".tm-source-row");
-        if (!row) row = el.closest && el.closest("dd, tr");
-        if (!row) row = el.parentNode;
-        var show = active.indexOf(id) >= 0;
-        row.classList.toggle("tm-row-hidden", !show);
-        row.style.setProperty("display", show ? "" : "none", "important");
-        row.style.setProperty("visibility", show ? "visible" : "hidden", "important");
-      });
+      fields[kind].forEach(function (id) { all.push({ id: id, kind: kind }); });
+    });
+    all.forEach(function (item) {
+      var el = document.getElementById(item.id);
+      if (!el) return;
+      var row = el.closest && el.closest("dd, tr");
+      if (!row) row = el.parentNode;
+      var show = item.kind === value;
+      row.classList.toggle("tm-row-hidden", !show);
+      row.setAttribute("aria-hidden", show ? "false" : "true");
+      row.style.setProperty("display", show ? "" : "none", "important");
     });
   }
 
