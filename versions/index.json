@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "default": "v1.3.0-beta5",
-  "latest_version": "v1.3.0-beta5",
+  "default": "v1.3.0-beta6",
+  "latest_version": "v1.3.0-beta6",
   "versions": [
     {
-      "id": "v1.3.0-beta5",
-      "label": "Beta v1.3.0-beta5：修复飞牛音乐配置布局与测试按钮",
+      "id": "v1.3.0-beta6",
+      "label": "Beta v1.3.0-beta6：修复飞牛音乐配置布局、默认值与测试按钮",
       "channel": "latest",
       "released_at": "2026-08-02",
       "music": true,
