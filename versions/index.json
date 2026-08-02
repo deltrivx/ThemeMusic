@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "default": "v1.3.0-beta3",
-  "latest_version": "v1.3.0-beta3",
+  "default": "v1.3.0-beta4",
+  "latest_version": "v1.3.0-beta4",
   "versions": [
     {
-      "id": "v1.3.0-beta3",
-      "label": "Beta v1.3.0-beta3：修复飞牛音乐(FnOS)音源配置显示与密码保存",
+      "id": "v1.3.0-beta4",
+      "label": "Beta v1.3.0-beta4：修复飞牛音乐(FnOS)音源配置显示",
       "channel": "latest",
       "released_at": "2026-08-02",
       "music": true,
