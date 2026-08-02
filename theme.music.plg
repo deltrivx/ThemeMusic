@@ -1,2 +1,273 @@
-<?xml version="1.0" encoding="utf-8"?>
-<PLUGIN>placeholder</PLUGIN>
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+<!ENTITY name      "theme.music">
+<!ENTITY author    "deltrivx">
+<!ENTITY      version   "v1.3.0-beta8">
+		<!ENTITY launch    "Settings/ThemeMusic">
+		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
+		<!ENTITY flash     "/boot/config/plugins/&name;">
+		<!ENTITY github    "deltrivx/ThemeMusic">
+		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
+		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
+		<!ENTITY ver       "v1.3.0-beta8">
+		]>
+		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
+
+		<!-- CHANGES in CDATA: bare & in notes must not break simplexml_load_file -->
+		<CHANGES>
+		<![CDATA[
+		## Theme Music
+		### v1.3.0-beta8
+		- 修复设置页飞牛音乐配置区块布局错乱：补回 Navidrome 连接行未闭合的 span，去掉多余 div
+		- 飞牛四行配置标签取消错误缩进，恢复 Unraid 定义列表正常渲染
+		- 接上飞牛「测试连接」按钮事件绑定（此前函数已定义但未调用）
+		- 还原被 beta 快照污染的 v1.2.2 正式版归档文件
+		### v1.3.0-beta6
+		- 修复无弹窗架构下音乐胶囊与仪表盘卡片的上一曲、下一曲和播放暂停按钮全部失效
+		- 全站播放改为直接操作页面内联音频，不再依赖已移除的宿主弹窗消息通道
+		### v1.2.1
+		- 本地大曲库改为低优先级、单实例后台完整索引，复用旧索引并原子切换，避免重复扫描与同步硬截断
+		- 曲目列表按 300 首分段渲染但保留完整播放队列；歌词支持按曲目提前/延后 0.5 秒及手动归零
+		- 设置页启动盘旧缓存按钮独占一行居中；PLG、快照、索引、文档和 Release 产物全部同步
+		### v1.1.9
+		- 自动识别本地阵列盘、SMB/CIFS 与 NFS，本地磁盘唤醒和远端共享就绪探测完全分流
+		- 歌词与下载封面统一保存为歌曲同目录的“歌曲名.lrc”和“歌曲名.jpg”，不再写入启动盘动态缓存
+		- 安装或升级时自动清除启动盘旧歌词/封面缓存目录，保留配置、密码与插件状态
+		### v1.1.8
+		- 全站模式使用固定名称的单一音频宿主，Tower 刷新和内部切页不再重建当前播放
+		- 音乐胶囊继续内嵌在 Tower 页面并同步曲目、进度和控制状态；离开 Tower 自动暂停，返回自动恢复
+		- 宿主只能由明确的播放点击创建，增加跨标签启动锁和自动校验，禁止心跳或导航循环开窗
+		### v1.1.7
+		- 代码许可改为 PolyForm Noncommercial 1.0.0，明确禁止未经授权的商业使用
+		- 更新日志版本列表自动换行并禁止横向滚动，窄屏改为单列布局
+		- 首次安装默认关闭，须在设置页手动开启；升级继续保留用户原有开关
+		### v1.1.6
+		- 全站胶囊模式在页面隐藏、切换和 Unraid 重绘时保留现有音频进程，不再主动暂停后等待点击续播
+		- 循环关闭、列表循环和单曲循环使用三种独立图标与状态类，当前模式一眼可辨
+		### v1.1.5
+		- 收敛跨页续播为单一重试链，取消旧音频和旧 play Promise 回调，修复播放/暂停状态反复跳变
+		- 自动播放被浏览器策略拦截后停止无效重试，稳定等待一次用户播放手势
+		- 固定右侧标题栏、信息内容区及 flex 基准，曲目/歌词/歌曲信息切换不再改变卡片高度
+		### v1.1.4
+		- 本地曲库改为有硬上限的安全扫描，不跟随符号链接并消除逐曲目重复目录遍历
+		- 增加六小时服务端与会话曲库缓存，刷新和切页可直接恢复播放
+		- 修复卡片前五个按钮的单击即时响应，歌曲信息改在右侧曲目/歌词复用区显示
+		- 对齐 Theme Effects 的 Unraid PLG 注册软链接，恢复已安装插件列表可见性
+		### v1.1.3
+		- 安装器优先使用经总校验的 Release 归档，避免 Raw 单文件请求长时间阻塞
+		- 归档通过总 SHA256 后仍逐文件复核清单，OTA 只写入变化项
+		- 收紧故障端点等待并增加 Release 备用入口，旧版本仍可自动回退
+		### v1.1.2
+		- 仓库说明、关于、支持、安全、贡献和中英文协议体系全面规范化
+		- Release 增加独立安装脚本、文件清单和统一校验和，安装后同步 PLG 元数据
+		- 插件管理器说明升级为正式中文介绍，并纳入闪存离线恢复
+		- 新增自动化发布验证，检查版本、清单、哈希、脚本、PLG 与文档一致性
+		### v1.1.1
+		- 移除仪表盘动态关闭卡片键，显示状态仅由总开关和运行模式决定
+		- 清除旧的临时隐藏状态及无用样式、事件分支
+		- 自动清理由 Unraid 后续注入或卡片克隆残留的关闭键
+		- 设置页补充卡片显示规则说明，原生折叠功能保持不变
+		### v1.1.0
+		- Navidrome 曲库、串流、封面和歌词结束测试并进入正式支持
+		- 卡片与胶囊三键即时双向同步，全部卡片控件兼容 Unraid 重绘
+		- 修复克隆卡片后搜索、音量、进度、曲目选择和折叠响应丢失
+		- 搜索采用低延迟合并刷新，兼顾响应速度与低配设备负载
+		### v1.1.0-beta3
+		- 卡片与胶囊的上一首、播放/暂停、下一首统一为同一控制链路
+		- 切歌立即双向同步曲名和按钮状态，不再等待远程媒体加载事件
+		- 兼容 Unraid 重绘卡片及两端交叉快速点击
+		### v1.1.0-beta2
+		- 修复上一曲只回到本曲开头、动态关闭键未对齐和标题分割线缺失
+		- Navidrome 测试连接直接使用当前输入，不必先应用
+		- 验证结构化歌词时间轴，并将 Navidrome 加入 FnOS 挂载恢复流程
+		### v1.1.0-beta
+		- 新增 Navidrome/OpenSubsonic 音源设置和连接测试
+		- 接入曲库、Range 串流、封面及结构化歌词
+		- Navidrome 密码独立以 0600 权限保存，不写入普通配置和日志
+		### v1.0.19
+		- 音频开始正常播放后清除自动续播提示并恢复曲库状态
+		### v1.0.18
+		- 修复动态磁贴关闭键和折叠箭头在深色主题下变黑
+		- 关闭磁贴恢复为仅在 Unraid 磁贴管理模式动态显示
+		- 播放前自动唤醒本地磁盘，远程挂载等待存储就绪
+		- 歌词同步由高频逐帧更新改为 250ms 低负载更新
+		- 曲库扫描增加两分钟缓存，手动重新扫描仍会强制刷新
+		### v1.0.17
+		- 音乐卡片标题图标统一为白色
+		- 移除自定义刷新和本次隐藏按钮，修复 Unraid 原生折叠箭头
+		- 将动态磁贴管理的关闭键归位到标题栏并与设置、折叠键对齐
+		- 歌词模式复用搜索栏空间，扩大歌词可视区域并修复遮挡
+		### v1.0.16
+		- 修复仪表盘重绘或克隆卡片后，随机与循环按钮多次点击失效
+		- 隔离按钮鼠标、触摸事件与 Unraid 卡片拖拽，兼容电脑端和移动端
+		- 卡片外观改用 Unraid 原生仪表盘标题、背景、边框和控件样式
+		- 右上角补充重新扫描、插件设置和隐藏卡片功能键
+		- 插件、OTA、Release 与文档版本号统一使用 v1.0.16
+		### v1.0.15
+		- 优化随机与循环按钮状态刷新，精简曲库状态文案
+		### v1.0.14
+		- 增加曲目排序切换及歌词、封面徽标
+		### v1.0.13
+		- 统一状态栏信息图标、音源和提示文字的垂直对齐
+		### v1.0.12
+		- 稳定曲目与歌词面板高度，区分重扫与歌词匹配图标
+		### v1.0.11
+		- 增加曲库搜索、重新扫描、歌词重新匹配和缓存清理
+		### v1.0.10
+		- 左侧控制区保持稳定，右侧曲目与歌词区填满剩余宽度
+		### v1.0.9
+		- 卡片适配仪表盘两栏与三栏布局，并接入原生拖拽排序
+		### v1.0.8
+		- 根据实际字体宽度优化曲目与歌词面板尺寸
+		### v1.0.7
+		- 增加仪表盘位置服务端记忆
+		### v1.0.6
+		- 修复空曲库和未配置提示重复显示
+		### v1.0.5
+		- 开机优先从闪存恢复插件，离线或网络超时不再丢失
+		### v1.0.4
+		- 加强歌词匹配校验并隔离错误歌词文件
+		### v1.0.3
+		- 修正歌词时间轴与偏移处理
+		### v1.0.2
+		- 修复曲目与歌词切换遮挡及歌词同步
+		### v1.0.1
+		- 优化双栏布局、歌词滚动、卡片位置和移动端按钮
+		### v1.0.0
+		- 首个正式版：独立音乐插件、电脑与手机配置、卡片与胶囊模式
+		]]>
+		</CHANGES>
+
+<!-- Prepare dirs -->
+<FILE Run="/bin/bash">
+<INLINE>
+mkdir -p &flash;/assets &plugdir;/assets
+echo "Theme Music: preparing &name;…"
+exit 0
+</INLINE>
+</FILE>
+
+<!-- README shown in plugin manager -->
+<FILE Name="&plugdir;/README.md">
+<INLINE>
+<![CDATA[
+# 主题音乐（Theme Music）
+
+适用于 Unraid 6.12+ 的独立 WebGUI 音乐播放器。
+
+## 核心能力
+
+- 本地目录与 Navidrome/OpenSubsonic 双音源
+- 仪表盘音乐卡片与全站音乐胶囊
+- PC/手机独立运行模式、随机、循环、音量和跨页续播
+- 曲库搜索与排序、封面、同步歌词和普通歌词
+- 播放前磁盘唤醒、远程挂载等待、低负载缓存
+- SHA256 差异 OTA、历史版本回滚和闪存离线恢复
+
+## 使用入口
+
+安装后前往：**设置 → 用户偏好 → 主题音乐**
+
+Navidrome 密码独立保存为 `0600`，不会写入普通配置、浏览器或日志。
+
+项目主页、完整说明、中文更新日志和支持信息：
+https://github.com/deltrivx/ThemeMusic
+]]>
+</INLINE>
+</FILE>
+
+<!-- Boot/install: restore runtime from flash first (offline-safe), then OTA if network works -->
+<FILE Name="/tmp/theme-music-install.sh" Run="/bin/bash">
+<INLINE>
+#!/bin/bash
+# Never hard-fail boot when flash already has a package (reboot offline / GitHub timeout).
+set +e
+export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
+FLASH="&flash;"
+PLUG="&plugdir;"
+mkdir -p "$FLASH/assets" "$PLUG/assets"
+
+restore_from_flash() {
+  [ -f "$FLASH/ThemeMusic.page" ] || return 1
+  [ -f "$FLASH/ucwc-music-api.php" ] || return 1
+  echo "Theme Music: restoring runtime from flash…"
+  for f in ThemeMusic.page ThemeMusic_Loader.page ucwc-music-api.php theme-music-save.php theme-music-update.php; do
+    [ -f "$FLASH/$f" ] && install -m 0644 "$FLASH/$f" "$PLUG/$f"
+  done
+  [ -f "$FLASH/README.md" ] && install -m 0644 "$FLASH/README.md" "$PLUG/README.md"
+  for f in ucwc-music.js ucwc-music.css ucwc-music-host.html theme-music-settings.js theme-music-settings.css; do
+    [ -f "$FLASH/assets/$f" ] && install -m 0644 "$FLASH/assets/$f" "$PLUG/assets/$f"
+  done
+  return 0
+}
+
+if restore_from_flash; then
+  echo "Theme Music: flash restore OK"
+else
+  echo "Theme Music: no complete flash package yet; will need network install"
+fi
+
+URL="&installSH;"
+OUT="/tmp/theme-music-install-run.sh"
+echo "Theme Music: fetching install.sh for OTA &ver;…"
+ok=0
+if curl -4 -fsSL --http1.1 --connect-timeout 12 --max-time 45 --retry 2 -o "$OUT" "$URL"; then
+  ok=1
+else
+  for m in \
+    "https://cdn.jsdelivr.net/gh/&github;@main/scripts/install.sh" \
+    "https://fastly.jsdelivr.net/gh/&github;@main/scripts/install.sh" \
+    "https://raw.gitmirror.com/&github;/main/scripts/install.sh" \
+    "https://ghfast.top/https://raw.githubusercontent.com/&github;/main/scripts/install.sh"
+  do
+    if curl -4 -fsSL --http1.1 --connect-timeout 12 --max-time 45 --retry 1 -o "$OUT" "$m"; then ok=1; break; fi
+  done
+fi
+
+if [ "$ok" = "1" ] && [ -s "$OUT" ]; then
+  chmod +x "$OUT"
+  export UCWC_PLUGIN_INSTALL=1
+  # Prefer line-buffered progress for plugin manager
+  if command -v stdbuf >/dev/null 2>&1; then
+    stdbuf -oL -eL sh "$OUT" install "&ver;" ota
+  else
+    sh "$OUT" install "&ver;" ota
+  fi
+  rc=$?
+  if [ "$rc" -eq 0 ]; then
+    echo "Theme Music: OTA install OK (&ver;)"
+    exit 0
+  fi
+  echo "Theme Music: OTA returned $rc — falling back to flash restore"
+  restore_from_flash
+else
+  echo "Theme Music: cannot download install.sh (network)"
+fi
+
+if [ -f "$PLUG/ThemeMusic.page" ] && [ -f "$PLUG/ucwc-music-api.php" ]; then
+  echo "Theme Music: runtime present after offline/OTA path — boot OK"
+  exit 0
+fi
+echo "Theme Music: ERROR — no runtime files (flash empty and network failed)" >&2
+exit 1
+</INLINE>
+</FILE>
+
+<!-- remove -->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+#!/bin/bash
+SH="/tmp/theme-music-install-run.sh"
+if [ ! -f "$SH" ]; then
+  curl -4 -fsSL --http1.1 -o "$SH" "&installSH;" 2>/dev/null || true
+fi
+if [ -f "$SH" ]; then
+  chmod +x "$SH" 2>/dev/null || true
+  bash -c "source '$SH'; uninstall_plugin" 2>/dev/null || true
+fi
+rm -f /tmp/theme-music-install.sh /tmp/theme-music-install-run.sh
+exit 0
+</INLINE>
+</FILE>
+
+</PLUGIN>
