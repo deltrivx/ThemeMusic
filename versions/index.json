@@ -1,12 +1,20 @@
 {
   "schema": 1,
-  "default": "v1.3.0-beta9",
-  "latest_version": "v1.3.0-beta9",
+  "default": "v1.3.0-beta10",
+  "latest_version": "v1.3.0-beta10",
   "versions": [
+    {
+      "id": "v1.3.0-beta10",
+      "label": "Beta v1.3.0-beta10：修复三音源设置 UI、FnOS 配置链路、播放器与 API 契约",
+      "channel": "latest",
+      "released_at": "2026-08-02",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.3.0-beta9",
       "label": "Beta v1.3.0-beta9：3 音源设置项独立配置 + 显隐隔离；按当前 MUSIC_SOURCE 收 POST 避免覆盖其它音源字段",
-      "channel": "latest",
+      "channel": "beta",
       "released_at": "2026-08-02",
       "music": true,
       "ota": true

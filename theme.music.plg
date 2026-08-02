@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY      version   "v1.3.0-beta9">
+<!ENTITY      version   "v1.3.0-beta10">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-		<!ENTITY ver       "v1.3.0-beta9">
+		<!ENTITY ver       "v1.3.0-beta10">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 
@@ -17,7 +17,7 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
-		### v1.3.0-beta9
+		### v1.3.0-beta10
 		- 修复设置页飞牛音乐配置区块布局错乱：补回 Navidrome 连接行未闭合的 span，去掉多余 div
 		- 飞牛四行配置标签取消错误缩进，恢复 Unraid 定义列表正常渲染
 		- 接上飞牛「测试连接」按钮事件绑定（此前函数已定义但未调用）
@@ -179,6 +179,7 @@ https://github.com/deltrivx/ThemeMusic
 <!-- Boot/install: restore runtime from flash first (offline-safe), then OTA if network works -->
 <FILE Name="/tmp/theme-music-install.sh" Run="/bin/bash">
 <INLINE>
+<![CDATA[
 #!/bin/bash
 # Never hard-fail boot when flash already has a package (reboot offline / GitHub timeout).
 set +e
@@ -250,6 +251,7 @@ if [ -f "$PLUG/ThemeMusic.page" ] && [ -f "$PLUG/ucwc-music-api.php" ]; then
 fi
 echo "Theme Music: ERROR — no runtime files (flash empty and network failed)" >&2
 exit 1
+]]>
 </INLINE>
 </FILE>
 
