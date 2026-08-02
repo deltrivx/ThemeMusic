@@ -478,10 +478,10 @@ install_version() {
     mkdir -p "$tmp/$dir"
     if fetch_pkg "$tmp/$f" "$base/$f" "$f" "$bn" "${ARCHIVE_DIR:+$ARCHIVE_DIR/$f}"; then
       :
-    elif download -o "$tmp/$f" "$REPO_RAW/$f"; then
-      OTA_FETCHED=$((OTA_FETCHED + 1))
+    elif fetch_pkg "$tmp/$f" "$REPO_RAW/$f" "$f" "$bn"; then
+      :
     else
-      ucwc_log "错误：未找到 $f"
+      ucwc_log "错误：未找到或校验失败：$f"
       exit 1
     fi
   done
