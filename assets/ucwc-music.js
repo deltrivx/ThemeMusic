@@ -17,6 +17,7 @@
   var apiBase = "/plugins/theme.music/ucwc-music-api.php";
   var state = {
     tracks: [],
+    libraryCount: 0,
     index: 0,
     playing: false,
     shuffle: false,
@@ -395,9 +396,12 @@
           clearPlayRetries();
           return;
         }
-        try {
-          // Sticky demuxer error: rebuild before another doomed play()
-          if (audioHasError(audio) || (audio && audio.error)) {
+          try {
+            // Sticky demuxer error: rebuild before another doomed play()
+            if (audio && !audio.src && state.tracks.length) {
+              primeAudioTrack(state.index, pendingSeekTo > 0.5 ? pendingSeekTo : 0);
+            }
+            if (audioHasError(audio) || (audio && audio.error)) {
             var keep = pendingSeekTo > 0.5 ? pendingSeekTo : 0;
             if (keep > 12) keep = 0;
             hardResetAudio("retry-error");
@@ -625,7 +629,15 @@
     }
     if (cardDomLive()) {
       // Re-bind els if individual nodes were replaced under the same root id.
-      if (!els.cur || !els.cur.isConnected || !els.play || !els.play.isConnected) {
+      if (
+        !els.cur || !els.cur.isConnected ||
+        !els.play || !els.play.isConnected ||
+        !els.lyricsScroll || !els.lyricsScroll.isConnected ||
+        !els.lyricsHint || !els.lyricsHint.isConnected ||
+        !els.sideLyricEarlier || !els.sideLyricEarlier.isConnected ||
+        !els.sideLyricOffset || !els.sideLyricOffset.isConnected ||
+        !els.sideLyricLater || !els.sideLyricLater.isConnected
+      ) {
         rebindCardEls();
       }
       return true;
@@ -1263,9 +1275,13 @@
     var seekTo = typeof startAt === "number" && isFinite(startAt) && startAt > 0 ? startAt : 0;
     if (seekTo > 0.5) pendingSeekTo = seekTo;
     if (lastSrcId !== t.id || !a.src) {
+      var mediaUrl = trackUrl(t.id);
       lastSrcId = t.id;
       try {
-        a.src = trackUrl(t.id);
+        // Use the attribute as well as the property: a few embedded WebViews
+        // expose a detached media element whose src setter is not reflected.
+        a.setAttribute("src", mediaUrl);
+        a.src = mediaUrl;
         a.load();
       } catch (eL) {}
     }
@@ -1688,8 +1704,10 @@
 
   function libraryStatusText() {
     var n = state.tracks.length;
-    if (!n) return state.libraryScanning ? "正在后台建立曲库索引…" : (state.loaded ? "目录内无支持的音频" : "");
-    var base = "共 " + n + " 首";
+    var total = Number(state.libraryCount);
+    if (!isFinite(total) || total < n) total = n;
+    if (!total) return state.libraryScanning ? "正在后台建立曲库索引…" : (state.loaded ? "目录内无支持的音频" : "");
+    var base = "共 " + total + " 首";
     if (state.libraryScanning) base += " · 后台更新中";
     if (state.listTruncated) {
       base += "（已截断" + (state.listLimit ? "·上限 " + state.listLimit : "") + "）";
@@ -1844,7 +1862,77 @@
   }
 
   function syncSourceLabel() {
-    if (els.sourceLabel) els.sourceLabel.textContent = sourceLabelText();
+    if (els.sourceLabel) {
+      els.sourceLabel.textContent = sourceLabelText();
+      els.sourceLabel.setAttribute("aria-label", "切换音源（当前：" + sourceLabelText() + "）");
+    }
+  }
+
+  var sourceCycleBusy = false;
+  function cycleMusicSource(ev) {
+    if (sourceCycleBusy) return true;
+    var c = cfg() || {};
+    var order = ["local", "navidrome", "fnos"];
+    var currentSource = String(c.source || "local").toLowerCase();
+    var index = order.indexOf(currentSource);
+    var next = order[(index >= 0 ? index + 1 : 0) % order.length];
+    var token = "";
+    try {
+      var input = document.querySelector('input[name="csrf_token"]');
+      token = input && input.value || window.csrf_token || "";
+    } catch (eToken) {}
+    var body = "SAVE_THEME_MUSIC=1&MUSIC_SOURCE=" + encodeURIComponent(next);
+    if (token) body += "&csrf_token=" + encodeURIComponent(token);
+    sourceCycleBusy = true;
+    if (els.sourceLabel) els.sourceLabel.setAttribute("aria-busy", "true");
+    setStatus("正在切换音源…");
+    fetch("/plugins/theme.music/theme-music-save.php", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", "X-CSRF-TOKEN": token },
+      body: body
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.ok) throw new Error((j && (j.message || j.error)) || "音源切换失败");
+      var liveCfg = global.__UCWC_MUSIC__ || c;
+      liveCfg.source = next;
+      global.__UCWC_MUSIC__ = liveCfg;
+      global.__UCWC_THEME__ = global.__UCWC_THEME__ || {};
+      global.__UCWC_THEME__.music = liveCfg;
+      stopEngine(true);
+      resumeAttempted = false;
+      resumeIntent = false;
+      gestureResumeWanted = false;
+      pendingSeekTo = 0;
+      lastSrcId = "";
+      if (audio) {
+        try { audio.pause(); audio.removeAttribute("src"); audio.load(); } catch (eAudio) {}
+      }
+      state.playing = false;
+      state.tracks = [];
+      state.index = 0;
+      state.loaded = false;
+      state.libraryScanning = false;
+      state.lyrics = {
+        id: "", lines: [], offsetMs: 0, driftMs: 0, active: -1,
+        loading: false, empty: true, unsynced: false, seq: Number(state.lyrics.seq) || 0
+      };
+      clearCoverView();
+      syncSourceLabel();
+      setStatus("正在加载" + sourceLabelText() + "…");
+      sourceCycleBusy = false;
+      if (els.sourceLabel) els.sourceLabel.removeAttribute("aria-busy");
+      fetchList(true).then(function () {
+        if (state.tracks.length) {
+          try { primeAudioTrack(state.index, 0); } catch (ePrime) {}
+          updatePlayBtn();
+        }
+      });
+    }).catch(function (err) {
+      sourceCycleBusy = false;
+      if (els.sourceLabel) els.sourceLabel.removeAttribute("aria-busy");
+      setStatus(err && err.message ? err.message : "音源切换失败");
+    });
+    return true;
   }
 
   function closeTrackInfoPop() {
@@ -1923,8 +2011,11 @@
   }
 
   function setStatus(msg) {
-    state.error = msg || "";
-    if (els.status) els.status.textContent = msg || "";
+    var text = msg || "";
+    // Keep the library count visible after transient playback messages clear.
+    if (!text && state.loaded) text = libraryStatusText();
+    state.error = text;
+    if (els.status) els.status.textContent = text;
     syncSourceLabel();
   }
 
@@ -2280,6 +2371,10 @@
   }
 
   function renderLyricsLines() {
+    if (!cardDomLive()) return;
+    if (!els.lyricsScroll || !els.lyricsScroll.isConnected) {
+      rebindCardEls();
+    }
     if (!els.lyricsScroll) return;
     els.lyricsScroll.innerHTML = "";
     var lines = state.lyrics.lines || [];
@@ -2399,6 +2494,8 @@
   }
 
   function updateLyricAdjustUi() {
+    if (!cardDomLive()) return;
+    if (!els.sideLyricOffset || !els.sideLyricOffset.isConnected) rebindCardEls();
     if (!els.sideLyricOffset) return;
     var drift = Number(state.lyrics.driftMs) || 0;
     var seconds = drift / 1000;
@@ -2410,7 +2507,7 @@
 
   function adjustLyricDrift(deltaMs) {
     var t = current();
-    if (!t || !t.id || !state.lyrics.lines.length || state.lyrics.unsynced) return;
+    if (!t || !t.id || !state.lyrics.lines.length) return;
     var next = Math.max(-10000, Math.min(10000, (Number(state.lyrics.driftMs) || 0) + deltaMs));
     state.lyrics.driftMs = next;
     saveLyricDrift(t.id, next);
@@ -2422,7 +2519,8 @@
 
   function syncLyrics(force) {
     if (!audio) return;
-    if (state.lyrics.unsynced) return;
+    if (!cardDomLive()) return;
+    if (!els.lyricsScroll || !els.lyricsScroll.isConnected) rebindCardEls();
     var now = Date.now();
     // rAF path may call very often; still allow ~30fps class updates
     if (!force && now - lyricsSyncLast < 32) return;
@@ -2489,7 +2587,6 @@
   }
   function startLyricsRaf() {
     if (!audio || audio.paused) return;
-    if (state.lyrics.unsynced) return;
     if (lyricsRaf) return;
     try {
       lyricsRaf = setTimeout(tickLyricsRaf, 0);
@@ -2811,7 +2908,9 @@
       if (state.lyrics.lines.length) syncLyrics(true);
       return;
     }
+    if (!Number.isFinite(Number(state.lyrics.seq))) state.lyrics.seq = 0;
     var seq = ++state.lyrics.seq;
+    if (!els.lyricsScroll || !els.lyricsScroll.isConnected) rebindCardEls();
     state.lyrics.id = t.id;
     state.lyrics.loading = true;
     state.lyrics.empty = true;
@@ -2861,6 +2960,8 @@
         }
         state.lyrics.offsetMs = typeof j.offset_ms === "number" ? j.offset_ms : 0;
         state.lyrics.unsynced = !!j.unsynced;
+        if (!cardDomLive()) return;
+        if (!els.lyricsScroll || !els.lyricsScroll.isConnected) rebindCardEls();
         state.lyrics.lines = norm;
         state.lyrics.empty = norm.length === 0;
         state.lyrics.id = t.id;
@@ -3442,6 +3543,13 @@
   /** Best-effort play against autoplay policy: try normal, then muted-then-unmute. */
   function tryPlayUnlocked(a, onBlocked) {
     if (!a) return;
+    // Hidden dashboard pages wait for visibility instead of starting then stopping playback.
+    if (document.visibilityState === "hidden" && !isSitewidePlay()) {
+      resumeIntent = true;
+      gestureResumeWanted = true;
+      bindGestureUnlock();
+      return;
+    }
     // Sticky MEDIA_ERR blocks play() forever — rebuild element first
     if (audioHasError(a)) {
       try {
@@ -3607,8 +3715,14 @@
     }
     if (needLoad) {
       lastSrcId = t.id;
-      try { a.pause(); } catch (eP) {}
-      a.src = trackUrl(t.id);
+      if (!a.paused) {
+        try { a.pause(); } catch (eP) {}
+      }
+      var mediaUrl = trackUrl(t.id);
+      try {
+        a.setAttribute("src", mediaUrl);
+        a.src = mediaUrl;
+      } catch (eSrc) {}
       try { a.load(); } catch (eL) {}
     }
 
@@ -3840,10 +3954,26 @@
      * normal toggle path instead of delegating to a host window. */
     var a = ensureAudio();
     if (!a.src) {
-      // User clicked play — still in gesture; prime + play sync path
+      // A stale session or DOM remount can leave the shared node empty. Build
+      // the source before any play() call so the gesture targets real media.
+      var seek = pendingSeekTo > 0.5 ? pendingSeekTo : 0;
+      state.playing = false;
+      resumeIntent = true;
       unlockMediaPipeline();
-      primeAudioTrack(state.index, pendingSeekTo > 0.5 ? pendingSeekTo : 0);
-      playAt(state.index, true);
+      a = primeAudioTrack(state.index, seek) || ensureAudio();
+      if (!a.src) {
+        // Keep the invariant even if a host replaced the element mid-click.
+        playAt(state.index, true, seek);
+      } else {
+        tryPlayUnlocked(a, function () {
+          state.playing = false;
+          gestureResumeWanted = true;
+          markPendingResume(true);
+          bindGestureUnlock();
+          updatePlayBtn();
+        });
+      }
+      updatePlayBtn();
       return;
     }
     if (a.paused) {
@@ -4656,6 +4786,9 @@
       adjustLyricDrift(-(Number(state.lyrics.driftMs) || 0));
       return true;
     }
+    if (btn.classList.contains("ucwc-music-source-label")) {
+      return cycleMusicSource(ev);
+    }
     if (btn.classList.contains("ucwc-music-info-btn")) {
       toggleTrackInfoPop(ev);
       return true;
@@ -4708,6 +4841,7 @@
               "#ucwc-music-card .ucwc-music-side-btn, " +
               "#ucwc-music-card .ucwc-music-header-btn, " +
               "#ucwc-music-card .ucwc-music-info-btn, " +
+              "#ucwc-music-card .ucwc-music-source-label, " +
               "#ucwc-music-card .ucwc-music-item, " +
               "#ucwc-music-card .ucwc-music-list-more"
           );
@@ -4953,7 +5087,7 @@
       "          </div>" +
       '          <div class="ucwc-music-status-row">' +
       '            <button type="button" class="ucwc-music-info-btn" title="当前曲目信息" aria-label="当前曲目信息" aria-expanded="false"></button>' +
-      '            <span class="ucwc-music-source-label" title="当前音源">本地音源</span>' +
+      '            <button type="button" class="ucwc-music-source-label" title="切换音源" aria-label="切换音源（当前：本地音源）">本地音源</button>' +
       '            <div class="ucwc-music-status" aria-live="polite"></div>' +
       "          </div>" +
       "        </div>" +
@@ -5069,6 +5203,8 @@
       String(c.local_dir || ""),
       String(c.navidrome_url || ""),
       String(c.navidrome_user || ""),
+      String(c.fnos_url || ""),
+      String(c.fnos_user || ""),
     ].join("|");
   }
 
@@ -5088,6 +5224,7 @@
           scope: libraryClientScope(),
           ts: Date.now(),
           tracks: j.tracks.slice(),
+          count: Number(j.count) || j.tracks.length,
           truncated: !!j.truncated,
           limit: Number(j.limit) || 0,
           tip: typeof j.tip === "string" ? j.tip : "",
@@ -5112,6 +5249,7 @@
         return false;
       }
       state.tracks = cached.tracks.slice();
+      state.libraryCount = Number(cached.count) || state.tracks.length;
       state.listTruncated = !!cached.truncated;
       state.listLimit = Number(cached.limit) || 0;
       state.listTip = typeof cached.tip === "string" ? cached.tip : "";
@@ -5165,6 +5303,7 @@
           return;
         }
         state.libraryScanning = !!j.scanning;
+        state.libraryCount = Number(j.count) || (Array.isArray(j.tracks) ? j.tracks.length : state.libraryCount);
         if (Array.isArray(j.tracks) && (j.tracks.length || !state.tracks.length || !j.scanning)) {
           state.tracks = j.tracks;
           state.listRenderLimit = 300;
@@ -5280,6 +5419,15 @@
     var sess = resumePending || loadPlaySession();
     resumePending = null;
     if (sessionWantsResume(sess) || resumeIntent) {
+      if (document.visibilityState === "hidden" && !isSitewidePlay()) {
+        resumeAttempted = false;
+        resumeIntent = true;
+        gestureResumeWanted = true;
+        bindGestureUnlock();
+        primeAudioTrack(sess ? resolveSessionIndex(sess) : state.index, sess && typeof sess.t === "number" ? sess.t : 0);
+        setStatus("页面可见后自动续播");
+        return;
+      }
       if (isDashboard() || isSitewidePlay()) {
         resumeAttempted = true;
         resumeIntent = true;
@@ -5314,6 +5462,7 @@
       pendingSeekTo = sess.t;
       // Still try auto-play on mobile if session had been playing; gesture unlock backs it up
       var forcePlay = !!(sess.playing || sess.intent || resumeIntent);
+      if (document.visibilityState === "hidden" && !isSitewidePlay()) forcePlay = false;
       if (forcePlay) {
         gestureResumeWanted = true;
         bindGestureUnlock();
@@ -5326,6 +5475,14 @@
     }
     var c = cfg();
     if (c.autoplay && isDashboard() && state.tracks.length) {
+      if (document.visibilityState === "hidden") {
+        resumeAttempted = false;
+        resumeIntent = true;
+        gestureResumeWanted = true;
+        bindGestureUnlock();
+        primeAudioTrack(state.index, 0);
+        return;
+      }
       resumeAttempted = true;
       resumeIntent = true;
       gestureResumeWanted = true;
@@ -5398,6 +5555,14 @@
       } catch (eT) {}
       startUiSyncTimer();
       if (state.tracks.length) {
+        // A source switch can leave the shared audio node empty while the card remounts.
+        // Always prime the current track before any resume attempt.
+        if (!audio || !audio.src) {
+          try {
+            state.playing = false;
+            primeAudioTrack(state.index, 0);
+          } catch (ePrimeMount) {}
+        }
         // Avoid wiping in-progress lyrics paint on every remount when same track
         if (!(state.lyrics && state.lyrics.id && current() && state.lyrics.id === current().id && state.lyrics.lines.length)) {
           loadLyricsForCurrent();
@@ -5474,6 +5639,13 @@
       } else if (isSitewidePlay()) {
         syncSitewideChip();
         showResumeChip();
+      }
+      if (state.tracks.length && audio && !audio.src) {
+        try {
+          state.playing = false;
+          primeAudioTrack(state.index, 0);
+          updatePlayBtn();
+        } catch (eLatePrime) {}
       }
     }
   }
