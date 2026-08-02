@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY      version   "v1.3.0-beta5">
+<!ENTITY      version   "v1.3.0-beta6">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-		<!ENTITY ver       "v1.3.0-beta5">
+		<!ENTITY ver       "v1.3.0-beta6">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 		
@@ -17,7 +17,7 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
-		### v1.3.0-beta5
+		### v1.3.0-beta6
 		- 修复无弹窗架构下音乐胶囊与仪表盘卡片的上一曲、下一曲和播放暂停按钮全部失效
 		- 全站播放改为直接操作页面内联音频，不再依赖已移除的宿主弹窗消息通道
 		### v1.2.1
