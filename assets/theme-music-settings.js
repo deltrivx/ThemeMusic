@@ -1535,8 +1535,10 @@
   function syncSourceRows() {
     if (!form) return;
     var src = form.querySelector('select[name="MUSIC_SOURCE"]');
-    var isLocal = !src || String(src.value || "local") === "local";
-    var isNavidrome = !!src && String(src.value || "") === "navidrome";
+    var val = src ? String(src.value || "local") : "local";
+    var isLocal = val === "local";
+    var isNavidrome = val === "navidrome";
+    var isFnos = val === "fnos";
     hideRow(form.querySelector('[name="MUSIC_LOCAL_DIR"]'), !isLocal);
     hideRow(document.getElementById("tm-music-local-dir"), !isLocal);
     [
@@ -1546,6 +1548,13 @@
       "tm-btn-test-navidrome",
     ].forEach(function (id) {
       hideRow(document.getElementById(id), !isNavidrome);
+    });
+    [
+      "tm-fnos-url",
+      "tm-fnos-user",
+      "tm-fnos-password",
+    ].forEach(function (id) {
+      hideRow(document.getElementById(id), !isFnos);
     });
   }
 

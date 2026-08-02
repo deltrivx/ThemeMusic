@@ -16,6 +16,7 @@ $persist = "/boot/config/plugins/theme.music";
 $fx_path = "$persist/theme-music.cfg";
 $svc_path = "$persist/theme.music.cfg";
 $navidrome_secret_path = "$persist/navidrome.secret";
+$fnos_secret_path = "$persist/fnos.secret";
 $log_path = "/tmp/theme-music-save.log";
 
 function tm_json($payload, $http = 200) {
@@ -41,6 +42,8 @@ function tm_defaults() {
         "MUSIC_LOCAL_DIR" => "",
         "MUSIC_NAVIDROME_URL" => "http://127.0.0.1:4533",
         "MUSIC_NAVIDROME_USER" => "",
+        "MUSIC_FNOS_URL" => "http://192.168.31.5/music",
+        "MUSIC_FNOS_USER" => "",
         "MUSIC_VOLUME" => "70",
         "MUSIC_AUTOPLAY" => "no",
         "MUSIC_SHUFFLE" => "no",
@@ -139,7 +142,7 @@ function tm_normalize(&$fx) {
     $mode = tm_resolve_run_mode($fx);
     tm_apply_run_mode($fx, $mode, false);
     $src = strtolower(trim((string)($fx["MUSIC_SOURCE"] ?? "local")));
-    $fx["MUSIC_SOURCE"] = in_array($src, ["local", "navidrome"], true) ? $src : "local";
+    $fx["MUSIC_SOURCE"] = in_array($src, ["local", "navidrome", "fnos"], true) ? $src : "local";
     $fx["MUSIC_LOCAL_DIR"] = tm_music_dir_ok($fx["MUSIC_LOCAL_DIR"] ?? "");
     $fx["MUSIC_NAVIDROME_URL"] = tm_navidrome_url_ok($fx["MUSIC_NAVIDROME_URL"] ?? "");
     if ($fx["MUSIC_NAVIDROME_URL"] === "") $fx["MUSIC_NAVIDROME_URL"] = "http://127.0.0.1:4533";
@@ -225,7 +228,7 @@ if (isset($_POST["MUSIC_RUN_MODE"])) {
 }
 if (isset($_POST["MUSIC_SOURCE"])) {
     $src = strtolower(trim((string)($_POST["MUSIC_SOURCE"] ?? "local")));
-    $fx["MUSIC_SOURCE"] = in_array($src, ["local", "navidrome"], true) ? $src : "local";
+    $fx["MUSIC_SOURCE"] = in_array($src, ["local", "navidrome", "fnos"], true) ? $src : "local";
 }
 if (isset($_POST["MUSIC_LOCAL_DIR"])) {
     $fx["MUSIC_LOCAL_DIR"] = tm_music_dir_ok($_POST["MUSIC_LOCAL_DIR"] ?? "");
@@ -239,6 +242,15 @@ if (isset($_POST["MUSIC_NAVIDROME_USER"])) {
 }
 if (isset($_POST["MUSIC_NAVIDROME_PASSWORD"]) && !tm_save_navidrome_password($navidrome_secret_path, $_POST["MUSIC_NAVIDROME_PASSWORD"])) {
     tm_json(["ok" => false, "error" => "Navidrome password write failed", "message" => "无法保存 Navidrome 密码"], 500);
+}
+if (isset($_POST["MUSIC_FNOS_URL"])) {
+    $fx["MUSIC_FNOS_URL"] = trim((string)($_POST["MUSIC_FNOS_URL"] ?? "http://192.168.31.5/music"));
+}
+if (isset($_POST["MUSIC_FNOS_USER"])) {
+    $fx["MUSIC_FNOS_USER"] = trim((string)($_POST["MUSIC_FNOS_USER"] ?? ""));
+}
+if (isset($_POST["MUSIC_FNOS_PASSWORD"]) && !tm_save_navidrome_password($fnos_secret_path, $_POST["MUSIC_FNOS_PASSWORD"])) {
+    tm_json(["ok" => false, "error" => "FnOS password write failed", "message" => "无法保存飞牛音乐密码"], 500);
 }
 if (isset($_POST["MUSIC_VOLUME_COMMIT"]) || isset($_POST["MUSIC_VOLUME"])) {
     $fx["MUSIC_VOLUME"] = tm_clamp_vol($_POST["MUSIC_VOLUME_COMMIT"] ?? ($_POST["MUSIC_VOLUME"] ?? ($fx["MUSIC_VOLUME"] ?? 70)));
@@ -315,6 +327,9 @@ $payload = [
         "navidrome_url" => $fx["MUSIC_NAVIDROME_URL"],
         "navidrome_user" => $fx["MUSIC_NAVIDROME_USER"],
         "navidrome_password_set" => is_file($navidrome_secret_path) && filesize($navidrome_secret_path) > 0,
+        "fnos_url" => $fx["MUSIC_FNOS_URL"] ?? "",
+        "fnos_user" => $fx["MUSIC_FNOS_USER"] ?? "",
+        "fnos_password_set" => is_file($fnos_secret_path) && filesize($fnos_secret_path) > 0,
         "volume" => intval($fx["MUSIC_VOLUME"]),
         "autoplay" => $fx["MUSIC_AUTOPLAY"] === "yes",
         "shuffle" => $fx["MUSIC_SHUFFLE"] === "yes",
