@@ -40,6 +40,10 @@ assert index['default'] == index['latest_version'] == ids[0], '默认、最新�
 latest_channels = [item['id'] for item in index['versions'] if item.get('channel') == 'latest']
 latest_id = index['latest_version']
 latest_item = next(item for item in index['versions'] if item['id'] == latest_id)
+for item in index['versions']:
+    version_dir = root / 'versions' / item['id']
+    assert version_dir.is_dir(), f"索引版本缺少快照目录：{item['id']}"
+    assert (version_dir / 'files.manifest').is_file(), f"索引版本缺少 manifest：{item['id']}"
 assert latest_channels in ([], [latest_id]), f'latest 频道标记错误：{latest_channels}'
 assert latest_item.get('channel') in ('latest', 'beta'), '最新版本必须属于 latest 或 beta 频道'
 plg = (root / 'theme.music.plg').read_text()

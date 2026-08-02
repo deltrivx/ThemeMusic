@@ -8,8 +8,7 @@
   var form = document.getElementById("theme-music-form");
   var API = "/plugins/theme.music/theme-music-update.php";
   var boot = window.__TM_BOOT__ || {};
-  var LOCAL_VERSION = boot.version || "v1.3.0-beta10";
-  if (!/beta10/i.test(LOCAL_VERSION) && /v1\.2\.2/i.test(LOCAL_VERSION)) LOCAL_VERSION = "v1.3.0-beta10";
+  var LOCAL_VERSION = boot.version || "unknown";
   var panel, mask, body, actions, title;
   var busy = false;
   var cache = { versions: null, latest: "", selected: "" };
