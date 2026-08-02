@@ -595,7 +595,50 @@ if ($action === "stream") {
         $pwd = m_navidrome_password($cfg);
         if ($params["u"] !== "" && $pwd !== "") { $salt = bin2hex(random_bytes(6)); $params["s"] = $salt; $params["t"] = md5($pwd . $salt); }
         $sep = strpos($url, "?") === false ? "?" : "&";
-        header("Location: " . $url . $sep . http_build_query($params), true, 302);
+        $streamUrl = $url . $sep . http_build_query($params);
+        $range = isset($_SERVER["HTTP_RANGE"]) ? trim((string)$_SERVER["HTTP_RANGE"]) : "";
+        $ch = curl_init($streamUrl);
+        $sentHeaders = false;
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array_filter([
+            "Accept: audio/*",
+            $range !== "" ? "Range: " . $range : null,
+            "User-Agent: ThemeMusic/1.3.0",
+        ]));
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
+        curl_setopt($ch, CURLOPT_HEADER, false);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 0);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($curl, $line) use (&$sentHeaders) {
+            $line = trim((string)$line);
+            if ($line === "") return strlen($line) + 2;
+            if (preg_match('/^HTTP\\/[^ ]+\\s+(\\d+)/i', $line, $m)) {
+                $code = (int)$m[1];
+                if ($code >= 200 && $code < 400) http_response_code($code);
+                return strlen($line) + 2;
+            }
+            if (preg_match('/^(Content-Type|Content-Length|Content-Range|Accept-Ranges|Cache-Control|ETag):\\s*(.+)$/i', $line, $m)) {
+                header($m[1] . ": " . $m[2]);
+            }
+            return strlen($line) + 2;
+        });
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, $chunk) use (&$sentHeaders) {
+            $sentHeaders = true;
+            echo $chunk;
+            if (function_exists("fastcgi_finish_request")) @ob_flush();
+            flush();
+            return strlen($chunk);
+        });
+        $ok = curl_exec($ch);
+        $errno = curl_errno($ch);
+        $err = curl_error($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($ok === false || $errno !== 0 || $code >= 400 || $code < 200) {
+            if (!$sentHeaders) mjson(["ok" => false, "error" => $err ?: ("Navidrome HTTP " . $code)], 502);
+        }
         exit;
     }
     $strat = (string)($auto["strategy"] ?? "");
@@ -767,6 +810,15 @@ if ($action === "cover") {
         $candidates[] = $root . "/" . $basename . ".jpg";
         $candidates[] = $root . "/" . $basename . ".jpeg";
         $candidates[] = $root . "/" . $basename . ".png";
+    }
+    /* Album artwork is commonly stored beside the track rather than beside
+     * the full library root. Prefer same-name art, then walk up to the track
+     * directory and check standard album-art filenames. */
+    if ($rel !== "") {
+        $dir = dirname($rel);
+        foreach (["cover.jpg", "cover.jpeg", "cover.png", "folder.jpg", "folder.jpeg", "folder.png", "album.jpg", "album.jpeg", "album.png", "front.jpg", "front.jpeg", "front.png"] as $name) {
+            $candidates[] = rtrim($dir, "/") . "/" . $name;
+        }
     }
     foreach ($candidates as $c) {
         if (is_file($c) && is_readable($c)) {

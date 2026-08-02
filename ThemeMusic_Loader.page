@@ -112,6 +112,8 @@ if (!$fx_music) {
     ui: <?= json_encode($fx_music_ui) ?>,
     source: <?= json_encode($fx_music_source) ?>,
     local_dir: <?= json_encode($fx_music_dir) ?>,
+    navidrome_url: <?= json_encode(trim((string)($fx['MUSIC_NAVIDROME_URL'] ?? ''))) ?>,
+    navidrome_user: <?= json_encode(trim((string)($fx['MUSIC_NAVIDROME_USER'] ?? ''))) ?>,
     fnos_url: <?= json_encode($fx_music_fnos_url) ?>,
     fnos_user: <?= json_encode($fx_music_fnos_user) ?>,
     library_scope: <?= json_encode($fx_music_library_scope) ?>,

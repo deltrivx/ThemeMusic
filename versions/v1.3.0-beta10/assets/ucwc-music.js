@@ -730,10 +730,15 @@
     if (now - stallRecoverAt < 2500) return false;
     var cur = audio.currentTime || 0;
     var dur = audio.duration || 0;
-    var badMeta = !(isFinite(dur) && dur > 0.5) || audioHasError(audio);
-    var stuckZero = cur < 0.35 && badMeta;
-    var ready0 = (audio.readyState || 0) < 2 && cur < 0.35;
-    if (!stuckZero && !ready0 && !audioHasError(audio)) {
+    var mediaError = audioHasError(audio);
+    var networkFailed = false;
+    try {
+      networkFailed = audio.networkState === 3 && !!audio.error;
+    } catch (eNetwork) {}
+    // A remote stream can legitimately remain at readyState=0 while the
+    // browser opens the connection. Only recover after an explicit media or
+    // network error; otherwise this watchdog deletes a healthy stream URL.
+    if (!mediaError && !networkFailed) {
       stallZeroSince = 0;
       return false;
     }
@@ -3116,11 +3121,6 @@
       } else {
         label = (t.artist ? t.artist + " — " : "") + (t.title || t.id);
       }
-      var num = document.createElement("span");
-      num.className = "ucwc-music-item-num";
-      num.textContent = String(oi + 1);
-      num.setAttribute("aria-hidden", "true");
-      b.appendChild(num);
       var txt = document.createElement("span");
       txt.className = "ucwc-music-item-txt";
       fillMarquee(txt, label);
@@ -3240,8 +3240,23 @@
   }
 
   function ensureAudio() {
+    if (audio && !audio.isConnected) {
+      /* Prefer the live node created by an Unraid dashboard repaint. */
+      try {
+        var liveAudio = document.querySelector("audio[data-ucwc-music-audio='1']") || document.querySelector("audio");
+        audio = liveAudio || null;
+      } catch (eFindAudio) {
+        audio = null;
+      }
+    }
     if (audio) return audio;
-    audio = new Audio();
+    try {
+      audio = document.querySelector("audio[data-ucwc-music-audio='1']") || document.querySelector("audio");
+    } catch (eExistingAudio) {
+      audio = null;
+    }
+    if (!audio) audio = new Audio();
+    audio.setAttribute("data-ucwc-music-audio", "1");
     audio.preload = "auto";
     try {
       audio.setAttribute("playsinline", "true");
@@ -5218,6 +5233,12 @@
         }
         
         maybeResumeOrAutoplay();
+        /* If a stale session marked playback active before the hidden audio
+         * node was recreated, ensure the current Navidrome/local track still
+         * has a concrete media source after the library arrives. */
+        if (audio && !audio.src && state.tracks.length) {
+          try { primeAudioTrack(state.index, 0); } catch (ePrimeAfterList) {}
+        }
         if (libraryPollTimer) clearTimeout(libraryPollTimer);
         if (state.libraryScanning) {
           libraryPollTimer = setTimeout(function () {
@@ -5247,9 +5268,17 @@
 
   function maybeResumeOrAutoplay() {
     if (!state.tracks.length) return;
+    /* A stale cross-page session can leave the hidden audio node marked as
+     * playing while its source was discarded. Never treat an empty source as
+     * active playback; rebuild it from the current track below. */
+    if (audio && !audio.src) {
+      try { audio.pause(); } catch (eEmpty) {}
+      state.playing = false;
+      resumeAttempted = false;
+    }
     // Always arm gesture unlock on mobile / when we may need a tap to unlock autoplay policy
     bindGestureUnlock();
-    if (audio && !audio.paused) {
+    if (audio && audio.src && !audio.paused) {
       mediaUnlocked = true;
       syncSitewideChip();
       updateChipUi();
@@ -5390,8 +5419,8 @@
       if (els.vol) els.vol.value = String(Math.round(state.volume * 100));
       updateModeBtns();
       // Sync button + progress to live audio after cross-page mount / card rebuild
-      if (audio && audio.paused) state.playing = false;
-      else if (audio && !audio.paused) state.playing = true;
+      if (audio && (!audio.src || audio.paused)) state.playing = false;
+      else if (audio && audio.src && !audio.paused) state.playing = true;
       updatePlayBtn();
       updateMeta();
       try {
@@ -5462,7 +5491,7 @@
       fetchList();
     } else if (isSitewidePlay() || isDashboard()) {
       var sess = earlySess || loadPlaySession();
-      if (audio && !audio.paused) {
+      if (audio && audio.src && !audio.paused) {
         syncSitewideChip();
         updateChipUi();
         updateMeta();

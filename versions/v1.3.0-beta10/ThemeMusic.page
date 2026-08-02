@@ -407,51 +407,38 @@ window.__TM_BOOT__ = {
   </select>
 
 <div class="tm-source-config" data-tm-source="local">
-本地音乐目录:
-: <span class="tm-path-field ucwc-path-field">
-    <input type="text" class="tm-local-path ucwc-local-path ucwc-path-dir" id="tm-music-local-dir" name="MUSIC_LOCAL_DIR" maxlength="512" value="<?=htmlspecialchars($fx["MUSIC_LOCAL_DIR"] ?? "")?>" placeholder="点击浏览选择音乐目录（如 /mnt/user/Music）" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickcloseonfile="false" data-pickroot="<?= htmlspecialchars($ucwc_pickroot) ?>" data-picktop="<?= htmlspecialchars($ucwc_pickroot) ?>" data-pickmatch=".*">
-    <button type="button" class="tm-path-browse ucwc-path-browse" title="浏览目录" aria-label="浏览目录"><i class="fa fa-folder-open-o" aria-hidden="true"></i></button>
-  </span>
+  <div class="tm-source-row" data-tm-source-row="local">
+    <span class="tm-source-label">本地音乐目录</span>
+    <span class="tm-source-control"><span class="tm-path-field ucwc-path-field">
+      <input type="text" class="tm-local-path ucwc-local-path ucwc-path-dir" id="tm-music-local-dir" name="MUSIC_LOCAL_DIR" maxlength="512" value="<?=htmlspecialchars($fx["MUSIC_LOCAL_DIR"] ?? "")?>" placeholder="点击浏览选择音乐目录（如 /mnt/user/Music）" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickcloseonfile="false" data-pickroot="<?= htmlspecialchars($ucwc_pickroot) ?>" data-picktop="<?= htmlspecialchars($ucwc_pickroot) ?>" data-pickmatch=".*">
+      <button type="button" class="tm-path-browse ucwc-path-browse" title="浏览目录" aria-label="浏览目录"><i class="fa fa-folder-open-o" aria-hidden="true"></i></button>
+    </span></span>
+  </div>
 </div>
 
 <div class="tm-source-config" data-tm-source="navidrome">
-Navidrome 地址:
-: <input type="url" id="tm-navidrome-url" name="MUSIC_NAVIDROME_URL" maxlength="512" value="<?=htmlspecialchars($fx["MUSIC_NAVIDROME_URL"] ?? "http://127.0.0.1:4533")?>" placeholder="http://127.0.0.1:4533" autocomplete="url" spellcheck="false">
-
-Navidrome 用户:
-: <input type="text" id="tm-navidrome-user" name="MUSIC_NAVIDROME_USER" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_NAVIDROME_USER"] ?? "")?>" placeholder="Navidrome 用户名" autocomplete="username" spellcheck="false">
-
-Navidrome 密码:
-: <input type="password" id="tm-navidrome-password" name="MUSIC_NAVIDROME_PASSWORD" maxlength="256" value="" placeholder="<?=is_file($navidrome_secret_path) && filesize($navidrome_secret_path) > 0 ? "已安全保存；留空保持不变" : "输入 Navidrome 密码"?>" autocomplete="new-password">
-
-Navidrome 连接:
-: <span class="tm-inline-actions">
+  <div class="tm-source-row" data-tm-source-row="navidrome"><span class="tm-source-label">Navidrome 地址</span><span class="tm-source-control"><input type="url" id="tm-navidrome-url" name="MUSIC_NAVIDROME_URL" maxlength="512" value="<?=htmlspecialchars($fx["MUSIC_NAVIDROME_URL"] ?? "http://127.0.0.1:4533")?>" placeholder="服务器地址（例如 http://主机:端口）" autocomplete="url" spellcheck="false"></span></div>
+  <div class="tm-source-row" data-tm-source-row="navidrome"><span class="tm-source-label">Navidrome 用户</span><span class="tm-source-control"><input type="text" id="tm-navidrome-user" name="MUSIC_NAVIDROME_USER" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_NAVIDROME_USER"] ?? "")?>" placeholder="服务账号用户名" autocomplete="username" spellcheck="false"></span></div>
+  <div class="tm-source-row" data-tm-source-row="navidrome"><span class="tm-source-label">Navidrome 密码</span><span class="tm-source-control"><input type="password" id="tm-navidrome-password" name="MUSIC_NAVIDROME_PASSWORD" maxlength="256" value="" placeholder="<?=is_file($navidrome_secret_path) && filesize($navidrome_secret_path) > 0 ? "已安全保存；留空保持不变" : "服务账号密码"?>" autocomplete="new-password"></span></div>
+  <div class="tm-source-row" data-tm-source-row="navidrome"><span class="tm-source-label">Navidrome 连接</span><span class="tm-source-control"><span class="tm-inline-actions">
     <button type="button" id="tm-btn-test-navidrome" class="tm-pill-btn" title="直接使用当前填写内容测试，不必先应用">测试连接</button>
     <span id="tm-navidrome-status" class="tm-muted"><?=is_file($navidrome_secret_path) && filesize($navidrome_secret_path) > 0 ? "密码已保存" : "尚未保存密码"?></span>
-  </span>
+  </span></span></div>
 </div>
 
 <div class="tm-source-config" data-tm-source="fnos">
-飞牛音乐地址:
-: <input type="url" id="tm-fnos-url" name="MUSIC_FNOS_URL" maxlength="512" value="<?=htmlspecialchars($fx["MUSIC_FNOS_URL"] ?? "")?>" placeholder="http://192.168.31.5/music" autocomplete="url" spellcheck="false">
-
-飞牛音乐用户:
-: <input type="text" id="tm-fnos-user" name="MUSIC_FNOS_USER" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_FNOS_USER"] ?? "")?>" placeholder="飞牛音乐用户名" autocomplete="username" spellcheck="false">
-
-飞牛音乐密码:
-: <input type="password" id="tm-fnos-password" name="MUSIC_FNOS_PASSWORD" maxlength="256" value="" placeholder="<?=is_file($fnos_secret_path) && filesize($fnos_secret_path) > 0 ? "已安全保存；留空保持不变" : "输入飞牛音乐密码"?>" autocomplete="new-password">
-
-飞牛音乐连接:
-: <span class="tm-inline-actions">
+  <div class="tm-source-row" data-tm-source-row="fnos"><span class="tm-source-label">飞牛音乐地址</span><span class="tm-source-control"><input type="url" id="tm-fnos-url" name="MUSIC_FNOS_URL" maxlength="512" value="<?=htmlspecialchars($fx["MUSIC_FNOS_URL"] ?? "")?>" placeholder="服务器地址（例如 http://主机:端口）" autocomplete="url" spellcheck="false"></span></div>
+  <div class="tm-source-row" data-tm-source-row="fnos"><span class="tm-source-label">飞牛音乐用户</span><span class="tm-source-control"><input type="text" id="tm-fnos-user" name="MUSIC_FNOS_USER" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_FNOS_USER"] ?? "")?>" placeholder="服务账号用户名" autocomplete="username" spellcheck="false"></span></div>
+  <div class="tm-source-row" data-tm-source-row="fnos"><span class="tm-source-label">飞牛音乐密码</span><span class="tm-source-control"><input type="password" id="tm-fnos-password" name="MUSIC_FNOS_PASSWORD" maxlength="256" value="" placeholder="<?=is_file($fnos_secret_path) && filesize($fnos_secret_path) > 0 ? "已安全保存；留空保持不变" : "服务账号密码"?>" autocomplete="new-password"></span></div>
+  <div class="tm-source-row" data-tm-source-row="fnos"><span class="tm-source-label">飞牛音乐连接</span><span class="tm-source-control"><span class="tm-inline-actions">
     <button type="button" id="tm-btn-test-fnos" class="tm-pill-btn" title="直接使用当前填写内容测试，不必先应用">测试连接</button>
     <span id="tm-fnos-status" class="tm-muted"><?=is_file($fnos_secret_path) && filesize($fnos_secret_path) > 0 ? "密码已保存" : "尚未保存密码"?></span>
-  </span>
+  </span></span></div>
 </div>
 
 存储准备:
 : <span class="tm-inline-actions">
-    <span id="tm-storage-detected">自动检测中…</span>
-    <span class="tm-muted" id="tm-storage-status" aria-live="polite">等待播放</span>
+    <span class="tm-muted" id="tm-storage-status" aria-live="polite">等待播放自动检测</span>
   </span>
 
 电脑运行模式:

@@ -4,13 +4,13 @@
   "files": [
     {
       "path": "ThemeMusic.page",
-      "sha256": "39ae330e496b7f27abcc73f0f52374115508304f36d130153b80f76fe73d1575",
-      "size": 25893
+      "sha256": "993fb740bec2d445d14c71f6d5e518a1dc2b1a4fc496af241d1c90d2cb2b6156",
+      "size": 27116
     },
     {
       "path": "ThemeMusic_Loader.page",
-      "sha256": "2dab59c787c5cafa78fca3cdaf55f445aeec12cb245339e7e72ffedd5a9a01f8",
-      "size": 6524
+      "sha256": "66a6eaa2e419eaaeb97cfeb998e72977d74f1aac9e1ecdefb27b8ccaf98a8f6c",
+      "size": 6704
     },
     {
       "path": "PLUGIN-README.md",
@@ -19,23 +19,23 @@
     },
     {
       "path": "assets/theme-music-settings.css",
-      "sha256": "942d85d899c58c10e6f0fe1e13540096c21e9f7e4adc8fdea19f208d650fcb6d",
-      "size": 19364
+      "sha256": "60baa9d43f0e388637a401aa3c0c090d86386a00a86f60618a1ca83a79c7582f",
+      "size": 20259
     },
     {
       "path": "assets/theme-music-settings.js",
-      "sha256": "c7cf78b6d0d8e9b8bf5026df2de4330762ab71daca746b5db87d7d6f753648e2",
-      "size": 18328
+      "sha256": "6348b80e32141ffacbf98ac1ca072bfb60463ef742692a5eded311e8c7562b91",
+      "size": 67866
     },
     {
       "path": "assets/ucwc-music.css",
-      "sha256": "df602f00ea80838615b637e114bd71c4c923e918a90a09903c0ef8c807c35362",
-      "size": 40632
+      "sha256": "2d7da19ecaa46023a768c2522f4a19cad056869331473d75412698b141a9b5a0",
+      "size": 40192
     },
     {
       "path": "assets/ucwc-music.js",
-      "sha256": "905d04f1001407313211d19b423cac3f5271d06b7e5ac595901f0e8a1c550e33",
-      "size": 201800
+      "sha256": "e376cd9275d7cd726aafcc871bcfc45d94dd26ff5f3802fa3dbe0dfeb39bb2cf",
+      "size": 203178
     },
     {
       "path": "theme-music-save.php",
@@ -59,8 +59,8 @@
     },
     {
       "path": "ucwc-music-api.php",
-      "sha256": "ecfae92adef0ea3c1091ca866b6df74afbdec1bcbdfa734fd8f23c7447ccc81e",
-      "size": 40265
+      "sha256": "7112f0dc93f7b3097feab23099c643df6581bdbc3b024b2231b222f251b8fd2f",
+      "size": 42857
     }
   ]
 }
