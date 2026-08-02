@@ -58,7 +58,9 @@ if (is_file($fx_path)) {
     }
 }
 
-$fx_music = (($fx['MUSIC_ENABLE'] ?? 'no') === 'yes');
+/* SERVICE is the authoritative master switch. MUSIC_ENABLE is retained for
+ * legacy config compatibility, but must not disable a service-enabled install. */
+$fx_music = in_array($ucwc_service, ['enabled', 'enable', '1', 'yes'], true);
 $fx_run_mode = $had_run_mode ? strtolower(trim((string)($fx['MUSIC_RUN_MODE'] ?? ''))) : '';
 if (!in_array($fx_run_mode, ['card', 'chip', 'both'], true)) {
     /* Legacy: no MUSIC_RUN_MODE key — map ENABLE + DASH_ONLY (old sitewide = both). */

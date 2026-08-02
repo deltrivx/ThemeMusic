@@ -4,13 +4,13 @@
   "files": [
     {
       "path": "ThemeMusic.page",
-      "sha256": "993fb740bec2d445d14c71f6d5e518a1dc2b1a4fc496af241d1c90d2cb2b6156",
-      "size": 27116
+      "sha256": "236fb88bea6404e1a5670a6969ec6ab818c847af11a780b99e2631ba2648198c",
+      "size": 26534
     },
     {
       "path": "ThemeMusic_Loader.page",
-      "sha256": "66a6eaa2e419eaaeb97cfeb998e72977d74f1aac9e1ecdefb27b8ccaf98a8f6c",
-      "size": 6704
+      "sha256": "06c62b944307e1cbb6f951f1fd23fde1ee3a61f4d141d1b3434a78c01e1a7ee5",
+      "size": 6886
     },
     {
       "path": "PLUGIN-README.md",
@@ -19,13 +19,13 @@
     },
     {
       "path": "assets/theme-music-settings.css",
-      "sha256": "60baa9d43f0e388637a401aa3c0c090d86386a00a86f60618a1ca83a79c7582f",
-      "size": 20259
+      "sha256": "86651db555885f76ecfd373e2df292f6cbcca7be921d261d665b6bcc3ebbb5cf",
+      "size": 19993
     },
     {
       "path": "assets/theme-music-settings.js",
-      "sha256": "6348b80e32141ffacbf98ac1ca072bfb60463ef742692a5eded311e8c7562b91",
-      "size": 67866
+      "sha256": "2071c76824f533d552e6ed295bfe844d97d6b6544e6b86cdb043f7f52b8b0fb4",
+      "size": 67700
     },
     {
       "path": "assets/ucwc-music.css",
@@ -34,8 +34,8 @@
     },
     {
       "path": "assets/ucwc-music.js",
-      "sha256": "e376cd9275d7cd726aafcc871bcfc45d94dd26ff5f3802fa3dbe0dfeb39bb2cf",
-      "size": 203178
+      "sha256": "09d6133dc9f44c0cb34b372ac39ec41253a69cc3983b73ce9570acd1eacd1715",
+      "size": 203379
     },
     {
       "path": "theme-music-save.php",
@@ -44,8 +44,8 @@
     },
     {
       "path": "theme-music-update.php",
-      "sha256": "600c8f9e6b0dcf4d31062fa7896264823904d0dc93651c7f73e44e4139625efc",
-      "size": 43341
+      "sha256": "7fbfccdaf2808ce6d99fcc4c004b91c48a8086b08750bcb626678b2b371de345",
+      "size": 44165
     },
     {
       "path": "theme-music.cfg",
@@ -59,8 +59,8 @@
     },
     {
       "path": "ucwc-music-api.php",
-      "sha256": "7112f0dc93f7b3097feab23099c643df6581bdbc3b024b2231b222f251b8fd2f",
-      "size": 42857
+      "sha256": "d632860480cd089345d6be9e48932126bbfd0c61f77644d667d6ac47e64f47f1",
+      "size": 50585
     }
   ]
 }

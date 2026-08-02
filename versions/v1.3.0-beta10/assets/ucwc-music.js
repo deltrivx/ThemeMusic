@@ -2765,6 +2765,9 @@
         state.cover.missId = "";
         if (t && t.id === trackId) t.has_cover = true;
         var imageUrl = absPluginUrl(j.url);
+        if (j.source === "remote") {
+          imageUrl = apiBase + "?action=cover&path=" + encodeURIComponent(trackId) + "&id=" + encodeURIComponent(trackId) + "&fetch=2&_ts=" + Date.now();
+        }
         // Prefer blob fetch so cookies/auth apply and broken HTML isn't shown as image
         return fetch(imageUrl, {
           credentials: "same-origin",

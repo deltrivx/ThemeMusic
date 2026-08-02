@@ -54,6 +54,37 @@ function m_cfg_get(array $cfg, $key, $default = "") {
     return $default;
 }
 
+function m_version_parts($id) {
+    $s = strtolower(ltrim(trim((string)$id), "v"));
+    if (!preg_match('/^(\d+)\.(\d+)(?:\.(\d+))?(?:[-_.]?(alpha|beta|rc|b)(\d*))?$/', $s, $m)) return null;
+    $kind = $m[4] ?? "";
+    $rank = $kind === "alpha" ? 1 : ($kind === "beta" || $kind === "b" ? 2 : ($kind === "rc" ? 3 : 100));
+    return [(int)$m[1], (int)$m[2], (int)($m[3] ?? 0), $rank, $rank < 100 ? (int)($m[5] ?? 0) : 0];
+}
+
+function m_version_compare($a, $b) {
+    $pa = m_version_parts($a);
+    $pb = m_version_parts($b);
+    if (!$pa || !$pb) return 0;
+    for ($i = 0; $i < 5; $i++) {
+        if ($pa[$i] !== $pb[$i]) return $pa[$i] <=> $pb[$i];
+    }
+    return 0;
+}
+
+function m_installed_version() {
+    $base = "/boot/config/plugins/theme.music";
+    foreach (["$base/ThemeMusic.options", "$base/ThemeMusic.state"] as $path) {
+        if (!is_file($path)) continue;
+        $lines = @file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if (!is_array($lines)) continue;
+        foreach ($lines as $line) {
+            if (preg_match('/^\\s*version\\s*=\\s*[\"\']?([^\"\'\\s]+)\\s*$/i', (string)$line, $m)) return trim($m[1]);
+        }
+    }
+    return "";
+}
+
 function m_glob_first($pattern) {
     $items = glob($pattern);
     if (!is_array($items) || !count($items)) return "";
@@ -125,7 +156,7 @@ function m_storage_label($strategy) {
         case "local_share":  return "Unraid 用户共享：已就绪";
         case "smb":          return "SMB 远端存储：已就绪";
         case "nfs":          return "NFS 远端存储：已就绪";
-        case "fnos":         return "飞牛音乐(FnOS)：已连接";
+        case "fnos":         return "飞牛音乐：已连接";
         case "navidrome":    return "Navidrome 远端 API：已连接";
         case "invalid":      return "本地音乐目录不可访问";
         case "empty":        return "本地音乐目录为空";
@@ -175,7 +206,7 @@ function m_detect_storage_source(array $cfg) {
     $navidrome = trim((string)m_cfg_get($cfg, "MUSIC_NAVIDROME_URL", ""));
     if ($fnos !== "") {
         $strategy = "fnos";
-        $label = "飞牛音乐(FnOS)";
+        $label = "飞牛音乐";
     } else if ($navidrome !== "") {
         $strategy = "navidrome";
         $label = "Navidrome 远端 API";
@@ -314,32 +345,79 @@ function m_fnos_password(array $cfg) {
     return "";
 }
 
-function m_fnos_sign($method, $pathQ, $body = "", $password = "") {
-    $raw = strtolower($method) . "&" . $pathQ;
-    if ($body !== "") $raw .= "&" . $body;
-    if ($password === "") return "";
-    return hash_hmac("sha1", $raw, $password);
+function m_fnos_authx($method, $pathQ, $body = "", $query = "") {
+    $nonce = (string)random_int(100000, 999999);
+    $timestamp = (string)round(microtime(true) * 1000);
+    $payloadHash = hash("sha256", strtoupper($method) === "GET" ? (string)$query : (string)$body);
+    $apiKey = "6D5602D4-A342-4799-A0F0-BB795E7167D0";
+    $raw = "NDzZTVxnRKP8Z0jXg1VAMonaG8akvh_" . $pathQ . "_" . $nonce . "_" . $timestamp . "_" . $payloadHash . "_" . $apiKey;
+    return "nonce=" . $nonce . "&timestamp=" . $timestamp . "&sign=" . hash("sha256", $raw);
+}
+
+function m_fnos_login($base, $user, $password, $timeout = 12) {
+    if ($user === "" || $password === "") return "";
+    $path = rtrim($base, "/") . "/user/password-login";
+    $payload = json_encode([
+        "username" => $user,
+        "password" => hash("sha256", $password),
+        "deviceId" => "theme-music",
+    ], JSON_UNESCAPED_SLASHES);
+    $url = $path;
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "Accept: application/json",
+        "Content-Type: application/json",
+        "authx: " . m_fnos_authx("POST", parse_url($url, PHP_URL_PATH), $payload, ""),
+        "User-Agent: ThemeMusic/1.3.0",
+    ]);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HEADER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, (int)$timeout);
+    $raw = curl_exec($ch);
+    $headerSize = (int)curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    curl_close($ch);
+    $raw = (string)$raw;
+    $headers = substr($raw, 0, $headerSize);
+    $body = substr($raw, $headerSize);
+    $j = json_decode($body, true);
+    $token = is_array($j) ? (string)($j["userToken"] ?? $j["data"]["userToken"] ?? "") : "";
+    if ($token === "" && preg_match('/(?:^|\r?\n)Set-Cookie:\s*music-token=([^;\r\n]+)/i', $headers, $m)) {
+        $token = trim($m[1]);
+    }
+    return $token;
 }
 
 function m_fnos_request(array $cfg, $pathQ, $params = [], $method = "GET", $body = "", $timeout = 15) {
     $url = trim((string)m_cfg_get($cfg, "MUSIC_FNOS_URL", ""));
     if ($url === "") return [null, "未配置飞牛音乐地址"];
     $url = rtrim($url, "/");
+    /* FnOS Music exposes its JSON API below /music/api/v1. Accept either
+     * the service root or a URL already ending in /music or /api/v1. */
+    if (!preg_match('#/api/v[0-9]+$#i', $url)) {
+        $url .= preg_match('#/music$#i', $url) ? "/api/v1" : "/music/api/v1";
+    }
+    $apiBase = $url;
     $user = trim((string)m_cfg_get($cfg, "MUSIC_FNOS_USER", ""));
     $pwd = m_fnos_password($cfg);
-    $sep = (strpos($pathQ, "?") === false) ? "?" : "&";
-    $fullUrl = $url . "/" . ltrim($pathQ, "/");
     if (strtolower($method) === "get" && !empty($params)) {
-        $fullUrl .= $sep . http_build_query($params);
+        ksort($params);
+        $query = http_build_query($params, "", "&", PHP_QUERY_RFC3986);
+    } else {
+        $query = "";
     }
+    $fullPath = "/" . ltrim($pathQ, "/") . ($query !== "" ? "?" . $query : "");
+    $fullUrl = $url . $fullPath;
     $headers = [
         "Accept: application/json",
         "User-Agent: ThemeMusic/1.3.0",
+        "authx: " . m_fnos_authx($method, "/" . ltrim($pathQ, "/"), $body, $query),
     ];
     if ($user !== "" && $pwd !== "") {
-        $sign = m_fnos_sign($method, $pathQ, $body, $pwd);
-        $headers[] = "X-Fnos-User: " . $user;
-        if ($sign !== "") $headers[] = "X-Fnos-Sign: " . $sign;
+        $token = m_fnos_login($url, $user, $pwd, $timeout);
+        if ($token !== "") $headers[] = "Cookie: music-token=" . $token;
     }
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $fullUrl);
@@ -457,12 +535,48 @@ function m_local_scan_files($root, $maxDepth = 6) {
     $it->setMaxDepth((int)$maxDepth);
     foreach ($it as $info) {
         $name = (string)$info->getFilename();
-        if (m_match_ext($name, $audio)) {
-            $out[] = (string)$info->getPathname();
-        }
+        if (m_match_ext($name, $audio)) $out[] = (string)$info->getPathname();
     }
     return $out;
 }
+
+function m_track_text($value) {
+    $value = trim((string)$value);
+    return preg_replace('/\\s+/u', ' ', $value);
+}
+
+function m_track_title_from_path($path) {
+    $name = pathinfo((string)$path, PATHINFO_FILENAME);
+    $name = preg_replace('/^[0-9]+[.\\-_ ]+/u', '', $name);
+    $name = preg_replace('/[.\\-_]+/u', ' ', $name);
+    return m_track_text($name) ?: "未知曲目";
+}
+
+function m_track_normalize(array $item, $source, $fallbackId = "") {
+    $source = strtolower(trim((string)$source));
+    $id = m_track_text($item["id"] ?? $item["path"] ?? $item["url"] ?? $fallbackId);
+    $path = m_track_text($item["path"] ?? $id);
+    $title = m_track_text($item["title"] ?? $item["name"] ?? $item["trackName"] ?? $item["songName"] ?? "");
+    $artist = m_track_text($item["artist"] ?? $item["artistName"] ?? $item["singer"] ?? $item["author"] ?? "");
+    $album = m_track_text($item["album"] ?? $item["albumName"] ?? $item["collectionName"] ?? "");
+    if ($title === "" && $source === "local") $title = m_track_title_from_path($path !== "" ? $path : $id);
+    if ($title === "") $title = "未知曲目";
+    $ext = strtolower(pathinfo($path !== "" ? $path : $id, PATHINFO_EXTENSION));
+    if ($ext === "" && !empty($item["format"])) $ext = strtolower((string)$item["format"]);
+    $cover = $item["coverArt"] ?? $item["coverUrl"] ?? $item["cover"] ?? $item["artwork"] ?? "";
+    $out = $item;
+    $out["id"] = $id;
+    $out["path"] = $path;
+    $out["source"] = $source;
+    $out["title"] = $title;
+    $out["artist"] = $artist;
+    $out["album"] = $album;
+    $out["ext"] = $ext;
+    if ($cover !== "") $out["coverArt"] = $cover;
+    $out["has_cover"] = !empty($item["has_cover"]) || !empty($item["hasCover"]) || $cover !== "";
+    return $out;
+}
+
 
 if ($action === "config") {
     $auto = m_detect_storage_source($cfg);
@@ -499,7 +613,9 @@ if ($action === "list") {
         $root = m_local_music_root($cfg);
         $files = $root !== "" ? m_local_scan_files($root, 6) : [];
         $tracks = [];
-        foreach ($files as $path) $tracks[] = ["id" => $path, "path" => $path, "source" => "local", "title" => pathinfo($path, PATHINFO_FILENAME)];
+        foreach ($files as $path) {
+            $tracks[] = m_track_normalize(["id" => $path, "path" => $path, "size" => @filesize($path)], "local", $path);
+        }
         mjson(["ok" => true, "tracks" => $tracks, "count" => count($tracks), "source" => "local"]);
     }
 }
@@ -552,10 +668,7 @@ if ($action === "library_remote") {
             if (!is_array($item)) continue;
             $id = (string)($item["id"] ?? $item["path"] ?? $item["url"] ?? "");
             $path = (string)($item["path"] ?? $id);
-            $item["id"] = $id;
-            $item["path"] = $path;
-            $item["source"] = "fnos";
-            $tracks[] = $item;
+            $tracks[] = m_track_normalize($item, "fnos", $id);
         }
         mjson(["ok" => true, "strategy" => "fnos", "items" => $tracks, "tracks" => $tracks, "count" => count($tracks)]);
     }
@@ -570,9 +683,7 @@ if ($action === "library_remote") {
         if (!is_array($tracks)) $tracks = [];
         foreach ($tracks as &$item) {
             if (!is_array($item)) continue;
-            $item["id"] = (string)($item["id"] ?? "");
-            $item["path"] = $item["id"];
-            $item["source"] = "navidrome";
+            $item = m_track_normalize($item, "navidrome");
         }
         unset($item);
         mjson(["ok" => true, "strategy" => "navidrome", "tracks" => $tracks, "items" => $tracks, "count" => count($tracks)]);
@@ -759,12 +870,61 @@ if ($action === "cover") {
         $params = ["id" => $remoteId, "u" => m_cfg_get($cfg, "MUSIC_NAVIDROME_USER", ""), "c" => "theme-music", "v" => "1.16.1", "f" => "" ];
         $pwd = m_navidrome_password($cfg);
         if ($params["u"] !== "" && $pwd !== "") { $salt = bin2hex(random_bytes(6)); $params["s"] = $salt; $params["t"] = md5($pwd . $salt); }
-        mjson(["ok" => true, "url" => $url . "?" . http_build_query($params), "source" => "remote"]);
+        $coverUrl = $url . "?" . http_build_query($params);
+        if (isset($_GET["fetch"]) && (string)$_GET["fetch"] === "2") {
+            $ch = curl_init($coverUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            $bin = curl_exec($ch);
+            $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $ct = (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+            curl_close($ch);
+            if (is_string($bin) && $bin !== "" && $code >= 200 && $code < 300) {
+                header("Content-Type: " . (strpos($ct, "image/") === 0 ? $ct : "image/jpeg"));
+                header("Cache-Control: private, max-age=300");
+                echo $bin;
+                exit;
+            }
+        }
+        mjson(["ok" => true, "url" => $coverUrl, "source" => "remote"]);
     }
     if (($auto["strategy"] ?? "") === "fnos") {
         [$resp, $err] = m_fnos_response($cfg, "track/cover", ["id" => $remoteId, "path" => $remoteId], 12);
         $data = is_array($resp) ? ($resp["data"] ?? $resp) : [];
-        $url = is_array($data) ? (string)($data["url"] ?? "") : "";
+        $url = is_array($data) ? (string)($data["url"] ?? $data["cover"] ?? $data["coverUrl"] ?? "") : "";
+        $b64 = is_array($data) ? (string)($data["base64"] ?? $data["b64"] ?? "") : "";
+        if ($b64 !== "" && isset($_GET["fetch"]) && (string)$_GET["fetch"] === "2") {
+            $bin = base64_decode(preg_replace('/^data:image\\/[^;]+;base64,/', '', $b64), true);
+            if ($bin !== false && $bin !== "") {
+                header("Content-Type: image/jpeg");
+                header("Cache-Control: private, max-age=300");
+                echo $bin;
+                exit;
+            }
+        }
+        if ($url !== "" && isset($_GET["fetch"]) && (string)$_GET["fetch"] === "2") {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            $bin = curl_exec($ch);
+            $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $ct = (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+            curl_close($ch);
+            if (is_string($bin) && $bin !== "" && $code >= 200 && $code < 300) {
+                header("Content-Type: " . (strpos($ct, "image/") === 0 ? $ct : "image/jpeg"));
+                header("Cache-Control: private, max-age=300");
+                echo $bin;
+                exit;
+            }
+        }
         if ($url !== "") mjson(["ok" => true, "url" => $url, "source" => "remote"]);
     }
     $strat = (string)($auto["strategy"] ?? "");
@@ -904,10 +1064,15 @@ if ($action === "check_update") {
     $indexPath = "/boot/config/plugins/theme.music/versions/index.json";
     if (!is_file($indexPath)) $indexPath = dirname(__FILE__) . "/versions/index.json";
     $j = is_file($indexPath) ? json_decode((string)@file_get_contents($indexPath), true) : [];
-    $current = trim((string)m_cfg_get($cfg, "VERSION", ""));
+    $current = m_installed_version();
+    if ($current === "") $current = trim((string)m_cfg_get($cfg, "VERSION", ""));
     $latest = is_array($j) ? (string)($j["latest_version"] ?? "") : "";
     if ($current === "") $current = $latest;
-    mjson(["ok" => true, "current" => $current, "latest" => $latest, "note" => $latest !== "" && $latest !== $current ? "有可用更新" : "已是最新版本"]);
+    $update = $current !== "" && $latest !== ""
+        && m_version_parts($current) !== null
+        && m_version_parts($latest) !== null
+        && m_version_compare($latest, $current) > 0;
+    mjson(["ok" => true, "current" => $current, "latest" => $latest, "update_available" => $update, "note" => $update ? "有可用更新" : "已是最新版本"]);
 }
 
 if ($action === "changelog") {

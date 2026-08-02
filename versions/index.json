@@ -6,7 +6,7 @@
     {
       "id": "v1.3.0-beta10",
       "label": "Beta v1.3.0-beta10：修复三音源设置 UI、FnOS 配置链路、播放器与 API 契约",
-      "channel": "latest",
+      "channel": "beta",
       "released_at": "2026-08-02",
       "music": true,
       "ota": true
