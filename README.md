@@ -7,13 +7,13 @@
 
 面向 Unraid WebGUI 的独立音乐播放器插件。它把本地目录或 Navidrome/OpenSubsonic 曲库原生融入仪表盘，同时提供可跨页面工作的音乐胶囊、歌词、封面、断点续播和完整的桌面/移动端配置。
 
-> 当前版本：**v1.3.0-beta9**（测试版）· 稳定版：**v1.2.2** · 插件 ID：`theme.music` · 最低 Unraid：**6.12.0**
+> 当前版本：**v1.3.0-beta10**（测试版）· 稳定版：**v1.2.2** · 插件 ID：`theme.music` · 最低 Unraid：**6.12.0**
 
 ## 为什么选择 Theme Music
 
 | 能力 | 说明 |
 |---|---|
-| 双音源 | 读取 Unraid 本地目录，或通过 Subsonic API 接入 Navidrome/OpenSubsonic |
+| 三类音源 | 读取 Unraid 本地目录，或通过 Subsonic API 接入 Navidrome/OpenSubsonic，也支持 FnOS 音乐 HTTP API |
 | 原生界面 | 仪表盘音乐卡片复用 Dynamix 卡片结构、配色、拖拽顺序与折叠行为 |
 | 全站播放 | 仪表盘与胶囊双向同步，跨页面内联音频持续播放 |
 | 完整媒体体验 | 播放列表、搜索、排序、随机、循环、进度、音量、封面与同步/普通歌词 |
@@ -54,7 +54,7 @@ curl -fsSL https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/in
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/install.sh -o /tmp/theme-music-install.sh
-sh /tmp/theme-music-install.sh install v1.3.0-beta9 ota
+sh /tmp/theme-music-install.sh install v1.3.0-beta10 ota
 ```
 
 ## 快速配置

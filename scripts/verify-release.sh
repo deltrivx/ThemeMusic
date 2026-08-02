@@ -54,12 +54,20 @@ import pathlib
 api = pathlib.Path('ucwc-music-api.php').read_text()
 player = pathlib.Path('assets/ucwc-music.js').read_text()
 page = pathlib.Path('ThemeMusic.page').read_text()
+loader = pathlib.Path('ThemeMusic_Loader.page').read_text()
 css = pathlib.Path('assets/theme-music-settings.css').read_text()
 assert 'function m_local_scan_files(' in api and 'function m_local_music_root(' in api, '本地曲库扫描器缺失'
 assert 'library_remote' in api and 'fnos' in api and 'navidrome' in api, '远端音源路由缺失'
 assert 'listRenderLimit: 300' in player and 'ucwc-music-list-more' in player, '大曲库缺少分段渲染'
 assert 'LYRIC_DRIFT_KEY' in player and 'adjustLyricDrift(500)' in player and 'adjustLyricDrift(-500)' in player, '歌词时间校准不完整'
 assert 'tm-fnos-url' in page and 'fnos_test' in api, 'FnOS 音源设置或连接测试缺失'
+assert 'in_array($src, ["local", "navidrome", "fnos"]' in page, '设置页未保留 FnOS source'
+assert page.count('class="tm-source-config"') == 3, '设置页三套音源 wrapper 不完整'
+assert 'action === "list"' in api and 'action === "set_service"' in api, '播放器或服务按钮 action 缺失'
+assert 'action === "check_update"' in api and 'action === "changelog"' in api, '版本管理 action 缺失'
+assert '"detected"' in api and '"status"' in api, '存储状态字段契约缺失'
+assert '&path=' in player and 'action=cover&path=' in player, '播放器媒体参数未统一为 path'
+assert 'MUSIC_FNOS_URL' in loader and 'fnos_url' in loader and 'fnos_user' in loader, 'Loader 未注入 FnOS 配置'
 print('曲库、远端音源、歌词校准与设置布局约束通过')
 PY
 
@@ -108,6 +116,7 @@ text = pathlib.Path('theme.music.plg').read_text()
 blocks = re.findall(r'<FILE(?: [^>]*)? Run="/bin/bash"(?: [^>]*)?>\s*<INLINE>\n(.*?)\n</INLINE>', text, re.S)
 assert blocks, '未找到 PLG 内联脚本'
 for idx, block in enumerate(blocks):
+    block = block.replace('<![CDATA[', '').replace(']]>', '')
     block = html.unescape(block)
     for key, value in {
         '&ver;': 'v0.0.0', '&flash;': '/tmp/theme.music', '&plugdir;': '/tmp/theme.music.runtime',
