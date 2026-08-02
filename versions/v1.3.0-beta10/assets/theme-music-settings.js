@@ -45,6 +45,99 @@
     });
   }
 
+  function alignCtrlWidth(form) {
+    if (!form) return;
+    var probes = Array.prototype.slice.call(form.querySelectorAll("select"));
+    var width = 0;
+    probes.forEach(function (el) {
+      var oldW = el.style.width;
+      var oldMin = el.style.minWidth;
+      var oldMax = el.style.maxWidth;
+      el.style.setProperty("width", "max-content", "important");
+      el.style.setProperty("min-width", "max-content", "important");
+      el.style.removeProperty("max-width");
+      var n = el.getBoundingClientRect().width || el.offsetWidth || 0;
+      if (n > width) width = n;
+      el.style.width = oldW;
+      el.style.minWidth = oldMin;
+      el.style.maxWidth = oldMax;
+    });
+    width = Math.max(224, Math.min(420, Math.ceil(width || 224)));
+    var px = width + "px";
+    form.style.setProperty("--tm-ctrl-w", px);
+    form.querySelectorAll("select").forEach(function (el) {
+      el.style.setProperty("width", px, "important");
+      el.style.setProperty("min-width", px, "important");
+      el.style.setProperty("max-width", "100%", "important");
+      el.style.setProperty("box-sizing", "border-box", "important");
+    });
+    form.querySelectorAll(".tm-path-field, .ucwc-path-field").forEach(function (field) {
+      field.style.setProperty("position", "relative", "important");
+      field.style.setProperty("display", "inline-flex", "important");
+      field.style.setProperty("align-items", "center", "important");
+      field.style.setProperty("width", px, "important");
+      field.style.setProperty("max-width", "100%", "important");
+      field.style.setProperty("box-sizing", "border-box", "important");
+      var input = field.querySelector("input");
+      if (input) {
+        input.style.setProperty("flex", "1 1 auto", "important");
+        input.style.setProperty("width", "100%", "important");
+        input.style.setProperty("min-width", "0", "important");
+        input.style.setProperty("padding-right", "36px", "important");
+        input.style.setProperty("box-sizing", "border-box", "important");
+      }
+      var button = field.querySelector(".tm-path-browse, .ucwc-path-browse");
+      if (button) {
+        button.style.setProperty("position", "absolute", "important");
+        button.style.setProperty("right", "2px", "important");
+        button.style.setProperty("top", "50%", "important");
+        button.style.setProperty("transform", "translateY(-50%)", "important");
+        button.style.setProperty("z-index", "3", "important");
+        button.style.setProperty("margin", "0", "important");
+        button.style.setProperty("float", "none", "important");
+      }
+    });
+    form.querySelectorAll(".tm-vol").forEach(function (el) {
+      el.style.setProperty("width", "100%", "important");
+      el.style.setProperty("max-width", "420px", "important");
+      el.style.setProperty("min-width", "0", "important");
+    });
+  }
+
+  function mountVersionInPageTitle() {
+    var src = document.getElementById("tm-ver-bar");
+    if (!src) return;
+    var titles = document.querySelectorAll("div.title");
+    var host = null;
+    for (var i = 0; i < titles.length; i++) {
+      if (titles[i].closest && titles[i].closest("#theme-music-form")) continue;
+      var probe = titles[i].querySelector(".left") || titles[i];
+      var text = (probe.textContent || "").replace(/\s+/g, " ");
+      if (text.indexOf("Theme Music") >= 0 || text.indexOf("主题音乐") >= 0) { host = titles[i]; break; }
+    }
+    if (!host) host = titles[0];
+    if (!host) return;
+    var left = host.querySelector("span.left");
+    if (!left) { left = document.createElement("span"); left.className = "left"; host.insertBefore(left, host.firstChild); }
+    var right = host.querySelector("span.right");
+    if (!right) { right = document.createElement("span"); right.className = "right"; host.appendChild(right); }
+    var wrap = document.getElementById("tm-title-ver");
+    if (!wrap) { wrap = document.createElement("span"); wrap.id = "tm-title-ver"; wrap.className = "tm-title-ver"; }
+    while (src.firstChild) wrap.appendChild(src.firstChild);
+    src.setAttribute("hidden", "");
+    src.setAttribute("aria-hidden", "true");
+    var sw = wrap.querySelector(".tm-service-switch");
+    var slot = document.getElementById("tm-title-switch");
+    if (!slot) { slot = document.createElement("span"); slot.id = "tm-title-switch"; slot.className = "tm-title-switch"; }
+    if (sw && sw.parentNode !== slot) slot.appendChild(sw);
+    if (slot.parentNode !== left) left.appendChild(slot);
+    if (wrap.parentNode !== right) right.appendChild(wrap);
+    right.classList.add("tm-title-right");
+    var actions = document.querySelector("#theme-music-form .buttons-spaced");
+    var actionsDd = actions && actions.closest ? actions.closest("dd") : null;
+    if (actionsDd) actionsDd.classList.add("tm-actions-dd");
+  }
+
   function boot() {
     var tag = document.querySelector("script[src*='theme-music-settings.js']");
     if (!tag) return;
@@ -332,6 +425,10 @@
         .then(function () { setTimeout(pollStorage, 5000); });
     }
     pollStorage();
+    alignCtrlWidth(form);
+    setTimeout(function () { alignCtrlWidth(form); mountVersionInPageTitle(); }, 0);
+    setTimeout(function () { alignCtrlWidth(form); mountVersionInPageTitle(); }, 250);
+    window.addEventListener("resize", function () { alignCtrlWidth(form); });
   }
 
   if (document.readyState === "loading") {

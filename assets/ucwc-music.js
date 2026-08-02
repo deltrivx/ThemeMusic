@@ -3116,6 +3116,11 @@
       } else {
         label = (t.artist ? t.artist + " — " : "") + (t.title || t.id);
       }
+      var num = document.createElement("span");
+      num.className = "ucwc-music-item-num";
+      num.textContent = String(oi + 1);
+      num.setAttribute("aria-hidden", "true");
+      b.appendChild(num);
       var txt = document.createElement("span");
       txt.className = "ucwc-music-item-txt";
       fillMarquee(txt, label);

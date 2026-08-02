@@ -719,8 +719,8 @@ ul.jqueryFileTree a:hover,
     left: auto !important;
     right: auto !important;
   }
-  form#theme-music-form dd:has(.buttons-spaced),
-  form[action*="ThemeMusic"] dd:has(.buttons-spaced) {
+  form#theme-music-form dd.tm-actions-dd,
+  form[action*="ThemeMusic"] dd.tm-actions-dd {
     display: block !important;
     width: 100% !important;
     max-width: 100% !important;
@@ -733,7 +733,7 @@ ul.jqueryFileTree a:hover,
     justify-content: center;
     width: 100%;
   }
-  div.title span.right:has(.tm-title-ver) {
+  div.title span.right.tm-title-right {
     flex-wrap: wrap;
     justify-content: center;
     width: 100%;
