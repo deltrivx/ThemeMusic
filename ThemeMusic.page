@@ -416,19 +416,19 @@ Navidrome 连接:
           <span class="tm-label">飞牛音乐</span>
         </div>
         <div class="tm-field">
-          <span class="tm-hint">通过 SSH 读取飞牛音乐数据库，需要已配置免密登录</span>
+          <span class="tm-hint">通过 HTTP API 获取飞牛音乐曲库，需要飞牛音乐已登录</span>
         </div>
         <div class="tm-field">
-          <label>宿主机地址：</label>
-          <input type="text" id="tm-fnos-host" name="MUSIC_FNOS_HOST" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_FNOS_HOST"] ?? "192.168.31.5")?>" placeholder="192.168.31.5" autocomplete="off" spellcheck="false">
+          <label>飞牛音乐地址：</label>
+          <input type="text" id="tm-fnos-url" name="MUSIC_FNOS_URL" maxlength="256" value="<?=htmlspecialchars($fx["MUSIC_FNOS_URL"] ?? "http://192.168.31.5/music")?>" placeholder="http://192.168.31.5/music" autocomplete="off" spellcheck="false">
         </div>
         <div class="tm-field">
-          <label>数据库路径：</label>
-          <input type="text" id="tm-fnos-db" name="MUSIC_FNOS_DB" maxlength="256" value="<?=htmlspecialchars($fx["MUSIC_FNOS_DB"] ?? "/usr/local/apps/@appdata/trim.music/db/music.db")?>" placeholder="/usr/local/apps/@appdata/trim.music/db/music.db" autocomplete="off" spellcheck="false">
+          <label>用户名：</label>
+          <input type="text" id="tm-fnos-user" name="MUSIC_FNOS_USER" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_FNOS_USER"] ?? "")?>" placeholder="飞牛音乐登录用户名" autocomplete="off" spellcheck="false">
         </div>
         <div class="tm-field">
-          <label>音乐目录：</label>
-          <input type="text" id="tm-fnos-music-dir" name="MUSIC_FNOS_MUSIC_DIR" maxlength="256" value="<?=htmlspecialchars($fx["MUSIC_FNOS_MUSIC_DIR"] ?? "/vol2/1000/Music")?>" placeholder="/vol2/1000/Music" autocomplete="off" spellcheck="false">
+          <label>密码：</label>
+          <input type="password" id="tm-fnos-password" name="MUSIC_FNOS_PASSWORD" maxlength="256" value="<?=htmlspecialchars($fx["MUSIC_FNOS_PASSWORD"] ?? "")?>" placeholder="飞牛音乐登录密码" autocomplete="off" spellcheck="false">
         </div>
       </div>
   </span>
