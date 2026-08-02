@@ -1,2 +1,523 @@
+Menu="UserPreferences"
+Title="主题音乐"
+Icon="music"
+Tag="music"
+---
 <?php
-/* placeholder */
+/**
+ * ThemeMusic settings page
+ * Plugin id: theme.music — independent music player for Unraid WebGUI.
+ *
+ * Unraid markdown form (Label: / : control) — same pattern as ThemeEffects / DisplaySettings.
+ * CSRF: injected by Unraid BodyInlineJS; do not hand-write csrf fields.
+ */
+$persist = "/boot/config/plugins/theme.music";
+$fx_path = "$persist/theme-music.cfg";
+$svc_cfg = "$persist/theme.music.cfg";
+$navidrome_secret_path = "$persist/navidrome.secret";
+$fnos_secret_path = "$persist/fnos.secret";
+$log_path = "/tmp/theme-music-save.log";
+$msg = "";
+$force_reload = false;
+
+if (function_exists("session_status") && session_status() === PHP_SESSION_ACTIVE) {
+    @session_write_close();
+}
+
+function tm_log($path, $line) {
+    @file_put_contents($path, date("c") . " " . $line . "\n", FILE_APPEND);
+}
+
+function tm_defaults() {
+    return [
+        "MUSIC_ENABLE" => "no",
+        "MUSIC_RUN_MODE" => "card",
+        "MUSIC_UI" => "card",
+        "MUSIC_SOURCE" => "local",
+        "MUSIC_FNOS_URL" => "",
+        "MUSIC_FNOS_USER" => "",
+        "MUSIC_FNOS_PASSWORD" => "",
+        "MUSIC_LOCAL_DIR" => "",
+        "MUSIC_NAVIDROME_URL" => "http://127.0.0.1:4533",
+        "MUSIC_NAVIDROME_USER" => "",
+        "MUSIC_VOLUME" => "70",
+        "MUSIC_AUTOPLAY" => "no",
+        "MUSIC_SHUFFLE" => "no",
+        "MUSIC_REPEAT" => "off",
+        "MUSIC_DASH_ONLY" => "yes",
+        /* Mobile profile: same = follow PC for run mode + vol/autoplay/shuffle/repeat */
+        "MUSIC_RUN_MODE_MOBILE" => "same",
+        "MUSIC_VOLUME_MOBILE" => "70",
+        "MUSIC_AUTOPLAY_MOBILE" => "no",
+        "MUSIC_SHUFFLE_MOBILE" => "no",
+        "MUSIC_REPEAT_MOBILE" => "off",
+    ];
+}
+
+function tm_music_dir_ok($v) {
+    $v = trim(str_replace("\\", "/", (string)$v));
+    $v = rtrim($v, "/");
+    if ($v === "") return "";
+    if ($v[0] !== "/") return "";
+    if (strpos($v, "..") !== false) return "";
+    if (strpos($v . "/", "/mnt/") !== 0 && strpos($v . "/", "/boot/config/plugins/theme.music/") !== 0) {
+        return "";
+    }
+    if (strlen($v) > 512) $v = substr($v, 0, 512);
+    return $v;
+}
+
+function tm_navidrome_url_ok($v) {
+    $v = rtrim(trim((string)$v), "/");
+    if ($v === "" || strlen($v) > 512 || !preg_match('#^https?://#i', $v)) return "";
+    $parts = @parse_url($v);
+    if (!is_array($parts) || empty($parts["host"]) || isset($parts["user"]) || isset($parts["pass"])) return "";
+    return $v;
+}
+
+function tm_navidrome_user_ok($v) {
+    $v = trim(str_replace(["\0", "\r", "\n"], "", (string)$v));
+    return substr($v, 0, 128);
+}
+
+function tm_save_navidrome_password($path, $v) {
+    $v = str_replace(["\0", "\r", "\n"], "", (string)$v);
+    if ($v === "") return true;
+    if (strlen($v) > 256) $v = substr($v, 0, 256);
+    @mkdir(dirname($path), 0755, true);
+    $ok = @file_put_contents($path, $v, LOCK_EX) !== false;
+    if ($ok) @chmod($path, 0600);
+    return $ok;
+}
+
+/**
+ * Derive MUSIC_RUN_MODE from legacy ENABLE + DASH_ONLY when missing.
+ * card = dashboard card only; chip = sitewide capsule only; both = card + capsule sitewide.
+ * Do not use legacy MUSIC_UI alone — it was historically forced to "card".
+ */
+function tm_resolve_run_mode($d) {
+    $mode = strtolower(trim((string)($d["MUSIC_RUN_MODE"] ?? "")));
+    if (in_array($mode, ["card", "chip", "both"], true)) return $mode;
+    if (($d["MUSIC_ENABLE"] ?? "no") !== "yes") return "card";
+    return (($d["MUSIC_DASH_ONLY"] ?? "yes") === "no") ? "both" : "card";
+}
+
+function tm_apply_run_mode(&$d, $mode, $force_enable = false) {
+    $mode = strtolower(trim((string)$mode));
+    if (!in_array($mode, ["card", "chip", "both"], true)) $mode = "card";
+    $d["MUSIC_RUN_MODE"] = $mode;
+    $d["MUSIC_UI"] = $mode;
+    if ($mode === "card") {
+        $d["MUSIC_DASH_ONLY"] = "yes";
+    } else {
+        $d["MUSIC_DASH_ONLY"] = "no";
+    }
+    if ($force_enable) {
+        $d["MUSIC_ENABLE"] = "yes";
+    }
+}
+
+function tm_clamp_vol($v) {
+    $vol = intval($v);
+    if ($vol < 0) $vol = 0;
+    if ($vol > 100) $vol = 100;
+    return (string)$vol;
+}
+
+function tm_yn($v) {
+    return ($v === "yes") ? "yes" : "no";
+}
+
+function tm_repeat($v) {
+    $rp = strtolower(trim((string)$v));
+    return in_array($rp, ["off", "one", "all"], true) ? $rp : "off";
+}
+
+function tm_mobile_run_mode($v) {
+    $m = strtolower(trim((string)$v));
+    return in_array($m, ["same", "card", "chip", "both"], true) ? $m : "same";
+}
+
+function tm_normalize(&$d) {
+    $d["MUSIC_ENABLE"] = (($d["MUSIC_ENABLE"] ?? "no") === "yes") ? "yes" : "no";
+    $mode = tm_resolve_run_mode($d);
+    tm_apply_run_mode($d, $mode, false);
+    $src = strtolower(trim((string)($d["MUSIC_SOURCE"] ?? "local")));
+    $d["MUSIC_SOURCE"] = in_array($src, ["local", "navidrome"], true) ? $src : "local";
+    $d["MUSIC_LOCAL_DIR"] = tm_music_dir_ok($d["MUSIC_LOCAL_DIR"] ?? "");
+    $d["MUSIC_NAVIDROME_URL"] = tm_navidrome_url_ok($d["MUSIC_NAVIDROME_URL"] ?? "");
+    if ($d["MUSIC_NAVIDROME_URL"] === "") $d["MUSIC_NAVIDROME_URL"] = "http://127.0.0.1:4533";
+    $d["MUSIC_NAVIDROME_USER"] = tm_navidrome_user_ok($d["MUSIC_NAVIDROME_USER"] ?? "");
+    $d["MUSIC_VOLUME"] = tm_clamp_vol($d["MUSIC_VOLUME"] ?? 70);
+    $d["MUSIC_AUTOPLAY"] = tm_yn($d["MUSIC_AUTOPLAY"] ?? "no");
+    $d["MUSIC_SHUFFLE"] = tm_yn($d["MUSIC_SHUFFLE"] ?? "no");
+    $d["MUSIC_REPEAT"] = tm_repeat($d["MUSIC_REPEAT"] ?? "off");
+    $d["MUSIC_RUN_MODE_MOBILE"] = tm_mobile_run_mode($d["MUSIC_RUN_MODE_MOBILE"] ?? "same");
+    $d["MUSIC_VOLUME_MOBILE"] = tm_clamp_vol($d["MUSIC_VOLUME_MOBILE"] ?? ($d["MUSIC_VOLUME"] ?? 70));
+    $d["MUSIC_AUTOPLAY_MOBILE"] = tm_yn($d["MUSIC_AUTOPLAY_MOBILE"] ?? "no");
+    $d["MUSIC_SHUFFLE_MOBILE"] = tm_yn($d["MUSIC_SHUFFLE_MOBILE"] ?? "no");
+    $d["MUSIC_REPEAT_MOBILE"] = tm_repeat($d["MUSIC_REPEAT_MOBILE"] ?? "off");
+}
+
+function tm_load($path) {
+    $d = tm_defaults();
+    $had_run_mode = false;
+    $had_mobile_mode = false;
+    if (is_file($path)) {
+        $raw = @parse_ini_file($path);
+        if (is_array($raw)) {
+            foreach ($d as $k => $v) {
+                if (isset($raw[$k]) && $raw[$k] !== "") $d[$k] = (string)$raw[$k];
+            }
+            $had_run_mode = isset($raw["MUSIC_RUN_MODE"]) && trim((string)$raw["MUSIC_RUN_MODE"]) !== "";
+            $had_mobile_mode = isset($raw["MUSIC_RUN_MODE_MOBILE"]) && trim((string)$raw["MUSIC_RUN_MODE_MOBILE"]) !== "";
+        }
+    }
+    /* Defaults include RUN_MODE=card; if cfg never had the key, derive from ENABLE+DASH_ONLY. */
+    if (!$had_run_mode) unset($d["MUSIC_RUN_MODE"]);
+    if (!$had_mobile_mode) $d["MUSIC_RUN_MODE_MOBILE"] = "same";
+    tm_normalize($d);
+    return $d;
+}
+
+function tm_save($path, $fx) {
+    tm_normalize($fx);
+    $lines = [];
+    foreach (tm_defaults() as $k => $_) {
+        $val = (string)($fx[$k] ?? "");
+        $val = str_replace(['"', "\r", "\n"], ['', '', ''], $val);
+        $lines[] = $k . '="' . $val . '"';
+    }
+    @mkdir(dirname($path), 0755, true);
+    $ok = @file_put_contents($path, implode("\n", $lines) . "\n") !== false;
+    if ($ok) @chmod($path, 0644);
+    return $ok;
+}
+
+$ucwc_service = "disabled";
+if (is_file($svc_cfg)) {
+    $ucwc_svc_raw = @parse_ini_file($svc_cfg);
+    if (is_array($ucwc_svc_raw) && isset($ucwc_svc_raw["SERVICE"]) && $ucwc_svc_raw["SERVICE"] !== "") {
+        $ucwc_service = strtolower(trim((string)$ucwc_svc_raw["SERVICE"]));
+    }
+}
+if (!in_array($ucwc_service, ["enabled", "enable", "1", "yes"], true)) {
+    $ucwc_service = "disabled";
+} else {
+    $ucwc_service = "enabled";
+}
+$ucwc_service_on = ($ucwc_service === "enabled");
+
+// Form POST save (Unraid injects csrf via BodyInlineJS)
+if (!empty($_POST) && (isset($_POST["SAVE_THEME_MUSIC"]) || isset($_POST["SAVE_THEME_FX"]))) {
+    $navidrome_password_ok = true;
+    if (function_exists("session_status") && session_status() === PHP_SESSION_ACTIVE) {
+        @session_write_close();
+    }
+    $fx = tm_load($fx_path);
+    if (isset($_POST["SERVICE"])) {
+        $svc = strtolower(trim((string)$_POST["SERVICE"]));
+        $ucwc_service = in_array($svc, ["enabled", "enable", "1", "yes"], true) ? "enabled" : "disabled";
+        $ucwc_service_on = ($ucwc_service === "enabled");
+        @mkdir($persist, 0755, true);
+        @file_put_contents($svc_cfg, 'SERVICE="' . $ucwc_service . "\"\n");
+        @chmod($svc_cfg, 0644);
+    }
+    if (isset($_POST["MUSIC_RUN_MODE"])) {
+        $mode = strtolower(trim((string)($_POST["MUSIC_RUN_MODE"] ?? "card")));
+        if (!in_array($mode, ["card", "chip", "both"], true)) $mode = "card";
+        /* Applying a PC run mode always turns the player on; SERVICE remains master gate. */
+        tm_apply_run_mode($fx, $mode, true);
+    } elseif (isset($_POST["MUSIC_ENABLE"]) || isset($_POST["MUSIC_DASH_ONLY"]) || isset($_POST["MUSIC_UI"])) {
+        /* Legacy fields still accepted (API / old forms). */
+        if (isset($_POST["MUSIC_ENABLE"])) {
+            $fx["MUSIC_ENABLE"] = (($_POST["MUSIC_ENABLE"] ?? "no") === "yes") ? "yes" : "no";
+        }
+        if (isset($_POST["MUSIC_DASH_ONLY"])) {
+            $fx["MUSIC_DASH_ONLY"] = (($_POST["MUSIC_DASH_ONLY"] ?? "yes") === "no") ? "no" : "yes";
+        }
+        if (isset($_POST["MUSIC_UI"])) {
+            $ui = strtolower(trim((string)($_POST["MUSIC_UI"] ?? "card")));
+            if (in_array($ui, ["card", "chip", "both"], true)) {
+                $fx["MUSIC_RUN_MODE"] = $ui;
+            } elseif (($fx["MUSIC_ENABLE"] ?? "no") === "yes") {
+                $fx["MUSIC_RUN_MODE"] = (($fx["MUSIC_DASH_ONLY"] ?? "yes") === "no") ? "both" : "card";
+            }
+        } elseif (isset($_POST["MUSIC_ENABLE"]) || isset($_POST["MUSIC_DASH_ONLY"])) {
+            if (($fx["MUSIC_ENABLE"] ?? "no") === "yes") {
+                $fx["MUSIC_RUN_MODE"] = (($fx["MUSIC_DASH_ONLY"] ?? "yes") === "no") ? "both" : "card";
+            }
+        }
+    }
+    if (isset($_POST["MUSIC_FNOS_URL"])) $fx["MUSIC_FNOS_URL"] = trim((string)($_POST["MUSIC_FNOS_URL"] ?? "http://192.168.31.5/music"));
+    if (isset($_POST["MUSIC_FNOS_USER"])) $fx["MUSIC_FNOS_USER"] = trim((string)($_POST["MUSIC_FNOS_USER"] ?? ""));
+    if (isset($_POST["MUSIC_FNOS_PASSWORD"])) $fx["MUSIC_FNOS_PASSWORD"] = trim((string)($_POST["MUSIC_FNOS_PASSWORD"] ?? ""));
+    if (isset($_POST["MUSIC_SOURCE"])) {
+        $src = strtolower(trim((string)($_POST["MUSIC_SOURCE"] ?? "local")));
+        $fx["MUSIC_SOURCE"] = in_array($src, ["local", "navidrome", "fnos"], true) ? $src : "local";
+    }
+    if (isset($_POST["MUSIC_LOCAL_DIR"])) {
+        $fx["MUSIC_LOCAL_DIR"] = tm_music_dir_ok($_POST["MUSIC_LOCAL_DIR"] ?? "");
+    }
+    if (isset($_POST["MUSIC_NAVIDROME_URL"])) {
+        $url = tm_navidrome_url_ok($_POST["MUSIC_NAVIDROME_URL"] ?? "");
+        $fx["MUSIC_NAVIDROME_URL"] = $url !== "" ? $url : "http://127.0.0.1:4533";
+    }
+    if (isset($_POST["MUSIC_NAVIDROME_USER"])) {
+        $fx["MUSIC_NAVIDROME_USER"] = tm_navidrome_user_ok($_POST["MUSIC_NAVIDROME_USER"] ?? "");
+    }
+    if (isset($_POST["MUSIC_NAVIDROME_PASSWORD"]) && !tm_save_navidrome_password($navidrome_secret_path, $_POST["MUSIC_NAVIDROME_PASSWORD"])) {
+        $navidrome_password_ok = false;
+        $msg = "无法保存 Navidrome 密码";
+    }
+    if (isset($_POST["MUSIC_VOLUME_COMMIT"]) || isset($_POST["MUSIC_VOLUME"])) {
+        $fx["MUSIC_VOLUME"] = tm_clamp_vol($_POST["MUSIC_VOLUME_COMMIT"] ?? ($_POST["MUSIC_VOLUME"] ?? ($fx["MUSIC_VOLUME"] ?? 70)));
+    }
+    if (isset($_POST["MUSIC_AUTOPLAY"])) {
+        $fx["MUSIC_AUTOPLAY"] = tm_yn(($_POST["MUSIC_AUTOPLAY"] ?? "no") === "yes" ? "yes" : "no");
+    }
+    if (isset($_POST["MUSIC_SHUFFLE"])) {
+        $fx["MUSIC_SHUFFLE"] = tm_yn(($_POST["MUSIC_SHUFFLE"] ?? "no") === "yes" ? "yes" : "no");
+    }
+    if (isset($_POST["MUSIC_REPEAT"])) {
+        $fx["MUSIC_REPEAT"] = tm_repeat($_POST["MUSIC_REPEAT"] ?? "off");
+    }
+    if (isset($_POST["MUSIC_RUN_MODE_MOBILE"])) {
+        $fx["MUSIC_RUN_MODE_MOBILE"] = tm_mobile_run_mode($_POST["MUSIC_RUN_MODE_MOBILE"] ?? "same");
+        if ($fx["MUSIC_RUN_MODE_MOBILE"] !== "same") {
+            $fx["MUSIC_ENABLE"] = "yes";
+        }
+    }
+    if (isset($_POST["MUSIC_VOLUME_MOBILE_COMMIT"]) || isset($_POST["MUSIC_VOLUME_MOBILE"])) {
+        $fx["MUSIC_VOLUME_MOBILE"] = tm_clamp_vol($_POST["MUSIC_VOLUME_MOBILE_COMMIT"] ?? ($_POST["MUSIC_VOLUME_MOBILE"] ?? ($fx["MUSIC_VOLUME_MOBILE"] ?? 70)));
+    }
+    if (isset($_POST["MUSIC_AUTOPLAY_MOBILE"])) {
+        $fx["MUSIC_AUTOPLAY_MOBILE"] = tm_yn(($_POST["MUSIC_AUTOPLAY_MOBILE"] ?? "no") === "yes" ? "yes" : "no");
+    }
+    if (isset($_POST["MUSIC_SHUFFLE_MOBILE"])) {
+        $fx["MUSIC_SHUFFLE_MOBILE"] = tm_yn(($_POST["MUSIC_SHUFFLE_MOBILE"] ?? "no") === "yes" ? "yes" : "no");
+    }
+    if (isset($_POST["MUSIC_REPEAT_MOBILE"])) {
+        $fx["MUSIC_REPEAT_MOBILE"] = tm_repeat($_POST["MUSIC_REPEAT_MOBILE"] ?? "off");
+    }
+    tm_normalize($fx);
+    if ($navidrome_password_ok && tm_save($fx_path, $fx)) {
+        // No title-area success tip — silent reload (user request).
+        $force_reload = true;
+        $msg = "";
+        tm_log($log_path, "page-save ok mode=" . $fx["MUSIC_RUN_MODE"] . " mobile=" . $fx["MUSIC_RUN_MODE_MOBILE"] . " enable=" . $fx["MUSIC_ENABLE"] . " dir=" . $fx["MUSIC_LOCAL_DIR"] . " svc=" . $ucwc_service);
+    } else {
+        if ($navidrome_password_ok) $msg = "保存失败：无法写入配置文件。";
+        tm_log($log_path, "page-save FAIL");
+    }
+}
+
+$fx = tm_load($fx_path);
+// Do not show applied tip under page title
+$ucwc_pickroot = is_dir("/mnt/user") ? "/mnt/user" : "/mnt";
+$ucwc_ft_css = "/usr/local/emhttp/webGui/styles/jquery.filetree.css";
+$ucwc_ft_js = "/usr/local/emhttp/webGui/javascript/jquery.filetree.js";
+$ucwc_ft_css_v = is_file($ucwc_ft_css) ? filemtime($ucwc_ft_css) : time();
+$ucwc_ft_js_v = is_file($ucwc_ft_js) ? filemtime($ucwc_ft_js) : time();
+$tm_css = "/usr/local/emhttp/plugins/theme.music/assets/theme-music-settings.css";
+$tm_css_v = is_file($tm_css) ? filemtime($tm_css) : time();
+$tm_js = "/usr/local/emhttp/plugins/theme.music/assets/theme-music-settings.js";
+$tm_js_v = is_file($tm_js) ? filemtime($tm_js) : time();
+$tm_ver_label = "—";
+foreach (["$persist/ThemeMusic.options", "$persist/ThemeMusic.state"] as $_tm_st) {
+    if (!is_file($_tm_st)) continue;
+    $_tm_kv = @parse_ini_file($_tm_st);
+    if (is_array($_tm_kv) && !empty($_tm_kv["version"])) {
+        $tm_ver_label = (string)$_tm_kv["version"];
+        break;
+    }
+}
+?>
+<link rel="stylesheet" href="/webGui/styles/jquery.filetree.css?v=<?=$ucwc_ft_css_v?>">
+<?if (is_file($tm_css)):?>
+<link rel="stylesheet" href="/plugins/theme.music/assets/theme-music-settings.css?v=<?=$tm_css_v?>">
+<?endif;?>
+<script src="/webGui/javascript/jquery.filetree.js?v=<?=$ucwc_ft_js_v?>" charset="utf-8"></script>
+<script>
+window.__TM_BOOT__ = {
+  version: <?= json_encode($tm_ver_label, JSON_UNESCAPED_UNICODE) ?>,
+  pickroot: <?= json_encode($ucwc_pickroot, JSON_UNESCAPED_UNICODE) ?>,
+  service: <?= json_encode($ucwc_service, JSON_UNESCAPED_UNICODE) ?>
+};
+</script>
+<?if ($force_reload):?>
+<script>
+(function () {
+  // Silent reload after save — no applied tip under title
+  var u = "/Settings/ThemeMusic?_ts=" + Date.now();
+  try { window.location.replace(u); } catch (e) { window.location.href = u; }
+})();
+</script>
+<?endif;?>
+
+<?if ($msg !== ""):?>
+<div markdown="1">
+<span class="green tm-msg"><?= htmlspecialchars($msg) ?></span>
+</div>
+<?endif;?>
+
+<!-- Version bar: switch → title left; version/actions → title right (theme-music-settings.js) -->
+<div id="tm-ver-bar" class="tm-ver-bar-source" hidden aria-hidden="true"
+     data-tm-service="<?= $ucwc_service_on ? 'enabled' : 'disabled' ?>">
+  <label class="tm-service-switch" title="总开关：关闭后不注入播放器，运行模式设置仍保留">
+    <span class="tm-service-switch-text">音乐</span>
+    <input type="checkbox" id="tm-service-toggle" <?= $ucwc_service_on ? 'checked' : '' ?>
+           role="switch" aria-checked="<?= $ucwc_service_on ? 'true' : 'false' ?>"
+           aria-label="主题音乐总开关">
+    <span class="tm-service-track" aria-hidden="true"><span class="tm-service-thumb"></span></span>
+    <span class="tm-service-state" id="tm-service-state"><?= $ucwc_service_on ? '开' : '关' ?></span>
+  </label>
+  <span class="tm-ver-meta">
+    <strong id="tm-bar-current"><?= htmlspecialchars($tm_ver_label) ?></strong>
+    <span class="tm-muted" id="tm-bar-extra" hidden></span>
+    <span class="tm-muted" id="tm-bar-latest"></span>
+  </span>
+  <span class="tm-ver-actions" role="group" aria-label="版本操作">
+    <button type="button" id="tm-btn-check" class="tm-pill-btn" title="检查主题音乐更新">检查更新</button>
+    <button type="button" id="tm-btn-log" class="tm-pill-btn" title="查看更新日志">更新日志</button>
+  </span>
+</div>
+
+<form markdown="1" method="POST" action="/Settings/ThemeMusic" id="theme-music-form" name="theme_music_settings">
+
+音乐音源:
+: <select name="MUSIC_SOURCE" size="1" id="tm-music-source">
+  <?=mk_option($fx["MUSIC_SOURCE"] ?? "local", "local", "本地目录")?>
+  <?=mk_option($fx["MUSIC_SOURCE"] ?? "local", "navidrome", "Navidrome")?>
+  <?=mk_option($fx["MUSIC_SOURCE"] ?? "local", "fnos", "飞牛音乐(FnOS)")?>
+  </select>
+
+本地音乐目录:
+: <span class="tm-path-field ucwc-path-field">
+    <input type="text" class="tm-local-path ucwc-local-path ucwc-path-dir" id="tm-music-local-dir" name="MUSIC_LOCAL_DIR" maxlength="512" value="<?=htmlspecialchars($fx["MUSIC_LOCAL_DIR"] ?? "")?>" placeholder="点击浏览选择音乐目录（如 /mnt/user/Music）" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickcloseonfile="false" data-pickroot="<?= htmlspecialchars($ucwc_pickroot) ?>" data-picktop="<?= htmlspecialchars($ucwc_pickroot) ?>" data-pickmatch=".*">
+    <button type="button" class="tm-path-browse ucwc-path-browse" title="浏览目录" aria-label="浏览目录"><i class="fa fa-folder-open-o" aria-hidden="true"></i></button>
+  </span>
+
+Navidrome 地址:
+: <input type="url" id="tm-navidrome-url" name="MUSIC_NAVIDROME_URL" maxlength="512" value="<?=htmlspecialchars($fx["MUSIC_NAVIDROME_URL"] ?? "http://127.0.0.1:4533")?>" placeholder="http://127.0.0.1:4533" autocomplete="url" spellcheck="false">
+
+Navidrome 用户:
+: <input type="text" id="tm-navidrome-user" name="MUSIC_NAVIDROME_USER" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_NAVIDROME_USER"] ?? "")?>" placeholder="Navidrome 用户名" autocomplete="username" spellcheck="false">
+
+Navidrome 密码:
+: <input type="password" id="tm-navidrome-password" name="MUSIC_NAVIDROME_PASSWORD" maxlength="256" value="" placeholder="<?=is_file($navidrome_secret_path) && filesize($navidrome_secret_path) > 0 ? "已安全保存；留空保持不变" : "输入 Navidrome 密码"?>" autocomplete="new-password">
+
+Navidrome 连接:
+: <span class="tm-inline-actions">
+    <button type="button" id="tm-btn-test-navidrome" class="tm-pill-btn" title="直接使用当前填写内容测试，不必先应用">测试连接</button>
+    <span id="tm-navidrome-status" class="tm-muted"><?=is_file($navidrome_secret_path) && filesize($navidrome_secret_path) > 0 ? "密码已保存" : "尚未保存密码"?></span>
+  </span>
+
+飞牛音乐地址:
+: <input type="url" id="tm-fnos-url" name="MUSIC_FNOS_URL" maxlength="512" value="<?=htmlspecialchars($fx["MUSIC_FNOS_URL"] ?? "")?>" placeholder="http://192.168.31.5/music" autocomplete="url" spellcheck="false">
+
+飞牛音乐用户:
+: <input type="text" id="tm-fnos-user" name="MUSIC_FNOS_USER" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_FNOS_USER"] ?? "")?>" placeholder="飞牛音乐用户名" autocomplete="username" spellcheck="false">
+
+飞牛音乐密码:
+: <input type="password" id="tm-fnos-password" name="MUSIC_FNOS_PASSWORD" maxlength="256" value="" placeholder="<?=is_file($fnos_secret_path) && filesize($fnos_secret_path) > 0 ? "已安全保存；留空保持不变" : "输入飞牛音乐密码"?>" autocomplete="new-password">
+
+飞牛音乐连接:
+: <span class="tm-inline-actions">
+    <button type="button" id="tm-btn-test-fnos" class="tm-pill-btn" title="直接使用当前填写内容测试，不必先应用">测试连接</button>
+    <span id="tm-fnos-status" class="tm-muted"><?=is_file($fnos_secret_path) && filesize($fnos_secret_path) > 0 ? "密码已保存" : "尚未保存密码"?></span>
+  </span>
+
+存储准备:
+: <span class="tm-inline-actions">
+    <span id="tm-storage-detected">自动检测中…</span>
+    <span class="tm-muted" id="tm-storage-status" aria-live="polite">等待播放</span>
+  </span>
+
+电脑运行模式:
+: <select name="MUSIC_RUN_MODE" size="1" id="tm-run-mode-pc">
+  <?=mk_option($fx["MUSIC_RUN_MODE"] ?? "card", "card", "音乐卡片（仅仪表盘播放）")?>
+  <?=mk_option($fx["MUSIC_RUN_MODE"] ?? "card", "chip", "音乐胶囊（全站播放）")?>
+  <?=mk_option($fx["MUSIC_RUN_MODE"] ?? "card", "both", "音乐卡片+音乐胶囊（全站播放）")?>
+  </select>
+
+电脑默认音量:
+: <span class="tm-vol">
+    <input type="range" name="MUSIC_VOLUME" min="0" max="100" step="1" value="<?=intval($fx["MUSIC_VOLUME"] ?? 70)?>" id="tm-music-volume">
+    <span class="mono" id="tm-music-volume-val"><?=intval($fx["MUSIC_VOLUME"] ?? 70)?></span>
+  </span>
+
+电脑自动播放:
+: <select name="MUSIC_AUTOPLAY" size="1">
+  <?=mk_option($fx["MUSIC_AUTOPLAY"] ?? "no", "no", "关闭")?>
+  <?=mk_option($fx["MUSIC_AUTOPLAY"] ?? "no", "yes", "开启（浏览器可能拦截）")?>
+  </select>
+
+电脑默认随机:
+: <select name="MUSIC_SHUFFLE" size="1">
+  <?=mk_option($fx["MUSIC_SHUFFLE"] ?? "no", "no", "关闭")?>
+  <?=mk_option($fx["MUSIC_SHUFFLE"] ?? "no", "yes", "开启")?>
+  </select>
+
+电脑默认循环:
+: <select name="MUSIC_REPEAT" size="1">
+  <?=mk_option($fx["MUSIC_REPEAT"] ?? "off", "off", "关闭")?>
+  <?=mk_option($fx["MUSIC_REPEAT"] ?? "off", "all", "列表循环")?>
+  <?=mk_option($fx["MUSIC_REPEAT"] ?? "off", "one", "单曲循环")?>
+  </select>
+
+手机运行模式:
+: <select name="MUSIC_RUN_MODE_MOBILE" size="1" id="tm-run-mode-mobile">
+  <?=mk_option($fx["MUSIC_RUN_MODE_MOBILE"] ?? "same", "same", "和电脑端配置相同")?>
+  <?=mk_option($fx["MUSIC_RUN_MODE_MOBILE"] ?? "same", "card", "音乐卡片（仅仪表盘播放）")?>
+  <?=mk_option($fx["MUSIC_RUN_MODE_MOBILE"] ?? "same", "chip", "音乐胶囊（全站播放）")?>
+  <?=mk_option($fx["MUSIC_RUN_MODE_MOBILE"] ?? "same", "both", "音乐卡片+音乐胶囊（全站播放）")?>
+  </select>
+
+手机默认音量:
+: <span class="tm-vol" id="tm-vol-mobile-wrap">
+    <input type="range" name="MUSIC_VOLUME_MOBILE" min="0" max="100" step="1" value="<?=intval($fx["MUSIC_VOLUME_MOBILE"] ?? 70)?>" id="tm-music-volume-mobile">
+    <span class="mono" id="tm-music-volume-mobile-val"><?=intval($fx["MUSIC_VOLUME_MOBILE"] ?? 70)?></span>
+  </span>
+
+手机自动播放:
+: <select name="MUSIC_AUTOPLAY_MOBILE" size="1" id="tm-autoplay-mobile">
+  <?=mk_option($fx["MUSIC_AUTOPLAY_MOBILE"] ?? "no", "no", "关闭")?>
+  <?=mk_option($fx["MUSIC_AUTOPLAY_MOBILE"] ?? "no", "yes", "开启（浏览器可能拦截）")?>
+  </select>
+
+手机默认随机:
+: <select name="MUSIC_SHUFFLE_MOBILE" size="1" id="tm-shuffle-mobile">
+  <?=mk_option($fx["MUSIC_SHUFFLE_MOBILE"] ?? "no", "no", "关闭")?>
+  <?=mk_option($fx["MUSIC_SHUFFLE_MOBILE"] ?? "no", "yes", "开启")?>
+  </select>
+
+手机默认循环:
+: <select name="MUSIC_REPEAT_MOBILE" size="1" id="tm-repeat-mobile">
+  <?=mk_option($fx["MUSIC_REPEAT_MOBILE"] ?? "off", "off", "关闭")?>
+  <?=mk_option($fx["MUSIC_REPEAT_MOBILE"] ?? "off", "all", "列表循环")?>
+  <?=mk_option($fx["MUSIC_REPEAT_MOBILE"] ?? "off", "one", "单曲循环")?>
+  </select>
+
+> **主题音乐**：音乐音源决定附属项显隐；本地目录显示路径，Navidrome 显示服务器与账号。电脑 / 手机可分别设置运行模式与音量、自动播放、随机、循环；手机选「和电脑端配置相同」时隐藏其余手机项。卡片与胶囊是否显示仅由总开关和运行模式决定。播放时自动区分本地磁盘唤醒与 SMB/NFS 远端就绪检测；歌词和下载封面只写入歌曲同目录，目录不可写时会明确报错。
+
+&nbsp;
+: <span class="buttons-spaced">
+    <input type="submit" name="SAVE_THEME_MUSIC" id="tm-btn-save" value="应用" class="lock">
+    <input type="button" id="tm-btn-done" value="完成" onclick="done()">
+  </span>
+
+</form>
+
+<div id="tm-panel-mask"></div>
+<div id="tm-panel" role="dialog" aria-modal="true">
+  <button type="button" class="tm-close" id="tm-panel-close" title="关闭">×</button>
+  <h3 id="tm-panel-title">版本管理</h3>
+  <div id="tm-panel-body"></div>
+  <div class="tm-panel-actions" id="tm-panel-actions"></div>
+</div>
+
+<?if (is_file($tm_js)):?>
+<script src="/plugins/theme.music/assets/theme-music-settings.js?v=<?=$tm_js_v?>"></script>
+<?endif;?>
+
