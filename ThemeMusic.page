@@ -416,7 +416,7 @@ Navidrome 连接:
           <span class="tm-label">飞牛音乐</span>
         </div>
         <div class="tm-field">
-          <span class="tm-hint">通过 SSH 读取飞牛音乐数据库，需要已配置免密登录</span>
+          <span class="tm-hint">通过 SSH 查询飞牛音乐数据库获取曲库元数据</span>
         </div>
         <div class="tm-field">
           <label>宿主机地址：</label>
