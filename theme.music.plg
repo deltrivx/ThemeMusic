@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY      version   "v1.3.0-beta2">
+<!ENTITY      version   "v1.2.2">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
