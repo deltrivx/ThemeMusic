@@ -589,13 +589,52 @@ function m_local_path_tags($path, $root = "") {
     return ["artist" => $artist, "album" => $album];
 }
 
+function m_track_duration_seconds(array $item) {
+    $keys = ["duration", "durationSeconds", "duration_seconds", "durationMs", "duration_ms", "length", "lengthMs", "playtime", "playTime"];
+    foreach ($keys as $key) {
+        if (!array_key_exists($key, $item) || !is_numeric($item[$key])) continue;
+        $value = (float)$item[$key];
+        if ($value <= 0) continue;
+        if (stripos($key, "ms") !== false || $value > 100000) $value /= 1000;
+        if ($value > 0 && $value < 86400) return round($value, 3);
+    }
+    return 0;
+}
+
+function m_track_first_text(array $item, array $keys) {
+    foreach ($keys as $key) {
+        if (!array_key_exists($key, $item)) continue;
+        $value = $item[$key];
+        if (is_array($value)) continue;
+        $value = m_track_text($value);
+        if ($value !== "") return $value;
+    }
+    return "";
+}
+
 function m_track_normalize(array $item, $source, $fallbackId = "") {
     $source = strtolower(trim((string)$source));
-    $id = m_track_text($item["id"] ?? $item["path"] ?? $item["url"] ?? $fallbackId);
-    $path = m_track_text($item["path"] ?? $id);
-    $title = m_track_text($item["title"] ?? $item["name"] ?? $item["trackName"] ?? $item["songName"] ?? "");
-    $artist = m_track_text($item["artist"] ?? $item["artistName"] ?? $item["singer"] ?? $item["author"] ?? "");
-    $album = m_track_text($item["album"] ?? $item["albumName"] ?? $item["collectionName"] ?? "");
+    $audioSpec = is_array($item["audioSpec"] ?? null) ? $item["audioSpec"] : [];
+    $id = m_track_first_text($item, ["id", "guid", "trackId", "path", "url"]);
+    if ($id === "") $id = m_track_first_text($audioSpec, ["id", "guid", "path"]);
+    if ($id === "") $id = m_track_text($fallbackId);
+    $path = m_track_first_text($item, ["path", "filePath", "url"]);
+    if ($path === "") $path = m_track_first_text($audioSpec, ["path", "filePath"]);
+    if ($path === "") $path = $id;
+    $title = m_track_first_text($item, ["title", "name", "trackName", "songName"]);
+    $artist = m_track_first_text($item, ["artist", "artistName", "singer", "author"]);
+    if ($artist === "" && is_array($item["artists"] ?? null)) {
+        $names = [];
+        foreach ($item["artists"] as $artistItem) {
+            if (is_array($artistItem)) $name = m_track_first_text($artistItem, ["name", "title", "artist"]);
+            else $name = m_track_text($artistItem);
+            if ($name !== "") $names[] = $name;
+        }
+        $artist = implode(" / ", $names);
+    }
+    $album = m_track_first_text($item, ["album", "albumName", "collectionName"]);
+    if (strcasecmp($album, "Array") === 0) $album = "";
+    if ($album === "" && is_array($item["album"] ?? null)) $album = m_track_first_text($item["album"], ["name", "title"]);
     if ($source === "local") {
         $tags = m_local_path_tags($path, $item["_root"] ?? "");
             if ($artist === "") $artist = $tags["artist"];
@@ -607,6 +646,11 @@ function m_track_normalize(array $item, $source, $fallbackId = "") {
     $ext = strtolower(pathinfo($path !== "" ? $path : $id, PATHINFO_EXTENSION));
     if ($ext === "" && !empty($item["format"])) $ext = strtolower((string)$item["format"]);
     $cover = $item["coverArt"] ?? $item["coverUrl"] ?? $item["cover"] ?? $item["artwork"] ?? "";
+    $durationItem = $item;
+    foreach (["audioSpec", "meta", "metadata"] as $nested) {
+        if (is_array($item[$nested] ?? null)) $durationItem = array_merge($durationItem, $item[$nested]);
+    }
+    $duration = m_track_duration_seconds($durationItem);
     $out = $item;
     unset($out["_root"]);
     $out["id"] = $id;
@@ -616,6 +660,7 @@ function m_track_normalize(array $item, $source, $fallbackId = "") {
     $out["artist"] = $artist;
     $out["album"] = $album;
     $out["ext"] = $ext;
+    $out["duration"] = $duration;
     if ($cover !== "") $out["coverArt"] = $cover;
     $out["has_cover"] = !empty($item["has_cover"]) || !empty($item["hasCover"]) || $cover !== "";
     return $out;
@@ -738,8 +783,9 @@ if ($action === "library_remote") {
 if ($action === "stream") {
     $auto = m_detect_storage_source($cfg);
     $remoteId = (string)($_GET["id"] ?? $_GET["path"] ?? "");
+    $remotePath = (string)($_GET["path"] ?? $remoteId);
     if (($auto["strategy"] ?? "") === "fnos") {
-        [$resp, $err] = m_fnos_response($cfg, "track/stream", ["id" => $remoteId, "path" => $remoteId], 30);
+        [$resp, $err] = m_fnos_response($cfg, "track/stream", ["id" => $remoteId, "path" => $remotePath], 30);
         $url = is_array($resp) ? (string)(($resp["data"] ?? $resp)["url"] ?? "") : "";
         if ($url !== "") { header("Location: " . $url, true, 302); exit; }
         mjson(["ok" => false, "error" => $err ?: "飞牛音乐无法提供音频"], 502);
@@ -855,60 +901,110 @@ if ($action === "stream") {
     exit;
 }
 
+function m_parse_lyrics_text($text) {
+    $text = str_replace(["\r\n", "\r"], "\n", (string)$text);
+    $lines = [];
+    $unsynced = [];
+    foreach (preg_split('/\n/u', $text) as $raw) {
+        $raw = trim((string)$raw);
+        if ($raw === "") continue;
+        $matched = false;
+        if (preg_match_all('/\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/u', $raw, $matches, PREG_SET_ORDER)) {
+            $textPart = trim(preg_replace('/\[\d{1,3}:\d{2}(?:[.:]\d{1,3})?\]/u', '', $raw));
+            if ($textPart !== "") {
+                foreach ($matches as $m) {
+                    $fraction = isset($m[3]) ? (float)("0." . str_pad(substr($m[3], 0, 3), 3, "0")) : 0;
+                    $lines[] = ["t" => ((int)$m[1] * 60 + (int)$m[2] + $fraction) * 1000, "text" => $textPart];
+                }
+                $matched = true;
+            }
+        }
+        if (!$matched && !preg_match('/^\[[a-z]+:/i', $raw)) $unsynced[] = preg_replace('/^\[[^\]]+\]\s*/u', '', $raw);
+    }
+    if (count($lines)) {
+        usort($lines, function ($a, $b) { return $a["t"] <=> $b["t"]; });
+        return ["lines" => $lines, "unsynced" => false];
+    }
+    $textLines = [];
+    foreach ($unsynced as $textLine) if ($textLine !== "") $textLines[] = ["t" => count($textLines) * 4000, "text" => $textLine];
+    return ["lines" => $textLines, "unsynced" => count($textLines) > 0];
+}
+
+function m_fnos_local_path($path, $root) {
+    $path = str_replace("\\", "/", trim((string)$path));
+    $root = rtrim(str_replace("\\", "/", (string)$root), "/");
+    if ($path === "" || $root === "") return "";
+    $safe = m_safe_path_under($root, $path);
+    if ($safe !== "") return $safe;
+    if (preg_match('#/Music/(.+)$#i', $path, $m)) {
+        $candidate = $root . "/" . ltrim($m[1], "/");
+        return m_safe_path_under($root, $candidate);
+    }
+    return "";
+}
+
+function m_local_lyrics_text($path, $root) {
+    $path = m_fnos_local_path($path, $root);
+    if ($path === "") return "";
+    $dir = dirname($path);
+    $base = pathinfo($path, PATHINFO_FILENAME);
+    $candidates = [$dir . "/" . $base . ".lrc", $dir . "/" . $base . ".txt", $dir . "/lyrics.lrc", $dir . "/lyrics.txt"];
+    $rootBase = pathinfo($path, PATHINFO_FILENAME);
+    $candidates[] = rtrim($root, "/") . "/" . $rootBase . ".lrc";
+    $candidates[] = rtrim($root, "/") . "/" . $rootBase . ".txt";
+    foreach ($candidates as $candidate) if (is_file($candidate) && is_readable($candidate)) {
+        $body = (string)@file_get_contents($candidate);
+        if ($body !== "") return $body;
+    }
+    return "";
+}
+
 if ($action === "lyrics") {
     $auto = m_detect_storage_source($cfg);
     $remoteId = (string)($_GET["id"] ?? $_GET["path"] ?? "");
+    $remotePath = (string)($_GET["path"] ?? $remoteId);
     if (($auto["strategy"] ?? "") === "navidrome") {
         [$resp, $err] = m_navidrome_request($cfg, "rest/getLyrics", ["id" => $remoteId], "GET", "", 15);
         $data = is_array($resp) ? ($resp["subsonic-response"] ?? $resp) : [];
         $lyrics = (string)(($data["lyrics"]["value"] ?? $data["lyrics"] ?? ""));
-        mjson(["ok" => true, "strategy" => "navidrome", "source" => "remote", "lyrics" => $lyrics]);
+        $parsed = m_parse_lyrics_text($lyrics);
+        mjson(["ok" => true, "strategy" => "navidrome", "source" => "remote", "lyrics" => $lyrics, "lines" => $parsed["lines"], "unsynced" => $parsed["unsynced"]]);
     }
     if (($auto["strategy"] ?? "") === "fnos") {
-        [$resp, $err] = m_fnos_response($cfg, "track/lyric", ["id" => $remoteId, "path" => $remoteId], 12);
+        [$resp, $err] = m_fnos_response($cfg, "track/lyric", ["id" => $remoteId, "path" => $remotePath], 12);
         $data = is_array($resp) ? ($resp["data"] ?? $resp) : [];
         $lyrics = is_array($data) ? (string)($data["lyric"] ?? $data["lrc"] ?? $data["lyrics"] ?? "") : "";
-        mjson(["ok" => true, "strategy" => "fnos", "source" => "remote", "lyrics" => $lyrics]);
+        $source = $lyrics !== "" ? "remote" : "";
+        if ($lyrics === "") {
+            $root = m_local_music_root($cfg);
+            $lyrics = m_local_lyrics_text($remotePath, $root);
+            if ($lyrics !== "") $source = "local";
+        }
+        $parsed = m_parse_lyrics_text($lyrics);
+        mjson(["ok" => true, "strategy" => "fnos", "source" => $source, "lyrics" => $lyrics, "lines" => $parsed["lines"], "unsynced" => $parsed["unsynced"]]);
     }
     $strat = (string)($auto["strategy"] ?? "");
     $rel = isset($_GET["path"]) ? (string)$_GET["path"] : "";
     $root = m_local_music_root($cfg);
-    $rel = m_safe_path_under($root !== "" ? $root : "/", $rel);
+    $rel = $strat === "fnos" ? m_fnos_local_path($rel, $root) : m_safe_path_under($root !== "" ? $root : "/", $rel);
     $basename = $rel !== "" ? pathinfo($rel, PATHINFO_FILENAME) : "";
-    $lyrics = "";
-    $source = "";
-    if ($strat === "fnos" && $rel !== "") {
-        [$resp, $err] = m_fnos_response($cfg, "track/lyric", ["path" => $rel], 12);
-        if (is_array($resp)) {
-            $data = $resp["data"] ?? $resp;
-            $lyrics = (string)($data["lyric"] ?? $data["lrc"] ?? $data["lyrics"] ?? "");
-            $source = "fnos";
-        }
-    }
-    if ($lyrics === "" && $rel !== "") {
-        $candidates = [];
-        if ($basename !== "") {
-            $candidates[] = $root . "/" . $basename . ".lrc";
-            $candidates[] = $root . "/" . $basename . ".txt";
-        }
-        foreach ($candidates as $c) {
-            if (is_file($c) && is_readable($c)) {
-                $lyrics = (string)@file_get_contents($c);
-                if ($lyrics !== "") { $source = "local"; break; }
-            }
-        }
-    }
+    $lyrics = $rel !== "" ? m_local_lyrics_text($rel, $root) : "";
+    $source = $lyrics !== "" ? "local" : "";
+    $parsed = m_parse_lyrics_text($lyrics);
     mjson([
         "ok" => true,
         "strategy" => $strat,
         "source" => $source,
         "lyrics" => $lyrics,
+        "lines" => $parsed["lines"],
+        "unsynced" => $parsed["unsynced"],
     ]);
 }
 
 if ($action === "cover") {
     $auto = m_detect_storage_source($cfg);
     $remoteId = (string)($_GET["id"] ?? $_GET["path"] ?? "");
+    $remotePath = (string)($_GET["path"] ?? $remoteId);
     if (($auto["strategy"] ?? "") === "navidrome") {
         $url = rtrim((string)m_cfg_get($cfg, "MUSIC_NAVIDROME_URL", ""), "/") . "/rest/getCoverArt";
         $params = ["id" => $remoteId, "u" => m_cfg_get($cfg, "MUSIC_NAVIDROME_USER", ""), "c" => "theme-music", "v" => "1.16.1", "f" => "" ];
@@ -937,7 +1033,7 @@ if ($action === "cover") {
         mjson(["ok" => true, "url" => $coverUrl, "source" => "remote"]);
     }
     if (($auto["strategy"] ?? "") === "fnos") {
-        [$resp, $err] = m_fnos_response($cfg, "track/cover", ["id" => $remoteId, "path" => $remoteId], 12);
+        [$resp, $err] = m_fnos_response($cfg, "track/cover", ["id" => $remoteId, "path" => $remotePath], 12);
         $data = is_array($resp) ? ($resp["data"] ?? $resp) : [];
         $url = is_array($data) ? (string)($data["url"] ?? $data["cover"] ?? $data["coverUrl"] ?? "") : "";
         $b64 = is_array($data) ? (string)($data["base64"] ?? $data["b64"] ?? "") : "";
@@ -974,7 +1070,7 @@ if ($action === "cover") {
     $strat = (string)($auto["strategy"] ?? "");
     $rel = isset($_GET["path"]) ? (string)$_GET["path"] : "";
     $root = m_local_music_root($cfg);
-    $rel = m_safe_path_under($root !== "" ? $root : "/", $rel);
+    $rel = $strat === "fnos" ? m_fnos_local_path($rel, $root) : m_safe_path_under($root !== "" ? $root : "/", $rel);
     $basename = $rel !== "" ? pathinfo($rel, PATHINFO_FILENAME) : "";
     if ($strat === "fnos" && $rel !== "") {
         [$resp, $err] = m_fnos_response($cfg, "track/cover", ["path" => $rel], 12);
@@ -1042,8 +1138,7 @@ if ($action === "cover") {
             exit;
         }
     }
-    m_emit_json_file("/usr/local/emhttp/plugins/theme.music/assets/img/cover_empty.json");
-    exit;
+    m_emit_cover_empty();
 }
 
 if ($action === "navidrome_test") {

@@ -442,8 +442,6 @@ Navidrome 连接:
     <span id="tm-fnos-status" class="tm-muted"><?=is_file($fnos_secret_path) && filesize($fnos_secret_path) > 0 ? "密码已保存" : "尚未保存密码"?></span>
   </span></span>
 
-飞牛音乐连接说明:
-: <span class="tm-source-control tm-source-help" data-tm-source-row="fnos" id="tm-fnos-help">地址填写飞牛音乐服务入口，例如 http://主机:端口；系统会自动补全 /music/api/v1。</span>
 
 存储准备:
 : <span class="tm-inline-actions">
