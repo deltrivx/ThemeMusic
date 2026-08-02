@@ -7,7 +7,7 @@
       "id": "v1.3.0",
       "label": "Theme Music v1.3.0：三音源统一、FnOS HTTP 音源、歌词与播放稳定性正式版",
       "channel": "latest",
-      "released_at": "2026-08-03",
+      "released_at": "2026-08-02",
       "music": true,
       "ota": true
     },
@@ -30,14 +30,6 @@
     {
       "id": "v1.3.0-beta7",
       "label": "Beta v1.3.0-beta7：飞牛音乐配置行结构对齐正式版，修复设置页布局错乱",
-      "channel": "beta",
-      "released_at": "2026-08-02",
-      "music": true,
-      "ota": true
-    },
-    {
-      "id": "v1.3.0-beta6",
-      "label": "Beta v1.3.0-beta6：修复飞牛音乐配置布局、默认值与测试按钮",
       "channel": "beta",
       "released_at": "2026-08-02",
       "music": true,

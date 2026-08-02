@@ -220,16 +220,55 @@ manifest_get() {
   _mp=$1
   _mf=$2
   if [ -z "${MANIFEST_JSON:-}" ]; then echo ""; return 0; fi
-  # Support both array .files[] and object .files{path:{}}
   printf '%s' "$MANIFEST_JSON" | jq -r --arg p "$_mp" --arg f "$_mf" '
-    if (.files | type) == "array" then
-      .files[]? | select(.path == $p) | .[$f] // empty
-    elif (.files | type) == "object" then
-      .files[$p][$f] // empty
-    else
-      empty
-    end
+    .files[]? | select(.path == $p) | .[$f] // empty
   ' 2>/dev/null || true
+}
+
+validate_manifest() {
+  _manifest=$1
+  _version=$2
+  [ -s "$_manifest" ] || { ucwc_log "错误：缺少 files.manifest"; return 1; }
+  jq -e --arg version "$_version" '
+    type == "object" and .schema == 1 and .version == $version and
+    (.files | type == "array" and length > 0) and
+    ([.files[] | select(
+      (.path | type) != "string" or .path == "" or
+      (.path | startswith("/") or contains("..")) or
+      (.size | type) != "number" or .size < 0 or
+      (.sha256 | type) != "string" or (.sha256 | test("^[0-9a-fA-F]{64}$") | not)
+    )] | length == 0)
+  ' "$_manifest" >/dev/null 2>&1 || {
+    ucwc_log "错误：files.manifest 校验失败（版本 $_version）"
+    return 1
+  }
+  for _required in \
+    ThemeMusic.page ThemeMusic_Loader.page PLUGIN-README.md \
+    assets/theme-music-settings.css assets/theme-music-settings.js \
+    assets/ucwc-music.css assets/ucwc-music.js \
+    theme-music-save.php theme-music-update.php theme-music.cfg \
+    theme.music.cfg ucwc-music-api.php
+  do
+    manifest_get "$_required" sha256 | grep -Eq '^[0-9a-fA-F]{64}$' || {
+      ucwc_log "错误：files.manifest 缺少必需文件 $_required"
+      return 1
+    }
+  done
+}
+
+verify_download() {
+  _path=$1
+  _rel=$2
+  _expect_sha=$(manifest_get "$_rel" sha256)
+  _expect_sz=$(manifest_get "$_rel" size)
+  [ -n "$_expect_sha" ] || return 0
+  _actual_sha=$(file_sha256 "$_path")
+  _actual_sz=$(file_size "$_path")
+  [ "$_actual_sha" = "$_expect_sha" ] && [ "$_actual_sz" = "$_expect_sz" ] || {
+    ucwc_log "错误：文件校验失败：$_rel"
+    rm -f -- "$_path"
+    return 1
+  }
 }
 
 fetch_pkg() {
@@ -273,17 +312,20 @@ fetch_pkg() {
 
   OTA_FETCHED=$(( ${OTA_FETCHED:-0} + 1 ))
   if [ -n "$_source" ] && [ -f "$_source" ]; then
-    if [ -n "$_expect_sha" ]; then
-      _source_sha=$(file_sha256 "$_source")
-      if [ -z "$_source_sha" ] || [ "$_source_sha" != "$_expect_sha" ]; then
-        ucwc_log "归档校验失败：$_label"
-        return 1
-      fi
-    fi
     cp -a "$_source" "$_dest"
-    return 0
+    verify_download "$_dest" "$_rel"
+    return $?
   fi
-  download -o "$_dest" "$_url"
+  _tmp="$_dest.download.$$"
+  rm -f -- "$_tmp"
+  if ! download -o "$_tmp" "$_url"; then
+    rm -f -- "$_tmp"
+    return 1
+  fi
+  if ! verify_download "$_tmp" "$_rel"; then
+    return 1
+  fi
+  mv -f -- "$_tmp" "$_dest"
 }
 
 install_pair() {
@@ -308,13 +350,13 @@ sync_plugin_metadata() {
   _dst="$1"
   _url="https://github.com/deltrivx/ThemeMusic/releases/download/$VERSION/theme.music-$VERSION.plg"
   if ! download -o "$_dst" "$_url"; then
-    ucwc_log "提示：PLG 元数据下载失败，运行文件已安装；下次更新时会重试"
-    return 0
+    ucwc_log "错误：PLG 元数据下载失败"
+    return 1
   fi
   _plg_ver=$(sed -n 's/.*<!ENTITY[[:space:]]\+version[[:space:]]\+"\([^"]*\)".*/\1/p' "$_dst" | head -1)
   if [ "$_plg_ver" != "$VERSION" ] || ! grep -q '<PLUGIN name="&name;"' "$_dst"; then
-    ucwc_log "提示：PLG 元数据校验失败（期望 $VERSION，得到 ${_plg_ver:-空}）"
-    return 0
+    ucwc_log "错误：PLG 元数据校验失败（期望 $VERSION，得到 ${_plg_ver:-空}）"
+    return 1
   fi
   install -m 0644 "$_dst" "$PLUGIN_BOOT"
   if [ -d "$(dirname "$PLUGIN_LOG")" ]; then
@@ -371,13 +413,16 @@ install_version() {
   progress 22 "拉取清单" "files.manifest（OTA 差异比对）"
   if download -o "$tmp/files.manifest" "$release_base/files.manifest" \
     || download -o "$tmp/files.manifest" "$base/files.manifest?_ts=$(date +%s)"; then
-    MANIFEST_JSON=$(cat "$tmp/files.manifest" 2>/dev/null || true)
-    case "$MANIFEST_JSON" in
-      "{"*) ucwc_log "已加载文件清单（OTA 可用 sha256 比对）" ;;
-      *) MANIFEST_JSON=""; ucwc_log "清单无效，OTA 将仅按本地存在性/大小尝试跳过" ;;
-    esac
+    if ! validate_manifest "$tmp/files.manifest" "$VERSION"; then
+      echo "无法安装：files.manifest 无效或与版本不匹配。" >&2
+      exit 1
+    fi
+    MANIFEST_JSON=$(cat "$tmp/files.manifest")
+    ucwc_log "已加载并验证文件清单（逐文件 SHA256/大小比对）"
   else
-    ucwc_log "无 files.manifest（旧包），OTA 将尽量复用同尺寸本地文件"
+    ucwc_log "错误：正式版本缺少 files.manifest"
+    echo "无法安装：缺少 files.manifest。" >&2
+    exit 1
   fi
 
   # Prefer one small, checksummed Release archive over a dozen raw GitHub
