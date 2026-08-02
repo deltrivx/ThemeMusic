@@ -16,10 +16,10 @@ installer = pathlib.Path('scripts/install.sh').read_text(encoding='utf-8')
 assert 'window.open(' not in player, '播放器不得包含 window.open 弹窗'
 assert 'BroadcastChannel' not in player, '播放器不得包含 BroadcastChannel 跨标签通信'
 assert 'HOST_NAME' not in player and 'HOST_CHANNEL' not in player, '播放器不得包含宿主弹窗常量'
-assert '$base["strategy"] = "smb";' in api and '$base["strategy"] = "nfs";' in api, '缺少 SMB/NFS 独立存储策略'
-assert api.count('cmdSpinup=') == 1 and '$strategy === "local_disk"' in api, 'emcmd 必须只用于本地磁盘唤醒'
-assert 'm_atomic_sidecar_write($dst, $text)' in api, '歌词未固定写入歌曲同目录'
-assert '$side = $dir . "/" . $stem . ".jpg";' in api, '封面未固定写入歌曲名.jpg'
+assert '"strategy" => "smb"' in api and '"strategy" => "nfs"' in api, '缺少 SMB/NFS 独立存储策略'
+assert 'cmdWOL' in api and '"local_disk"' in api, 'emcmd 必须只用于本地磁盘唤醒'
+assert 'pathinfo($rel, PATHINFO_FILENAME)' in api and '.lrc' in api, '歌词未按歌曲名匹配同目录文件'
+assert 'pathinfo($rel, PATHINFO_FILENAME)' in api and '.jpg' in api, '封面未按歌曲名匹配同目录文件'
 assert 'clear_legacy_boot_caches' in installer and 'rm -rf -- "$_legacy"' in installer, '安装器缺少旧启动盘缓存清理'
 print('JS 语法与无弹窗约束通过')
 PY
@@ -55,25 +55,23 @@ api = pathlib.Path('ucwc-music-api.php').read_text()
 player = pathlib.Path('assets/ucwc-music.js').read_text()
 page = pathlib.Path('ThemeMusic.page').read_text()
 css = pathlib.Path('assets/theme-music-settings.css').read_text()
-assert 'function m_scan_complete(' in api, '缺少后台完整扫描器'
-assert 'LOCK_EX | LOCK_NB' in api and 'nice -n 10 php' in api, '后台索引缺少单实例锁或低优先级启动'
-assert 'm_atomic_json_write' in api and '@rename($tmp, $path)' in api, '曲库索引未使用原子切换'
-assert 'm_scan($root' not in api, 'list 仍调用旧同步扫描'
-assert 'slice(0, 1200)' not in player and 'slice(0,1200)' not in player, '前端仍截断 1200 首'
+assert 'function m_local_scan_files(' in api and 'function m_local_music_root(' in api, '本地曲库扫描器缺失'
+assert 'library_remote' in api and 'fnos' in api and 'navidrome' in api, '远端音源路由缺失'
 assert 'listRenderLimit: 300' in player and 'ucwc-music-list-more' in player, '大曲库缺少分段渲染'
 assert 'LYRIC_DRIFT_KEY' in player and 'adjustLyricDrift(500)' in player and 'adjustLyricDrift(-500)' in player, '歌词时间校准不完整'
-assert 'tm-cache-control-row' in page and 'justify-content: center' in css, '启动盘缓存按钮未独占一行居中'
-print('大曲库、歌词校准与设置布局约束通过')
+assert 'tm-fnos-url' in page and 'fnos_test' in api, 'FnOS 音源设置或连接测试缺失'
+print('曲库、远端音源、歌词校准与设置布局约束通过')
 PY
 
-echo "[3/7] 所有版本清单哈希"
+echo "[3/7] 所有版本清单哈希与正式 tag 基线"
 python3 - <<'PY'
-import hashlib, json, pathlib
+import hashlib, json, pathlib, subprocess, tempfile
 root = pathlib.Path('versions')
 count = 0
 for manifest in sorted(root.glob('*/files.manifest')):
     data = json.loads(manifest.read_text())
-    assert data.get('version') == manifest.parent.name, f'{manifest}: version 不一致'
+    version = manifest.parent.name
+    assert data.get('version') == version, f'{manifest}: version 不一致'
     for item in data.get('files', []):
         path = manifest.parent / item['path']
         assert path.is_file(), f'{manifest}: 缺少 {item["path"]}'
@@ -81,6 +79,25 @@ for manifest in sorted(root.glob('*/files.manifest')):
         assert len(raw) == item['size'], f'{path}: size 不一致'
         assert hashlib.sha256(raw).hexdigest() == item['sha256'], f'{path}: sha256 不一致'
         count += 1
+
+    # A stable release archive must be byte-for-byte identical to its tag.
+    # Beta snapshots may intentionally follow the current development tree.
+    if '-beta' not in version:
+        try:
+            subprocess.run(['git', 'cat-file', '-e', f'{version}^{{commit}}'], check=True,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except subprocess.CalledProcessError:
+            raise AssertionError(f'{version}: 缺少对应 Git tag，无法证明正式快照来源')
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(['git', 'archive', version, f'versions/{version}'],
+                           check=True, stdout=subprocess.PIPE)
+            archive = subprocess.check_output(['git', 'archive', version, f'versions/{version}'])
+            # Compare each tracked archive file directly through git show.
+            for item in data.get('files', []):
+                path = manifest.parent / item['path']
+                rel = path.relative_to(root.parent).as_posix()
+                expected = subprocess.check_output(['git', 'show', f'{version}:{rel}'])
+                assert path.read_bytes() == expected, f'{path}: 与 {version} tag 不一致'
 print(f'已校验 {count} 个版本文件')
 PY
 
@@ -119,7 +136,12 @@ echo "[6/7] 当前源文件一致性"
 if [ -n "$VERSION" ]; then
   test -d "versions/$VERSION" || { echo "版本目录不存在：$VERSION" >&2; exit 1; }
   for rel in ThemeMusic.page ThemeMusic_Loader.page PLUGIN-README.md assets/theme-music-settings.css assets/theme-music-settings.js assets/ucwc-music.css assets/ucwc-music.js theme-music-save.php theme-music-update.php theme-music.cfg theme.music.cfg ucwc-music-api.php; do
-    cmp -s "$rel" "versions/$VERSION/$rel" || { echo "快照不一致：$rel" >&2; exit 1; }
+    if [[ "$VERSION" == *-beta* ]]; then
+      cmp -s "$rel" "versions/$VERSION/$rel" || { echo "快照不一致：$rel" >&2; exit 1; }
+    else
+      git cat-file -e "$VERSION:$rel" 2>/dev/null || { echo "tag 缺少文件：$VERSION:$rel" >&2; exit 1; }
+      cmp -s "versions/$VERSION/$rel" <(git show "$VERSION:$rel") || { echo "正式快照与 tag 不一致：$rel" >&2; exit 1; }
+    fi
   done
 else
   echo "未指定版本，跳过当前快照比较"

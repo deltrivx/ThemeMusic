@@ -1,0 +1,846 @@
+<?php
+/**
+ * ThemeMusic music API
+ * Local directory and Navidrome/OpenSubsonic library, media, cover and lyrics proxy.
+ */
+header("X-Content-Type-Options: nosniff");
+
+$persist = "/boot/config/plugins/theme.music/theme.music.cfg";
+$rawCfgText = is_file($persist) ? (string)file_get_contents($persist) : "";
+$persistDefault = "/boot/config/plugins/theme.music/theme-music.cfg";
+$rawDefaultText = is_file($persistDefault) ? (string)file_get_contents($persistDefault) : "";
+
+$cfg = [];
+foreach ([$rawDefaultText, $rawCfgText] as $blob) {
+    foreach (preg_split('/\r?\n/', (string)$blob) as $line) {
+        $line = trim((string)$line);
+        if ($line === "" || str_starts_with($line, "#")) continue;
+        $eq = strpos($line, "=");
+        if ($eq === false) continue;
+        $k = trim(substr($line, 0, $eq));
+        $v = trim(substr($line, $eq + 1), " \t\"'");
+        $cfg[$k] = $v;
+    }
+}
+
+$action = isset($_REQUEST["action"]) ? (string)$_REQUEST["action"] : "";
+$method = isset($_SERVER["REQUEST_METHOD"]) ? strtoupper((string)$_SERVER["REQUEST_METHOD"]) : "GET";
+if ($action === "" && $method === "POST") {
+    $raw = (string)file_get_contents("php://input");
+    if ($raw !== "") {
+        $j = json_decode($raw, true);
+        if (is_array($j) && isset($j["action"])) $action = (string)$j["action"];
+    }
+}
+
+function mjson($data, $status = 200) {
+    http_response_code($status);
+    header("Content-Type: application/json; charset=utf-8");
+    header("Cache-Control: no-store, no-cache, must-revalidate");
+    header("Pragma: no-cache");
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+function m_cfg_get(array $cfg, $key, $default = "") {
+    if (array_key_exists($key, $cfg)) {
+        $v = $cfg[$key];
+        if (is_string($v)) {
+            $stripped = trim($v, " \t\"'");
+            if ($stripped !== "" || $v === "") return $stripped;
+        }
+        return $v;
+    }
+    return $default;
+}
+
+function m_glob_first($pattern) {
+    $items = glob($pattern);
+    if (!is_array($items) || !count($items)) return "";
+    return (string)$items[0];
+}
+
+function m_emit_json_file($path) {
+    if (!is_file($path)) return false;
+    $fp = fopen($path, "rb");
+    if (!$fp) return false;
+    $size = filesize($path);
+    if ($size === false) { fclose($fp); return false; }
+    $head = fread($fp, 1);
+    if ($head !== "{") { fclose($fp); return false; }
+    $body = $head . ($size > 1 ? fread($fp, $size - 1) : "");
+    fclose($fp);
+    $arr = json_decode($body, true);
+    if (!is_array($arr)) return false;
+    header("Content-Type: application/json; charset=utf-8");
+    header("Cache-Control: no-store, no-cache, must-revalidate");
+    header("Pragma: no-cache");
+    echo json_encode($arr, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+function m_normalize_path($p) {
+    $p = (string)$p;
+    $p = str_replace("\\", "/", $p);
+    while (preg_match('#/\\./#', $p)) $p = preg_replace('#/\\./#', '/', $p);
+    $parts = [];
+    foreach (explode("/", $p) as $seg) {
+        if ($seg === "" || $seg === ".") continue;
+        if ($seg === "..") { array_pop($parts); continue; }
+        $parts[] = $seg;
+    }
+    return "/" . implode("/", $parts);
+}
+
+function m_safe_path_under($root, $candidate) {
+    $root = rtrim((string)$root, "/");
+    $cand = m_normalize_path($candidate);
+    $base = m_normalize_path($root);
+    if ($base === "/" || $base === "") return $cand;
+    if (str_starts_with($cand, $base . "/") || $cand === $base) return $cand;
+    return "";
+}
+
+function m_match_ext($name, array $exts) {
+    $name = strtolower((string)$name);
+    $dot = strrpos($name, ".");
+    if ($dot === false) return false;
+    $ext = substr($name, $dot + 1);
+    foreach ($exts as $e) if (strtolower($e) === $ext) return true;
+    return false;
+}
+
+function m_dir_is_listable($dir) {
+    $d = (string)$dir;
+    if ($d === "" || !is_dir($d)) return false;
+    $test = @opendir($d);
+    if ($test === false) return false;
+    @closedir($test);
+    return true;
+}
+
+function m_storage_label($strategy) {
+    switch ((string)$strategy) {
+        case "local_disk":   return "本地磁盘：已唤醒 / 可播放";
+        case "local_share":  return "Unraid 用户共享：已就绪";
+        case "smb":          return "SMB 远端存储：已就绪";
+        case "nfs":          return "NFS 远端存储：已就绪";
+        case "fnos":         return "飞牛音乐(FnOS)：已连接";
+        case "navidrome":    return "Navidrome 远端 API：已连接";
+        case "invalid":      return "本地音乐目录不可访问";
+        case "empty":        return "本地音乐目录为空";
+        default:             return "等待播放自动检测";
+    }
+}
+
+function m_detect_storage_source(array $cfg) {
+    $cfgStr = m_cfg_get($cfg, "MUSIC_DIR", "/mnt/user/music");
+    $userShare = m_cfg_get($cfg, "MUSIC_SHARE", "/mnt/user/music");
+    $disks = m_cfg_get($cfg, "MUSIC_DISKS", "/mnt/disk1/music,/mnt/disk2/music");
+    $strategy = "invalid";
+    $label = "";
+    $info = [];
+    $candidates = [];
+    $candidates[] = ["path" => $cfgStr, "kind" => "auto", "share" => $userShare];
+    foreach (preg_split('/\s*,\s*/', (string)$disks) as $d) {
+        $d = trim((string)$d);
+        if ($d === "") continue;
+        $candidates[] = ["path" => $d, "kind" => "disk", "share" => $userShare];
+    }
+    foreach ($candidates as $c) {
+        $p = (string)$c["path"];
+        if ($p === "" || !m_dir_is_listable($p)) continue;
+        if (!empty($c["share"])) {
+            $strategy = "local_share";
+            $label = "Unraid 用户共享：" . $p;
+        } else {
+            $strategy = "local_disk";
+            $label = "本地磁盘：" . $p;
+        }
+        $info = ["path" => $p];
+        return ["strategy" => $strategy, "label" => $label, "info" => $info];
+    }
+    $smb = trim((string)m_cfg_get($cfg, "MUSIC_SMB", ""));
+    $nfs = trim((string)m_cfg_get($cfg, "MUSIC_NFS", ""));
+    if ($smb !== "" || $nfs !== "") {
+        $strategy = $smb !== "" ? "smb" : "nfs";
+        $label = $strategy === "smb" ? "SMB 远端存储默认挂载" : "NFS 远端存储默认挂载";
+    }
+    $fnos = trim((string)m_cfg_get($cfg, "MUSIC_FNOS_URL", ""));
+    $navidrome = trim((string)m_cfg_get($cfg, "MUSIC_NAVIDROME_URL", ""));
+    if ($fnos !== "") {
+        $strategy = "fnos";
+        $label = "飞牛音乐(FnOS)";
+    } else if ($navidrome !== "") {
+        $strategy = "navidrome";
+        $label = "Navidrome 远端 API";
+    }
+    if ($strategy === "invalid") {
+        $label = "本地音乐目录不可访问";
+    }
+    return ["strategy" => $strategy, "label" => $label, "info" => $info];
+}
+
+function m_wake_source_path(array $cfg) {
+    $cfgStr = m_cfg_get($cfg, "MUSIC_DIR", "/mnt/user/music");
+    $userShare = m_cfg_get($cfg, "MUSIC_SHARE", "/mnt/user/music");
+    $disks = m_cfg_get($cfg, "MUSIC_DISKS", "/mnt/disk1/music,/mnt/disk2/music");
+    $candidates = [];
+    $candidates[] = ["path" => $cfgStr, "kind" => "auto", "share" => $userShare];
+    foreach (preg_split('/\s*,\s*/', (string)$disks) as $d) {
+        $d = trim((string)$d);
+        if ($d === "") continue;
+        $candidates[] = ["path" => $d, "kind" => "disk", "share" => $userShare];
+    }
+    foreach ($candidates as $c) {
+        $p = (string)$c["path"];
+        if ($p === "") continue;
+        if (!empty($c["share"])) {
+            $strat = "local_share";
+        } else {
+            $strat = "local_disk";
+        }
+        if (m_dir_is_listable($p)) {
+            $entries = @scandir($p);
+            $hasFiles = false;
+            if (is_array($entries)) {
+                foreach ($entries as $name) {
+                    if ($name === "." || $name === "..") continue;
+                    $hasFiles = true;
+                    break;
+                }
+            }
+            return [
+                "ok" => true,
+                "strategy" => $strat,
+                "label" => m_storage_label($strat),
+                "path" => $p,
+                "empty" => !$hasFiles,
+            ];
+        }
+        $emcmd = trim((string)m_cfg_get($cfg, "MUSIC_EMCMD", "/usr/local/sbin/emcmd"));
+        if (!empty($c["share"])) {
+            $strat = "local_share";
+        } else if (is_file($emcmd) && is_executable($emcmd)) {
+            $rc = 0;
+            $out = [];
+            @exec(escapeshellcmd($emcmd) . " cmdWOL /boot/config/plugins/dynamix/include/cmdWOL.php '" . escapeshellarg($p) . "' 2>&1", $out, $rc);
+            usleep(800000);
+            if (m_dir_is_listable($p)) {
+                return [
+                    "ok" => true,
+                    "strategy" => $strat,
+                    "label" => m_storage_label($strat),
+                    "path" => $p,
+                    "empty" => false,
+                    "woken" => true,
+                ];
+            }
+        }
+    }
+    $smb = trim((string)m_cfg_get($cfg, "MUSIC_SMB", ""));
+    $nfs = trim((string)m_cfg_get($cfg, "MUSIC_NFS", ""));
+    if ($smb !== "") {
+        return [
+            "ok" => true,
+            "strategy" => "smb",
+            "label" => m_storage_label("smb"),
+            "path" => $smb,
+        ];
+    }
+    if ($nfs !== "") {
+        return [
+            "ok" => true,
+            "strategy" => "nfs",
+            "label" => m_storage_label("nfs"),
+            "path" => $nfs,
+        ];
+    }
+    $fnos = trim((string)m_cfg_get($cfg, "MUSIC_FNOS_URL", ""));
+    if ($fnos !== "") {
+        return [
+            "ok" => true,
+            "strategy" => "fnos",
+            "label" => m_storage_label("fnos"),
+            "path" => $fnos,
+        ];
+    }
+    $navidrome = trim((string)m_cfg_get($cfg, "MUSIC_NAVIDROME_URL", ""));
+    if ($navidrome !== "") {
+        return [
+            "ok" => true,
+            "strategy" => "navidrome",
+            "label" => m_storage_label("navidrome"),
+            "path" => $navidrome,
+        ];
+    }
+    return [
+        "ok" => false,
+        "strategy" => "invalid",
+        "label" => m_storage_label("invalid"),
+    ];
+}
+
+function m_fnos_secret_path() {
+    $candidates = [
+        "/boot/config/plugins/theme.music/fnos.secret",
+        "/boot/config/plugins/theme.music/.fnos.secret",
+    ];
+    foreach ($candidates as $c) {
+        if (is_file($c)) return $c;
+    }
+    return "";
+}
+
+function m_fnos_password(array $cfg) {
+    $inline = trim((string)m_cfg_get($cfg, "MUSIC_FNOS_PASSWORD", ""));
+    if ($inline !== "") return $inline;
+    $sp = m_fnos_secret_path();
+    if ($sp !== "" && is_file($sp) && is_readable($sp)) {
+        $raw = (string)@file_get_contents($sp);
+        $raw = preg_replace('/\s+/', '', $raw);
+        if ($raw !== "") return $raw;
+    }
+    return "";
+}
+
+function m_fnos_sign($method, $pathQ, $body = "", $password = "") {
+    $raw = strtolower($method) . "&" . $pathQ;
+    if ($body !== "") $raw .= "&" . $body;
+    if ($password === "") return "";
+    return hash_hmac("sha1", $raw, $password);
+}
+
+function m_fnos_request(array $cfg, $pathQ, $params = [], $method = "GET", $body = "", $timeout = 15) {
+    $url = trim((string)m_cfg_get($cfg, "MUSIC_FNOS_URL", ""));
+    if ($url === "") return [null, "未配置飞牛音乐地址"];
+    $url = rtrim($url, "/");
+    $user = trim((string)m_cfg_get($cfg, "MUSIC_FNOS_USER", ""));
+    $pwd = m_fnos_password($cfg);
+    $sep = (strpos($pathQ, "?") === false) ? "?" : "&";
+    $fullUrl = $url . "/" . ltrim($pathQ, "/");
+    if (strtolower($method) === "get" && !empty($params)) {
+        $fullUrl .= $sep . http_build_query($params);
+    }
+    $headers = [
+        "Accept: application/json",
+        "User-Agent: ThemeMusic/1.3.0",
+    ];
+    if ($user !== "" && $pwd !== "") {
+        $sign = m_fnos_sign($method, $pathQ, $body, $pwd);
+        $headers[] = "X-Fnos-User: " . $user;
+        if ($sign !== "") $headers[] = "X-Fnos-Sign: " . $sign;
+    }
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $fullUrl);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper($method));
+    if (strtoupper($method) !== "GET" && $body !== "") {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+    }
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, (int)$timeout);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+    $resp = curl_exec($ch);
+    $errno = curl_errno($ch);
+    $errStr = $errno ? curl_error($ch) : "";
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($errno !== 0 || $resp === false) {
+        return [null, "网络错误：" . ($errStr ?: ("errno=" . $errno))];
+    }
+    if ((int)$code >= 400) {
+        return [null, "HTTP " . (int)$code];
+    }
+    $j = json_decode((string)$resp, true);
+    if (!is_array($j)) return [null, "响应非 JSON"];
+    return [$j, ""];
+}
+
+function m_fnos_response(array $cfg, $pathQ, $params = [], $timeout = 15) {
+    return m_fnos_request($cfg, $pathQ, $params, "GET", "", $timeout);
+}
+
+function m_navidrome_request(array $cfg, $pathQ, $params = [], $method = "GET", $body = "", $timeout = 15) {
+    $url = trim((string)m_cfg_get($cfg, "MUSIC_NAVIDROME_URL", ""));
+    if ($url === "") return [null, "未配置 Navidrome 地址"];
+    $url = rtrim($url, "/");
+    $user = trim((string)m_cfg_get($cfg, "MUSIC_NAVIDROME_USER", ""));
+    $pwd = trim((string)m_cfg_get($cfg, "MUSIC_NAVIDROME_PASSWORD", ""));
+    $client = trim((string)m_cfg_get($cfg, "MUSIC_NAVIDROME_CLIENT", "theme-music"));
+    $version = trim((string)m_cfg_get($cfg, "MUSIC_NAVIDROME_VERSION", "1.16.1"));
+    $fmt = trim((string)m_cfg_get($cfg, "MUSIC_NAVIDROME_FORMAT", "json"));
+    $sep = (strpos($pathQ, "?") === false) ? "?" : "&";
+    $auth = [
+        "u" => $user,
+        "c" => $client,
+        "v" => $version,
+        "f" => $fmt,
+    ];
+    if ($user !== "" && $pwd !== "") {
+        $tok = "enc:" . bin2hex(md5($pwd, true));
+        $auth["t"] = substr(md5($auth["t"] = "" . $tok, true), 0, 0);
+        $salt = bin2hex(random_bytes(6));
+        $auth["s"] = $salt;
+        $auth["t"] = md5($pwd . $salt);
+    }
+    $fullUrl = $url . "/" . ltrim($pathQ, "/") . $sep . http_build_query(array_merge($auth, $params));
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $fullUrl);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper($method));
+    if (strtoupper($method) !== "GET" && $body !== "") {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
+    }
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, (int)$timeout);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+    $resp = curl_exec($ch);
+    $errno = curl_errno($ch);
+    $errStr = $errno ? curl_error($ch) : "";
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($errno !== 0 || $resp === false) {
+        return [null, "网络错误：" . ($errStr ?: ("errno=" . $errno))];
+    }
+    if ((int)$code >= 400) {
+        return [null, "HTTP " . (int)$code];
+    }
+    $j = json_decode((string)$resp, true);
+    if (!is_array($j)) return [null, "响应非 JSON"];
+    return [$j, ""];
+}
+
+function m_local_music_root(array $cfg) {
+    $strat = m_detect_storage_source($cfg);
+    if (!empty($strat["info"]["path"])) return (string)$strat["info"]["path"];
+    $cfgStr = m_cfg_get($cfg, "MUSIC_DIR", "/mnt/user/music");
+    if (m_dir_is_listable($cfgStr)) return $cfgStr;
+    foreach (preg_split('/\s*,\s*/', (string)m_cfg_get($cfg, "MUSIC_DISKS", "")) as $d) {
+        $d = trim((string)$d);
+        if ($d !== "" && m_dir_is_listable($d)) return $d;
+    }
+    return "";
+}
+
+function m_local_scan_files($root, $maxDepth = 6) {
+    $root = rtrim((string)$root, "/");
+    if ($root === "" || !is_dir($root)) return [];
+    $audio = ["mp3","flac","m4a","aac","ogg","wav","opus","wma"];
+    $out = [];
+    $it = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::LEAVES_ONLY
+    );
+    $it->setMaxDepth((int)$maxDepth);
+    foreach ($it as $info) {
+        $name = (string)$info->getFilename();
+        if (m_match_ext($name, $audio)) {
+            $out[] = (string)$info->getPathname();
+        }
+    }
+    return $out;
+}
+
+if ($action === "config") {
+    $auto = m_detect_storage_source($cfg);
+    $out = [
+        "ok" => true,
+        "config" => [
+            "MUSIC_DIR" => m_cfg_get($cfg, "MUSIC_DIR", "/mnt/user/music"),
+            "MUSIC_SHARE" => m_cfg_get($cfg, "MUSIC_SHARE", "/mnt/user/music"),
+            "MUSIC_DISKS" => m_cfg_get($cfg, "MUSIC_DISKS", "/mnt/disk1/music,/mnt/disk2/music"),
+            "MUSIC_SMB" => m_cfg_get($cfg, "MUSIC_SMB", ""),
+            "MUSIC_NFS" => m_cfg_get($cfg, "MUSIC_NFS", ""),
+            "MUSIC_FNOS_URL" => m_cfg_get($cfg, "MUSIC_FNOS_URL", ""),
+            "MUSIC_FNOS_USER" => m_cfg_get($cfg, "MUSIC_FNOS_USER", ""),
+            "MUSIC_NAVIDROME_URL" => m_cfg_get($cfg, "MUSIC_NAVIDROME_URL", ""),
+            "MUSIC_NAVIDROME_USER" => m_cfg_get($cfg, "MUSIC_NAVIDROME_USER", ""),
+            "MUSIC_NAVIDROME_PASSWORD" => m_cfg_get($cfg, "MUSIC_NAVIDROME_PASSWORD", ""),
+            "MUSIC_CARD_MODE" => m_cfg_get($cfg, "MUSIC_CARD_MODE", "card"),
+            "MUSIC_CHIP_MODE" => m_cfg_get($cfg, "MUSIC_CHIP_MODE", "chip"),
+        ],
+        "storage" => $auto,
+    ];
+    mjson($out);
+}
+
+if ($action === "storage_status") {
+    $st = m_wake_source_path($cfg);
+    mjson(["ok" => true] + $st);
+}
+
+if ($action === "library") {
+    $auto = m_detect_storage_source($cfg);
+    $strat = (string)($auto["strategy"] ?? "");
+    $root = (string)($auto["info"]["path"] ?? "");
+    $files = [];
+    $source = "";
+    if ($strat === "fnos" || $strat === "navidrome") {
+        mjson([
+            "ok" => true,
+            "strategy" => $strat,
+            "label" => $auto["label"] ?? "",
+            "files" => [],
+            "message" => "远端音源使用 library_remote action 拉取",
+        ]);
+    }
+    if ($root === "") {
+        mjson(["ok" => false, "strategy" => $strat, "label" => $auto["label"] ?? "", "error" => "无可用本地音乐目录"], 200);
+    }
+    $files = m_local_scan_files($root, 6);
+    $source = $root;
+    mjson([
+        "ok" => true,
+        "strategy" => $strat,
+        "label" => $auto["label"] ?? "",
+        "source" => $source,
+        "count" => count($files),
+        "files" => array_slice($files, 0, 5000),
+    ]);
+}
+
+if ($action === "library_remote") {
+    $auto = m_detect_storage_source($cfg);
+    $strat = (string)($auto["strategy"] ?? "");
+    if ($strat === "fnos") {
+        [$resp, $err] = m_fnos_response($cfg, "track/list", ["page" => 1, "pageSize" => 200], 20);
+        if (!is_array($resp)) {
+            mjson(["ok" => false, "error" => $err], 502);
+        }
+        $data = $resp["data"] ?? $resp;
+        $items = is_array($data) ? ($data["list"] ?? $data["items"] ?? $data["tracks"] ?? []) : [];
+        mjson(["ok" => true, "strategy" => "fnos", "items" => $items, "count" => count($items)]);
+    }
+    if ($strat === "navidrome") {
+        [$resp, $err] = m_navidrome_request($cfg, "rest/getMusicFolders", [], "GET", "", 15);
+        if (!is_array($resp)) {
+            mjson(["ok" => false, "error" => $err], 502);
+        }
+        mjson(["ok" => true, "strategy" => "navidrome", "raw" => $resp]);
+    }
+    mjson(["ok" => false, "error" => "非远端音源策略"], 400);
+}
+
+if ($action === "stream") {
+    $auto = m_detect_storage_source($cfg);
+    $strat = (string)($auto["strategy"] ?? "");
+    $root = (string)($auto["info"]["path"] ?? "");
+    $rel = isset($_GET["path"]) ? (string)$_GET["path"] : "";
+    $rel = m_safe_path_under($root !== "" ? $root : "/", $rel);
+    if ($rel === "" || !is_file($rel)) {
+        mjson(["ok" => false, "error" => "文件不存在"], 404);
+    }
+    $size = filesize($rel);
+    $ext = strtolower(pathinfo($rel, PATHINFO_EXTENSION));
+    $mime = "application/octet-stream";
+    $map = [
+        "mp3" => "audio/mpeg",
+        "m4a" => "audio/mp4",
+        "aac" => "audio/aac",
+        "flac" => "audio/flac",
+        "ogg" => "audio/ogg",
+        "opus" => "audio/ogg",
+        "wav" => "audio/wav",
+        "wma" => "audio/x-ms-wma",
+    ];
+    if (isset($map[$ext])) $mime = $map[$ext];
+    header("Content-Type: " . $mime);
+    header("Content-Length: " . (int)$size);
+    header("Accept-Ranges: bytes");
+    header("Cache-Control: public, max-age=600");
+    $fp = fopen($rel, "rb");
+    $start = 0;
+    $end = (int)$size - 1;
+    $code = 200;
+    if (isset($_SERVER["HTTP_RANGE"]) && preg_match('/bytes=(\d*)-(\d*)/', (string)$_SERVER["HTTP_RANGE"], $m)) {
+        $rs = $m[1] === "" ? null : (int)$m[1];
+        $re = $m[2] === "" ? null : (int)$m[2];
+        if ($rs !== null) $start = $rs;
+        if ($re !== null) $end = $re;
+        if ($start > $end) $start = $end;
+        $code = 206;
+        header("HTTP/1.1 206 Partial Content");
+        header("Content-Range: bytes " . $start . "-" . $end . "/" . (int)$size);
+        header("Content-Length: " . ((int)$end - (int)$start + 1));
+    }
+    $sent = 0;
+    $len = (int)$end - (int)$start + 1;
+    fseek($fp, (int)$start);
+    while ($sent < $len && !feof($fp)) {
+        $buf = fread($fp, 8192);
+        if ($buf === false) break;
+        $echoed = strlen($buf);
+        if ($sent + $echoed > $len) {
+            $buf = substr($buf, 0, $len - $sent);
+            $echoed = strlen($buf);
+        }
+        echo $buf;
+        flush();
+        $sent += $echoed;
+    }
+    fclose($fp);
+    exit;
+}
+
+if ($action === "lyrics") {
+    $auto = m_detect_storage_source($cfg);
+    $strat = (string)($auto["strategy"] ?? "");
+    $rel = isset($_GET["path"]) ? (string)$_GET["path"] : "";
+    $root = m_local_music_root($cfg);
+    $rel = m_safe_path_under($root !== "" ? $root : "/", $rel);
+    $basename = $rel !== "" ? pathinfo($rel, PATHINFO_FILENAME) : "";
+    $lyrics = "";
+    $source = "";
+    if ($strat === "fnos" && $rel !== "") {
+        [$resp, $err] = m_fnos_response($cfg, "track/lyric", ["path" => $rel], 12);
+        if (is_array($resp)) {
+            $data = $resp["data"] ?? $resp;
+            $lyrics = (string)($data["lyric"] ?? $data["lrc"] ?? $data["lyrics"] ?? "");
+            $source = "fnos";
+        }
+    }
+    if ($lyrics === "" && $rel !== "") {
+        $candidates = [];
+        if ($basename !== "") {
+            $candidates[] = $root . "/" . $basename . ".lrc";
+            $candidates[] = $root . "/" . $basename . ".txt";
+        }
+        foreach ($candidates as $c) {
+            if (is_file($c) && is_readable($c)) {
+                $lyrics = (string)@file_get_contents($c);
+                if ($lyrics !== "") { $source = "local"; break; }
+            }
+        }
+    }
+    mjson([
+        "ok" => true,
+        "strategy" => $strat,
+        "source" => $source,
+        "lyrics" => $lyrics,
+    ]);
+}
+
+if ($action === "cover") {
+    $auto = m_detect_storage_source($cfg);
+    $strat = (string)($auto["strategy"] ?? "");
+    $rel = isset($_GET["path"]) ? (string)$_GET["path"] : "";
+    $root = m_local_music_root($cfg);
+    $rel = m_safe_path_under($root !== "" ? $root : "/", $rel);
+    $basename = $rel !== "" ? pathinfo($rel, PATHINFO_FILENAME) : "";
+    if ($strat === "fnos" && $rel !== "") {
+        [$resp, $err] = m_fnos_response($cfg, "track/cover", ["path" => $rel], 12);
+        if (is_array($resp)) {
+            $data = $resp["data"] ?? $resp;
+            $url = (string)($data["url"] ?? $data["cover"] ?? "");
+            $b64 = (string)($data["base64"] ?? $data["b64"] ?? "");
+            if ($b64 !== "") {
+                $bin = base64_decode($b64, true);
+                if ($bin !== false) {
+                    header("Content-Type: image/jpeg");
+                    echo $bin;
+                    exit;
+                }
+            }
+            if ($url !== "") {
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $url);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+                $bin = curl_exec($ch);
+                curl_close($ch);
+                if (is_string($bin) && $bin !== "") {
+                    header("Content-Type: image/jpeg");
+                    echo $bin;
+                    exit;
+                }
+            }
+        }
+    }
+    if ($rel === "") {
+        m_emit_json_file("/usr/local/emhttp/plugins/theme.music/assets/img/cover_empty.json");
+        exit;
+    }
+    $candidates = [];
+    if ($basename !== "") {
+        $candidates[] = $root . "/" . $basename . ".jpg";
+        $candidates[] = $root . "/" . $basename . ".jpeg";
+        $candidates[] = $root . "/" . $basename . ".png";
+    }
+    foreach ($candidates as $c) {
+        if (is_file($c) && is_readable($c)) {
+            $size = filesize($c);
+            $ext = strtolower(pathinfo($c, PATHINFO_EXTENSION));
+            $mime = $ext === "png" ? "image/png" : "image/jpeg";
+            header("Content-Type: " . $mime);
+            header("Content-Length: " . (int)$size);
+            header("Cache-Control: public, max-age=3600");
+            readfile($c);
+            exit;
+        }
+    }
+    m_emit_json_file("/usr/local/emhttp/plugins/theme.music/assets/img/cover_empty.json");
+    exit;
+}
+
+if ($action === "navidrome_test") {
+    $testCfg = $cfg;
+    $urlInput = rtrim(trim((string)($_POST["url"] ?? "")), "/");
+    $userInput = trim(str_replace(["\0", "\r", "\n"], "", (string)($_POST["user"] ?? "")));
+    $passwordInput = substr(str_replace(["\0", "\r", "\n"], "", (string)($_POST["password"] ?? "")), 0, 256);
+    if ($urlInput === "") {
+        mjson(["ok" => false, "error" => "Navidrome 地址无效"], 400);
+    }
+    if (!preg_match('#^https?://#i', $urlInput) || !is_array(@parse_url($urlInput)) || empty(parse_url($urlInput)["host"])) {
+        mjson(["ok" => false, "error" => "Navidrome 地址无效"], 400);
+    }
+    $testCfg["MUSIC_NAVIDROME_URL"] = substr($urlInput, 0, 512);
+    if ($userInput !== "") $testCfg["MUSIC_NAVIDROME_USER"] = substr($userInput, 0, 128);
+    if ($passwordInput !== "") $testCfg["MUSIC_NAVIDROME_PASSWORD"] = $passwordInput;
+    [$resp, $err] = m_navidrome_request($testCfg, "rest/ping", [], "GET", "", 12);
+    if (!is_array($resp)) {
+        mjson(["ok" => false, "error" => $err !== "" ? $err : "Navidrome 连接失败"], 400);
+    }
+    mjson([
+        "ok" => true,
+        "server_type" => "navidrome",
+        "library_access" => true,
+    ]);
+}
+
+if ($action === "fnos_test") {
+    $testCfg = $cfg;
+    $urlInput = rtrim(trim((string)($_POST["url"] ?? "")), "/");
+    $userInput = trim(str_replace(["\0", "\r", "\n"], "", (string)($_POST["user"] ?? "")));
+    $passwordInput = substr(str_replace(["\0", "\r", "\n"], "", (string)($_POST["password"] ?? "")), 0, 256);
+    if ($urlInput === "") {
+        mjson(["ok" => false, "error" => "飞牛音乐地址无效"], 400);
+    }
+    if (!preg_match('#^https?://#i', $urlInput) || !is_array(@parse_url($urlInput)) || empty(parse_url($urlInput)["host"])) {
+        mjson(["ok" => false, "error" => "飞牛音乐地址无效"], 400);
+    }
+    $testCfg["MUSIC_FNOS_URL"] = substr($urlInput, 0, 512);
+    if ($userInput !== "") $testCfg["MUSIC_FNOS_USER"] = substr($userInput, 0, 128);
+    if ($passwordInput !== "") $testCfg["MUSIC_FNOS_PASSWORD"] = $passwordInput;
+    [$resp, $err] = m_fnos_response($testCfg, "track/list", ["page" => 1, "pageSize" => 1], 12);
+    if (!is_array($resp)) {
+        mjson(["ok" => false, "error" => $err !== "" ? $err : "飞牛音乐连接失败"], 400);
+    }
+    $data = $resp["data"] ?? $resp;
+    $items = is_array($data) ? ($data["list"] ?? $data["items"] ?? $data["tracks"] ?? []) : [];
+    $libraryAccess = is_array($items);
+    mjson([
+        "ok" => true,
+        "server_type" => "fnos",
+        "library_access" => $libraryAccess,
+    ]);
+}
+
+if ($action === "dash_pos") {
+    // Cross-browser / reboot-safe dashboard card placement (localStorage alone is per-browser).
+    $file = "/boot/config/plugins/theme.music/dash_pos.json";
+    $method = $method;
+    if ($method === "GET") {
+        if (!is_file($file)) mjson(["ok" => true, "pos" => null]);
+        $raw = (string)@file_get_contents($file);
+        $j = json_decode($raw, true);
+        if (!is_array($j)) mjson(["ok" => true, "pos" => null]);
+        mjson(["ok" => true, "pos" => $j]);
+    }
+    $raw = (string)file_get_contents("php://input");
+    $j = json_decode($raw, true);
+    if (!is_array($j)) mjson(["ok" => false, "error" => "无效请求体"], 400);
+    $pos = $j["pos"] ?? null;
+    if (!is_array($pos)) mjson(["ok" => false, "error" => "pos 缺失"], 400);
+    @file_put_contents($file, json_encode($pos, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    mjson(["ok" => true]);
+}
+
+if ($action === "runtime") {
+    $file = "/boot/config/plugins/theme.music/runtime.json";
+    $method = $method;
+    if ($method === "GET") {
+        if (!is_file($file)) mjson(["ok" => true, "state" => null]);
+        $raw = (string)@file_get_contents($file);
+        $j = json_decode($raw, true);
+        if (!is_array($j)) mjson(["ok" => true, "state" => null]);
+        mjson(["ok" => true, "state" => $j]);
+    }
+    $raw = (string)file_get_contents("php://input");
+    $j = json_decode($raw, true);
+    if (!is_array($j)) mjson(["ok" => false, "error" => "无效请求体"], 400);
+    @file_put_contents($file, json_encode($j, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    mjson(["ok" => true]);
+}
+
+if ($action === "save_cfg") {
+    $raw = (string)file_get_contents("php://input");
+    $j = json_decode($raw, true);
+    if (!is_array($j)) mjson(["ok" => false, "error" => "无效请求体"], 400);
+    $lines = [];
+    foreach ($j as $k => $v) {
+        $k = (string)$k;
+        $v = (string)$v;
+        if (!preg_match('/^[A-Z0-9_]{1,64}$/', $k)) continue;
+        $v = str_replace(["\r", "\n"], ["\\r", "\\n"], $v);
+        $lines[] = $k . "=\"" . $v . "\"";
+    }
+    @file_put_contents($persist, implode("\n", $lines) . "\n");
+    mjson(["ok" => true]);
+}
+
+if ($action === "clear_cache") {
+    $what = isset($_REQUEST["what"]) ? (string)$_REQUEST["what"] : "all";
+    $root = m_local_music_root($cfg);
+    $removed = 0;
+    $bytes = 0;
+    $errParts = [];
+    $lyrics = ["removed" => 0, "bytes" => 0];
+    $cover = ["removed" => 0, "bytes" => 0];
+    $candidates = [
+        "/boot/config/plugins/theme.music/cache",
+        "/tmp/theme.music.cache",
+    ];
+    foreach ($candidates as $dir) {
+        if (!is_dir($dir)) continue;
+        $it = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::LEAVES_ONLY
+        );
+        foreach ($it as $info) {
+            $f = (string)$info->getPathname();
+            $ext = strtolower($info->getExtension());
+            $ok = false;
+            if ($what === "lyrics" && $ext === "lrc") $ok = true;
+            else if ($what === "cover" && in_array($ext, ["jpg","jpeg","png","webp"])) $ok = true;
+            else if ($what === "all" || $what === "legacy") $ok = in_array($ext, ["lrc","jpg","jpeg","png","webp"]);
+            if (!$ok) continue;
+            $sz = (int)$info->getSize();
+            if (@unlink($f)) {
+                $removed++;
+                $bytes += $sz;
+                if ($ext === "lrc") $lyrics["removed"]++;
+                else $cover["removed"]++;
+                if ($ext === "lrc") $lyrics["bytes"] += $sz;
+                else $cover["bytes"] += $sz;
+            } else {
+                $errParts[] = $f;
+            }
+        }
+    }
+    mjson([
+        "ok" => true,
+        "what" => $what,
+        "removed" => $removed,
+        "bytes" => $bytes,
+        "lyrics" => $lyrics,
+        "cover" => $cover,
+        "errors" => $errParts,
+    ]);
+}
+
+mjson(["ok" => false, "error" => "unknown action"], 400);
