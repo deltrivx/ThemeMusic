@@ -15,8 +15,10 @@ jobs:
       version: ${{ steps.build.outputs.version }}
     runs-on: ubuntu-latest
     steps:
-      - name: 检出仓库
+      - name: 检出仓库（包含正式版本 tags）
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: 构建并校验当前版本
         id: build
         run: |
