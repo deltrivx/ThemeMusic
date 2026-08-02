@@ -12,6 +12,53 @@
 .tm-source-config.tm-hidden {
   display: none !important;
 }
+.tm-source-config {
+  width: 100%;
+  margin: 0;
+}
+.tm-source-row {
+  display: grid;
+  grid-template-columns: minmax(9.5rem, 30%) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 38px;
+  box-sizing: border-box;
+}
+.tm-source-label {
+  text-align: right;
+  white-space: nowrap;
+  color: inherit;
+}
+.tm-source-control {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.tm-source-control > input,
+.tm-source-control > .tm-path-field,
+.tm-source-control > .tm-inline-actions {
+  width: min(100%, var(--tm-ctrl-w, 28rem));
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.tm-source-control > input {
+  min-height: 30px;
+}
+@media (max-width: 720px) {
+  .tm-source-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 6px 0;
+  }
+  .tm-source-label {
+    text-align: center;
+  }
+  .tm-source-control {
+    justify-content: center;
+  }
+}
 
 /* ---------- Title: switch on left; version/actions on right ---------- */
 #tm-ver-bar.tm-ver-bar-source[hidden],
