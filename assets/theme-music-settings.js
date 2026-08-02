@@ -1553,8 +1553,55 @@
       "tm-fnos-url",
       "tm-fnos-user",
       "tm-fnos-password",
+      "tm-btn-test-fnos",
     ].forEach(function (id) {
       hideRow(document.getElementById(id), !isFnos);
+    });
+  }
+
+  function wireFnosTest() {
+    var btn = document.getElementById("tm-btn-test-fnos");
+    var out = document.getElementById("tm-fnos-status");
+    var url = document.getElementById("tm-fnos-url");
+    var user = document.getElementById("tm-fnos-user");
+    var password = document.getElementById("tm-fnos-password");
+    if (!btn || !out) return;
+    btn.addEventListener("click", function (ev) {
+      if (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+      var values = {
+        url: url ? String(url.value || "").trim() : "",
+        user: user ? String(user.value || "").trim() : "",
+        password: password ? String(password.value || "") : "",
+      };
+      if (!values.url) {
+        out.textContent = "请先填写飞牛音乐地址";
+        return;
+      }
+      btn.disabled = true;
+      out.textContent = "正在连接…";
+      var csrf = csrfToken();
+      var body = "url=" + encodeURIComponent(values.url) +
+        "&user=" + encodeURIComponent(values.user) +
+        "&password=" + encodeURIComponent(values.password);
+      if (csrf) body += "&csrf_token=" + encodeURIComponent(csrf);
+      fetch("/plugins/theme.music/ucwc-music-api.php?action=fnos_test&_ts=" + Date.now(), {
+        method: "POST",
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: body,
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        btn.disabled = false;
+        if (j.ok) {
+          out.textContent = "连接成功！";
+        } else {
+          out.textContent = j.error || "连接失败";
+        }
+      }).catch(function () {
+        btn.disabled = false;
+        out.textContent = "网络错误";
+      });
     });
   }
 
