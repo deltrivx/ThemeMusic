@@ -118,21 +118,6 @@ function m_fnos_track_path($cfg, $trackId) {
     return trim((string)($rows[0]["path"] ?? ""));
 }
 
-/**
- * Resolve an FnOS track path to a local file path (via SMB mount on Unraid).
- */
-function m_fnos_local_path($cfg, $fnosPath) {
-    $fnosPath = trim((string)$fnosPath);
-    if ($fnosPath === "") return "";
-    $musicDir = rtrim(trim((string)($cfg["MUSIC_FNOS_MUSIC_DIR"] ?? "/vol2/1000/Music")), "/");
-    $localMount = "/mnt/remotes/FnOS/Music";
-    if (strpos($fnosPath, $musicDir) === 0) {
-        $rel = substr($fnosPath, strlen($musicDir));
-        return rtrim($localMount, "/") . "/" . ltrim($rel, "/");
-    }
-    return $fnosPath;
-}
-
 function m_realpath_dir($dir) {
     $dir = trim((string)$dir);
     if ($dir === "") return "";
@@ -2349,7 +2334,7 @@ if ($action === "config") {
         "fnos_host" => $cfg["MUSIC_FNOS_HOST"] ?? "",
         "fnos_db" => $cfg["MUSIC_FNOS_DB"] ?? "",
         "fnos_music_dir" => $cfg["MUSIC_FNOS_MUSIC_DIR"] ?? "",
-        "fnos_local_mount" => "/mnt/remotes/FnOS/Music",
+
         "local_dir" => $cfg["MUSIC_LOCAL_DIR"] ?? "",
         "local_dir_ok" => $root !== "",
         "navidrome_url" => $cfg["MUSIC_NAVIDROME_URL"] ?? "",
@@ -2644,15 +2629,18 @@ if ($action === "stream") {
             mjson(["ok" => false, "error" => "未找到文件"], 404);
             exit;
         }
-        $localPath = m_fnos_local_path($cfg, $path);
-        if ($localPath === "" || !is_file($localPath)) {
-            mjson(["ok" => false, "error" => "无法访问音乐文件"], 404);
-            exit;
+        $host = trim((string)($cfg["MUSIC_FNOS_HOST"] ?? "192.168.31.5"));
+        $absPath = $path;
+        if (strpos($absPath, "/") !== 0) {
+            $musicDir = rtrim(trim((string)($cfg["MUSIC_FNOS_MUSIC_DIR"] ?? "/vol2/1000/Music")), "/");
+            $absPath = $musicDir . "/" . ltrim($absPath, "/");
         }
-        $mime = m_mime_by_suffix(pathinfo($localPath, PATHINFO_EXTENSION));
+        $mime = m_mime_by_suffix(pathinfo($absPath, PATHINFO_EXTENSION));
         header("Content-Type: " . $mime);
         header("Content-Disposition: inline");
-        readfile($localPath);
+        $sshCmd = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 " . escapeshellarg($host);
+        $cmd = $sshCmd . " cat " . escapeshellarg($absPath);
+        passthru($cmd);
         exit;
     }
     if (($cfg["MUSIC_SOURCE"] ?? "local") === "navidrome") {
@@ -2728,15 +2716,18 @@ if ($action === "lyrics") {
             mjson(["ok" => false, "error" => "未找到文件"], 404);
             exit;
         }
-        $localPath = m_fnos_local_path($cfg, $path);
-        if ($localPath === "" || !is_file($localPath)) {
-            mjson(["ok" => false, "error" => "无法访问音乐文件"], 404);
-            exit;
+        $host = trim((string)($cfg["MUSIC_FNOS_HOST"] ?? "192.168.31.5"));
+        $absPath = $path;
+        if (strpos($absPath, "/") !== 0) {
+            $musicDir = rtrim(trim((string)($cfg["MUSIC_FNOS_MUSIC_DIR"] ?? "/vol2/1000/Music")), "/");
+            $absPath = $musicDir . "/" . ltrim($absPath, "/");
         }
-        $mime = m_mime_by_suffix(pathinfo($localPath, PATHINFO_EXTENSION));
+        $mime = m_mime_by_suffix(pathinfo($absPath, PATHINFO_EXTENSION));
         header("Content-Type: " . $mime);
         header("Content-Disposition: inline");
-        readfile($localPath);
+        $sshCmd = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 " . escapeshellarg($host);
+        $cmd = $sshCmd . " cat " . escapeshellarg($absPath);
+        passthru($cmd);
         exit;
     }
     if (($cfg["MUSIC_SOURCE"] ?? "local") === "navidrome") {
@@ -2986,15 +2977,18 @@ if ($action === "cover") {
             mjson(["ok" => false, "error" => "未找到文件"], 404);
             exit;
         }
-        $localPath = m_fnos_local_path($cfg, $path);
-        if ($localPath === "" || !is_file($localPath)) {
-            mjson(["ok" => false, "error" => "无法访问音乐文件"], 404);
-            exit;
+        $host = trim((string)($cfg["MUSIC_FNOS_HOST"] ?? "192.168.31.5"));
+        $absPath = $path;
+        if (strpos($absPath, "/") !== 0) {
+            $musicDir = rtrim(trim((string)($cfg["MUSIC_FNOS_MUSIC_DIR"] ?? "/vol2/1000/Music")), "/");
+            $absPath = $musicDir . "/" . ltrim($absPath, "/");
         }
-        $mime = m_mime_by_suffix(pathinfo($localPath, PATHINFO_EXTENSION));
+        $mime = m_mime_by_suffix(pathinfo($absPath, PATHINFO_EXTENSION));
         header("Content-Type: " . $mime);
         header("Content-Disposition: inline");
-        readfile($localPath);
+        $sshCmd = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 " . escapeshellarg($host);
+        $cmd = $sshCmd . " cat " . escapeshellarg($absPath);
+        passthru($cmd);
         exit;
     }
     if (($cfg["MUSIC_SOURCE"] ?? "local") === "navidrome") {
