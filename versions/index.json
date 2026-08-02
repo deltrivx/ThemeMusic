@@ -1,8 +1,16 @@
 {
   "schema": 1,
-  "default": "v1.3.0-beta10",
-  "latest_version": "v1.3.0-beta10",
+  "default": "v1.3.0",
+  "latest_version": "v1.3.0",
   "versions": [
+    {
+      "id": "v1.3.0",
+      "label": "Theme Music v1.3.0：三音源统一、FnOS HTTP 音源、歌词与播放稳定性正式版",
+      "channel": "latest",
+      "released_at": "2026-08-03",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.3.0-beta10",
       "label": "Beta v1.3.0-beta10：修复三音源设置 UI、FnOS 配置链路、播放器与 API 契约",
