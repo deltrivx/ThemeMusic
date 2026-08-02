@@ -14,7 +14,7 @@
     {
       "id": "v1.3.0-beta7",
       "label": "Beta v1.3.0-beta7：飞牛音乐配置行结构对齐正式版，修复设置页布局错乱",
-      "channel": "latest",
+      "channel": "beta",
       "released_at": "2026-08-02",
       "music": true,
       "ota": true

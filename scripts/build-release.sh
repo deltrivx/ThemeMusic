@@ -17,6 +17,10 @@ fi
 VERSION_DIR="$ROOT/versions/$VERSION"
 DIST_DIR="$ROOT/dist/$VERSION"
 PACKAGE_DIR="$DIST_DIR/ThemeMusic-$VERSION"
+SOURCE_REF=""
+if git -C "$ROOT" rev-parse --verify -q "$VERSION^{commit}" >/dev/null; then
+  SOURCE_REF="$VERSION"
+fi
 RUNTIME_FILES=(
   ThemeMusic.page
   ThemeMusic_Loader.page
@@ -32,12 +36,26 @@ RUNTIME_FILES=(
   ucwc-music-api.php
 )
 
+copy_source_file() {
+  local rel="$1"
+  local dest="$2"
+  if [[ -n "$SOURCE_REF" ]]; then
+    git -C "$ROOT" show "$SOURCE_REF:$rel" > "$dest"
+  else
+    cp "$ROOT/$rel" "$dest"
+  fi
+}
+
 if [[ "$MODE" == "snapshot" ]]; then
+  if [[ "$VERSION" != *-beta* && -z "$SOURCE_REF" ]]; then
+    echo "正式版本 $VERSION 缺少对应 Git tag；拒绝从当前工作树生成正式快照" >&2
+    exit 1
+  fi
   rm -rf "$VERSION_DIR"
   mkdir -p "$VERSION_DIR/assets"
   for rel in "${RUNTIME_FILES[@]}"; do
     mkdir -p "$VERSION_DIR/$(dirname "$rel")"
-    cp "$ROOT/$rel" "$VERSION_DIR/$rel"
+    copy_source_file "$rel" "$VERSION_DIR/$rel"
   done
 elif [[ ! -d "$VERSION_DIR" ]]; then
   echo "版本目录不存在：$VERSION_DIR" >&2
@@ -76,9 +94,15 @@ cp -R "$VERSION_DIR"/. "$PACKAGE_DIR"/
 copy_release_file() {
   local rel="$1"
   local dest="$2"
-  if [[ "$MODE" == "existing" ]]; then
-    if git -C "$ROOT" cat-file -e "$VERSION:$rel" 2>/dev/null; then
-      git -C "$ROOT" show "$VERSION:$rel" > "$dest"
+  local ref=""
+  if [[ -n "$SOURCE_REF" ]]; then
+    ref="$SOURCE_REF"
+  elif [[ "$MODE" == "existing" ]]; then
+    ref="$VERSION"
+  fi
+  if [[ -n "$ref" ]]; then
+    if git -C "$ROOT" cat-file -e "$ref:$rel" 2>/dev/null; then
+      git -C "$ROOT" show "$ref:$rel" > "$dest"
     else
       return 1
     fi
