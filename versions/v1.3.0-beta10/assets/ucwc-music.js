@@ -793,7 +793,7 @@
           }
           recoverStalledPlayback("ui-sync");
           var cur = audio.currentTime || 0;
-          var dur = audio.duration || 0;
+          var dur = audioDurationSeconds(current());
           paintProgressTo(document.getElementById("ucwc-music-card") || root, cur, dur);
           updatePlayBtn();
         }
@@ -1803,11 +1803,26 @@
     return m + ":" + (s < 10 ? "0" : "") + s;
   }
 
+  function trackDurationSeconds(track) {
+    var value = Number(track && track.duration || 0);
+    return isFinite(value) && value > 0 ? value : 0;
+  }
+
+  function audioDurationSeconds(track) {
+    var metadata = Number(audio && audio.duration || 0);
+    return isFinite(metadata) && metadata > 0 ? metadata : trackDurationSeconds(track);
+  }
+
   function trackUrl(id) {
     // Stable URL per track — Date.now() bust caused full reload + seek-to-0 races
     var v = 1;
     try { v = encodeURIComponent(String(id || "")).length || 1; } catch (e0) { v = 1; }
-    return apiBase + "?action=stream&path=" + encodeURIComponent(id) + "&id=" + encodeURIComponent(id) + "&_v=" + v;
+    var track = null;
+    for (var i = 0; i < state.tracks.length; i++) {
+      if (String(state.tracks[i].id || "") === String(id || "")) { track = state.tracks[i]; break; }
+    }
+    var path = track && track.path ? track.path : id;
+    return apiBase + "?action=stream&path=" + encodeURIComponent(path) + "&id=" + encodeURIComponent(id) + "&_v=" + v;
   }
 
   function current() {
@@ -2042,7 +2057,7 @@
     if (audio && shouldShowCard()) {
       try {
         var cur = audio.currentTime || 0;
-        var dur = audio.duration || 0;
+        var dur = audioDurationSeconds(current());
         paintProgressTo(document.getElementById("ucwc-music-card") || root, cur, dur);
       } catch (e1) {}
     }
@@ -2730,7 +2745,8 @@
     state.cover.loading = true;
     if (state.cover.missId && state.cover.missId !== trackId) state.cover.missId = "";
     // Keep previous art visible until the new cover is ready (or confirmed empty).
-    var imageUrl = apiBase + "?action=cover&path=" + encodeURIComponent(trackId) + "&id=" + encodeURIComponent(trackId) + "&fetch=2&_ts=" + Date.now();
+    var imagePath = t.path || trackId;
+    var imageUrl = apiBase + "?action=cover&path=" + encodeURIComponent(imagePath) + "&id=" + encodeURIComponent(trackId) + "&fetch=2&_ts=" + Date.now();
     fetch(imageUrl, {
       credentials: "same-origin",
       cache: "no-store",
@@ -3386,8 +3402,9 @@
     if (root && !cardDomLive()) {
       ensureLiveCardRefs();
     }
+    var t = current();
     var cur = audio.currentTime || 0;
-    var dur = audio.duration || 0;
+    var dur = audioDurationSeconds(t);
     var liveCard = null;
     try {
       liveCard = document.getElementById("ucwc-music-card");
@@ -5561,7 +5578,7 @@
                   }
                   bindNativeDashboardControls(live);
                   if (audio) {
-                    paintProgressTo(live, audio.currentTime || 0, audio.duration || 0);
+                    paintProgressTo(live, audio.currentTime || 0, audioDurationSeconds(current()));
                     updatePlayBtn();
                   }
                   return;
@@ -5598,7 +5615,7 @@
       else if (shouldShowCard() && root) placeInDashboard(root);
       if (audio && shouldShowCard()) {
         try {
-          paintProgressTo(document.getElementById("ucwc-music-card") || root, audio.currentTime || 0, audio.duration || 0);
+          paintProgressTo(document.getElementById("ucwc-music-card") || root, audio.currentTime || 0, audioDurationSeconds(current()));
           updatePlayBtn();
         } catch (eP) {}
       }

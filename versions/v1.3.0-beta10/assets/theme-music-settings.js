@@ -1549,7 +1549,7 @@
     var fields = {
       local: ["tm-music-local-dir"],
       navidrome: ["tm-navidrome-url", "tm-navidrome-user", "tm-navidrome-password", "tm-btn-test-navidrome"],
-      fnos: ["tm-fnos-url", "tm-fnos-user", "tm-fnos-password", "tm-btn-test-fnos", "tm-fnos-help"],
+      fnos: ["tm-fnos-url", "tm-fnos-user", "tm-fnos-password", "tm-btn-test-fnos"],
     };
     var all = [];
     Object.keys(fields).forEach(function (kind) {
