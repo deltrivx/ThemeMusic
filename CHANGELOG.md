@@ -1,3 +1,30 @@
+## v1.3.0-beta2 — 2026-08-02
+
+### 修复
+
+- **重写飞牛音乐(FnOS)音源**：从 SSH+sqlite3 方式彻底改为 HTTP API 方式
+- 移除 SSH 连接和 sqlite3 命令依赖，改为通过 HTTP API 获取曲库、流媒体、封面、歌词
+- 配置项改为「飞牛音乐地址 + 用户名 + 密码」，与 Navidrome 配置一致
+- 飞牛音乐 API 路由：`/api/v1/track/list`、`/api/v1/track/stream`、`/api/v1/static/cover/track`、`/api/v1/search/lyrics/best`
+
+### 配置项变化
+
+| 旧配置（已移除） | 新配置 |
+|---|---|
+| `MUSIC_FNOS_HOST` | `MUSIC_FNOS_URL`（飞牛音乐 HTTP 地址） |
+| `MUSIC_FNOS_DB` | `MUSIC_FNOS_USER`（飞牛音乐用户名） |
+| `MUSIC_FNOS_MUSIC_DIR` | `MUSIC_FNOS_PASSWORD`（飞牛音乐密码） |
+
+### 文件改动
+
+| 文件 | 改动 |
+|------|------|
+| `ucwc-music-api.php` | 删除 SSH+sqlite3 代码，新增 `m_fnos_url()` / `m_fnos_response()` / `m_fnos_proxy()` / `m_fnos_songs()` HTTP API 函数 |
+| `ThemeMusic.page` | 设置页改为「地址 + 用户名 + 密码」输入框 |
+| `README.md` | 版本号更新至 v1.3.0-beta2 |
+| `theme.music.plg` | 版本号更新至 v1.3.0-beta2 |
+| `versions/index.json` | 版本索引更新至 v1.3.0-beta2 |
+
 ## v1.3.0-beta — 2026-08-02
 
 ### 新增
