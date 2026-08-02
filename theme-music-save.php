@@ -42,7 +42,7 @@ function tm_defaults() {
         "MUSIC_LOCAL_DIR" => "",
         "MUSIC_NAVIDROME_URL" => "http://127.0.0.1:4533",
         "MUSIC_NAVIDROME_USER" => "",
-        "MUSIC_FNOS_URL" => "http://192.168.31.5/music",
+        "MUSIC_FNOS_URL" => "",
         "MUSIC_FNOS_USER" => "",
         "MUSIC_VOLUME" => "70",
         "MUSIC_AUTOPLAY" => "no",

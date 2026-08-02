@@ -34,7 +34,7 @@ function tm_defaults() {
         "MUSIC_RUN_MODE" => "card",
         "MUSIC_UI" => "card",
         "MUSIC_SOURCE" => "local",
-        "MUSIC_FNOS_URL" => "http://192.168.31.5/music",
+        "MUSIC_FNOS_URL" => "",
         "MUSIC_FNOS_USER" => "",
         "MUSIC_FNOS_PASSWORD" => "",
         "MUSIC_LOCAL_DIR" => "",
@@ -411,16 +411,15 @@ Navidrome 连接:
 : <span class="tm-inline-actions">
     <button type="button" id="tm-btn-test-navidrome" class="tm-pill-btn" title="直接使用当前填写内容测试，不必先应用">测试连接</button>
     <span id="tm-navidrome-status" class="tm-muted"><?=is_file($navidrome_secret_path) && filesize($navidrome_secret_path) > 0 ? "密码已保存" : "尚未保存密码"?></span>
-      </div>
 
       飞牛音乐地址:
-: <input type="url" id="tm-fnos-url" name="MUSIC_FNOS_URL" maxlength="256" value="<?=htmlspecialchars($fx["MUSIC_FNOS_URL"] ?? "http://192.168.31.5/music")?>" placeholder="http://192.168.31.5/music" autocomplete="off" spellcheck="false">
+: <input type="url" id="tm-fnos-url" name="MUSIC_FNOS_URL" maxlength="256" value="<?=htmlspecialchars($fx["MUSIC_FNOS_URL"] ?? "")?>" placeholder="http://192.168.31.5/music" autocomplete="off" spellcheck="false">
 
       飞牛音乐用户:
 : <input type="text" id="tm-fnos-user" name="MUSIC_FNOS_USER" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_FNOS_USER"] ?? "")?>" placeholder="飞牛音乐登录用户名" autocomplete="off" spellcheck="false">
 
       飞牛音乐密码:
-: <input type="password" id="tm-fnos-password" name="MUSIC_FNOS_PASSWORD" maxlength="256" value="" placeholder="输入飞牛音乐密码" autocomplete="new-password">
+: <input type="password" id="tm-fnos-password" name="MUSIC_FNOS_PASSWORD" maxlength="256" value="" placeholder="<?=is_file($fnos_secret_path) && filesize($fnos_secret_path) > 0 ? "已安全保存；留空保持不变" : "输入飞牛音乐密码"?>" autocomplete="new-password">
 
       飞牛音乐连接:
 : <span class="tm-inline-actions">
