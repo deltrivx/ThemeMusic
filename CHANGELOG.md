@@ -1,3 +1,16 @@
+## v1.3.0-beta7 — 2026-08-02
+
+### 修复
+
+- **设置页布局错乱**：比对 v1.2.2 正式版结构逐行修复飞牛音乐配置区块
+  - Navidrome 连接行的 `<span class="tm-inline-actions">` 此前未闭合，导致后续所有行被吞进该 span
+  - 飞牛「地址 / 用户 / 密码 / 连接」四行的定义列表标签存在多余缩进，破坏 Unraid `dl/dt/dd` 渲染
+  - 飞牛连接行结尾误用 `</div>`，应为 `</span>`；该多余闭合标签破坏整页 DOM 层级
+  - 文件末尾丢失换行已补回
+- **飞牛测试连接按钮无响应**：`wireFnosTest()` 此前只定义未调用，现已在初始化流程中接上
+- 飞牛输入框属性对齐 Navidrome：地址 `maxlength=512` / `autocomplete=url`，用户 `autocomplete=username`
+- **还原被污染的 v1.2.2 正式版归档**：`versions/v1.2.2/` 下的 `ThemeMusic.page`、`ucwc-music-api.php`、`files.manifest` 曾被 beta 内容覆盖，现恢复为 v1.2.2 发布时的原始内容
+
 ## v1.3.0-beta6 — 2026-08-02
 
 ### 修复
