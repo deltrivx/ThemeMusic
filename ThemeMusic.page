@@ -411,26 +411,16 @@ Navidrome 连接:
     <button type="button" id="tm-btn-test-navidrome" class="tm-pill-btn" title="直接使用当前填写内容测试，不必先应用">测试连接</button>
     <span id="tm-navidrome-status" class="tm-muted"><?=is_file($navidrome_secret_path) && filesize($navidrome_secret_path) > 0 ? "密码已保存" : "尚未保存密码"?></span>
       </div>
-      <div class="tm-source-config tm-source-fnos" id="tm-fnos-config" style="display:none;margin-top:8px;">
-        <div class="tm-label-row">
-          <span class="tm-label">飞牛音乐</span>
-        </div>
-        <div class="tm-field">
-          <span class="tm-hint">通过 HTTP API 获取飞牛音乐曲库，需要飞牛音乐已登录</span>
-        </div>
-        <div class="tm-field">
-          <label>飞牛音乐地址：</label>
-          <input type="text" id="tm-fnos-url" name="MUSIC_FNOS_URL" maxlength="256" value="<?=htmlspecialchars($fx["MUSIC_FNOS_URL"] ?? "http://192.168.31.5/music")?>" placeholder="http://192.168.31.5/music" autocomplete="off" spellcheck="false">
-        </div>
-        <div class="tm-field">
-          <label>用户名：</label>
-          <input type="text" id="tm-fnos-user" name="MUSIC_FNOS_USER" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_FNOS_USER"] ?? "")?>" placeholder="飞牛音乐登录用户名" autocomplete="off" spellcheck="false">
-        </div>
-        <div class="tm-field">
-          <label>密码：</label>
-          <input type="password" id="tm-fnos-password" name="MUSIC_FNOS_PASSWORD" maxlength="256" value="<?=htmlspecialchars($fx["MUSIC_FNOS_PASSWORD"] ?? "")?>" placeholder="飞牛音乐登录密码" autocomplete="off" spellcheck="false">
-        </div>
-      </div>
+      <span id="tm-fnos-hint" class="tm-muted" style="display:none">通过 HTTP API 获取飞牛音乐曲库，需要飞牛音乐已登录</span>
+
+      飞牛音乐地址:
+: <input type="url" id="tm-fnos-url" name="MUSIC_FNOS_URL" maxlength="256" value="<?=htmlspecialchars($fx["MUSIC_FNOS_URL"] ?? "http://192.168.31.5/music")?>" placeholder="http://192.168.31.5/music" autocomplete="off" spellcheck="false">
+
+      飞牛音乐用户:
+: <input type="text" id="tm-fnos-user" name="MUSIC_FNOS_USER" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_FNOS_USER"] ?? "")?>" placeholder="飞牛音乐登录用户名" autocomplete="off" spellcheck="false">
+
+      飞牛音乐密码:
+: <input type="password" id="tm-fnos-password" name="MUSIC_FNOS_PASSWORD" maxlength="256" value="" placeholder="输入飞牛音乐密码" autocomplete="new-password">
   </span>
 
 存储准备:
