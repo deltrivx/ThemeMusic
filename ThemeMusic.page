@@ -392,41 +392,52 @@ window.__TM_BOOT__ = {
   <?=mk_option($fx["MUSIC_SOURCE"] ?? "local", "fnos", "飞牛音乐(FnOS)")?>
   </select>
 
+<? $cur_src = $fx["MUSIC_SOURCE"] ?? "local"; ?>
+
+<? if ($cur_src === "local"): ?>
 本地音乐目录:
-: <span class="tm-path-field ucwc-path-field">
+: <span class="tm-path-field ucwc-path-field" data-tm-source="local">
     <input type="text" class="tm-local-path ucwc-local-path ucwc-path-dir" id="tm-music-local-dir" name="MUSIC_LOCAL_DIR" maxlength="512" value="<?=htmlspecialchars($fx["MUSIC_LOCAL_DIR"] ?? "")?>" placeholder="点击浏览选择音乐目录（如 /mnt/user/Music）" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickcloseonfile="false" data-pickroot="<?= htmlspecialchars($ucwc_pickroot) ?>" data-picktop="<?= htmlspecialchars($ucwc_pickroot) ?>" data-pickmatch=".*">
     <button type="button" class="tm-path-browse ucwc-path-browse" title="浏览目录" aria-label="浏览目录"><i class="fa fa-folder-open-o" aria-hidden="true"></i></button>
   </span>
 
+<? endif; ?>
+
+<? if ($cur_src === "navidrome"): ?>
 Navidrome 地址:
-: <input type="url" id="tm-navidrome-url" name="MUSIC_NAVIDROME_URL" maxlength="512" value="<?=htmlspecialchars($fx["MUSIC_NAVIDROME_URL"] ?? "http://127.0.0.1:4533")?>" placeholder="http://127.0.0.1:4533" autocomplete="url" spellcheck="false">
+: <input type="url" id="tm-navidrome-url" name="MUSIC_NAVIDROME_URL" maxlength="512" value="<?=htmlspecialchars($fx["MUSIC_NAVIDROME_URL"] ?? "http://127.0.0.1:4533")?>" placeholder="http://127.0.0.1:4533" autocomplete="url" spellcheck="false" data-tm-source="navidrome">
 
 Navidrome 用户:
-: <input type="text" id="tm-navidrome-user" name="MUSIC_NAVIDROME_USER" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_NAVIDROME_USER"] ?? "")?>" placeholder="Navidrome 用户名" autocomplete="username" spellcheck="false">
+: <input type="text" id="tm-navidrome-user" name="MUSIC_NAVIDROME_USER" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_NAVIDROME_USER"] ?? "")?>" placeholder="Navidrome 用户名" autocomplete="username" spellcheck="false" data-tm-source="navidrome">
 
 Navidrome 密码:
-: <input type="password" id="tm-navidrome-password" name="MUSIC_NAVIDROME_PASSWORD" maxlength="256" value="" placeholder="<?=is_file($navidrome_secret_path) && filesize($navidrome_secret_path) > 0 ? "已安全保存；留空保持不变" : "输入 Navidrome 密码"?>" autocomplete="new-password">
+: <input type="password" id="tm-navidrome-password" name="MUSIC_NAVIDROME_PASSWORD" maxlength="256" value="" placeholder="<?=is_file($navidrome_secret_path) && filesize($navidrome_secret_path) > 0 ? "已安全保存；留空保持不变" : "输入 Navidrome 密码"?>" autocomplete="new-password" data-tm-source="navidrome">
 
 Navidrome 连接:
-: <span class="tm-inline-actions">
+: <span class="tm-inline-actions" data-tm-source="navidrome">
     <button type="button" id="tm-btn-test-navidrome" class="tm-pill-btn" title="直接使用当前填写内容测试，不必先应用">测试连接</button>
     <span id="tm-navidrome-status" class="tm-muted"><?=is_file($navidrome_secret_path) && filesize($navidrome_secret_path) > 0 ? "密码已保存" : "尚未保存密码"?></span>
   </span>
 
+<? endif; ?>
+
+<? if ($cur_src === "fnos"): ?>
 飞牛音乐地址:
-: <input type="url" id="tm-fnos-url" name="MUSIC_FNOS_URL" maxlength="512" value="<?=htmlspecialchars($fx["MUSIC_FNOS_URL"] ?? "")?>" placeholder="http://192.168.31.5/music" autocomplete="url" spellcheck="false">
+: <input type="url" id="tm-fnos-url" name="MUSIC_FNOS_URL" maxlength="512" value="<?=htmlspecialchars($fx["MUSIC_FNOS_URL"] ?? "")?>" placeholder="http://192.168.31.5/music" autocomplete="url" spellcheck="false" data-tm-source="fnos">
 
 飞牛音乐用户:
-: <input type="text" id="tm-fnos-user" name="MUSIC_FNOS_USER" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_FNOS_USER"] ?? "")?>" placeholder="飞牛音乐用户名" autocomplete="username" spellcheck="false">
+: <input type="text" id="tm-fnos-user" name="MUSIC_FNOS_USER" maxlength="128" value="<?=htmlspecialchars($fx["MUSIC_FNOS_USER"] ?? "")?>" placeholder="飞牛音乐用户名" autocomplete="username" spellcheck="false" data-tm-source="fnos">
 
 飞牛音乐密码:
-: <input type="password" id="tm-fnos-password" name="MUSIC_FNOS_PASSWORD" maxlength="256" value="" placeholder="<?=is_file($fnos_secret_path) && filesize($fnos_secret_path) > 0 ? "已安全保存；留空保持不变" : "输入飞牛音乐密码"?>" autocomplete="new-password">
+: <input type="password" id="tm-fnos-password" name="MUSIC_FNOS_PASSWORD" maxlength="256" value="" placeholder="<?=is_file($fnos_secret_path) && filesize($fnos_secret_path) > 0 ? "已安全保存；留空保持不变" : "输入飞牛音乐密码"?>" autocomplete="new-password" data-tm-source="fnos">
 
 飞牛音乐连接:
-: <span class="tm-inline-actions">
+: <span class="tm-inline-actions" data-tm-source="fnos">
     <button type="button" id="tm-btn-test-fnos" class="tm-pill-btn" title="直接使用当前填写内容测试，不必先应用">测试连接</button>
     <span id="tm-fnos-status" class="tm-muted"><?=is_file($fnos_secret_path) && filesize($fnos_secret_path) > 0 ? "密码已保存" : "尚未保存密码"?></span>
   </span>
+
+<? endif; ?>
 
 存储准备:
 : <span class="tm-inline-actions">
@@ -498,15 +509,6 @@ Navidrome 连接:
   <?=mk_option($fx["MUSIC_REPEAT_MOBILE"] ?? "off", "all", "列表循环")?>
   <?=mk_option($fx["MUSIC_REPEAT_MOBILE"] ?? "off", "one", "单曲循环")?>
   </select>
-
-附属文件:
-: <span class="tm-cache-actions" id="tm-cache-actions">
-    <span class="tm-cache-copy">本地/挂载音源：歌曲同目录 <code>歌曲名.lrc</code> / <code>歌曲名.jpg</code>（不写启动盘）；Navidrome 使用服务端 API</span>
-    <span class="tm-cache-control-row">
-      <button type="button" id="tm-btn-clear-legacy-cache" class="tm-pill-btn" title="只清除旧版本遗留在启动盘的歌词和封面缓存">清理启动盘旧缓存</button>
-      <span class="tm-muted" id="tm-cache-status" aria-live="polite"></span>
-    </span>
-  </span>
 
 > **主题音乐**：音乐音源决定附属项显隐；本地目录显示路径，Navidrome 显示服务器与账号。电脑 / 手机可分别设置运行模式与音量、自动播放、随机、循环；手机选「和电脑端配置相同」时隐藏其余手机项。卡片与胶囊是否显示仅由总开关和运行模式决定。播放时自动区分本地磁盘唤醒与 SMB/NFS 远端就绪检测；歌词和下载封面只写入歌曲同目录，目录不可写时会明确报错。
 
