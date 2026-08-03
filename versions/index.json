@@ -1,12 +1,20 @@
 {
   "schema": 1,
-  "default": "v1.3.1",
-  "latest_version": "v1.3.1",
+  "default": "v1.3.2",
+  "latest_version": "v1.3.2",
   "versions": [
+    {
+      "id": "v1.3.2",
+      "label": "Theme Music v1.3.2：GitHub 更新日志稳定性与 action 错误反馈修复正式版",
+      "channel": "latest",
+      "released_at": "2026-08-03",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.3.1",
       "label": "Theme Music v1.3.1：FnOS 认证恢复、歌词稳定性与三音源空歌词修复正式版",
-      "channel": "latest",
+      "channel": "history",
       "released_at": "2026-08-03",
       "music": true,
       "ota": true

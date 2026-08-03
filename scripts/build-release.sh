@@ -47,7 +47,7 @@ copy_source_file() {
 }
 
 if [[ "$MODE" == "snapshot" ]]; then
-  if [[ "$VERSION" != *-beta* && -z "$SOURCE_REF" ]]; then
+  if [[ "$VERSION" != *-beta* && -z "$SOURCE_REF" && "${ALLOW_UNTAGGED_SNAPSHOT:-0}" != "1" ]]; then
     echo "正式版本 $VERSION 缺少对应 Git tag；拒绝从当前工作树生成正式快照" >&2
     exit 1
   fi
