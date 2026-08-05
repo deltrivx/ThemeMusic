@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY      version   "v1.3.3">
+<!ENTITY      version   "v1.3.4">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-			<!ENTITY ver       "v1.3.3">
+			<!ENTITY ver       "v1.3.4">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 
@@ -17,6 +17,9 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+### v1.3.4
+- 修复 Release 资产超时后空文件进入清单校验导致安装失败的问题
+- 安装器增加下载非空校验并回退版本快照
 ### v1.3.3
 - 修复手机端独立配置复用电脑端播放状态、音源循环进入未配置来源的问题
 - 优化安装失败日志反馈和正常/异常状态提示
