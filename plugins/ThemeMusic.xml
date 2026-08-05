@@ -1,0 +1,12 @@
+<Plugin>
+  <Name>Theme Music</Name>
+  <Overview>Native Unraid WebGUI music player with three configurable sources: local directories, Navidrome/OpenSubsonic, and the FnOS music HTTP API. Includes dashboard card, site-wide music capsule, synchronized lyrics, covers, large-library indexing, desktop/mobile profiles, and reliable OTA updates.</Overview>
+  <PluginURL>https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/theme.music.plg</PluginURL>
+  <PluginAuthor>deltrivx</PluginAuthor>
+  <Support>https://github.com/deltrivx/ThemeMusic/issues</Support>
+  <Project>https://github.com/deltrivx/ThemeMusic</Project>
+  <ReadMe>https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/PLUGIN-README.md</ReadMe>
+  <Category>MediaServer:Music</Category>
+  <MinVer>6.12.0</MinVer>
+  <License>GPLv2</License>
+</Plugin>
