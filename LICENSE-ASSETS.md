@@ -18,6 +18,6 @@ https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
 
 ## 与代码许可证的边界
 
-程序源代码和随代码使用所必需的技术接口文件采用仓库根目录 [LICENSE](LICENSE) 中的 PolyForm Noncommercial License 1.0.0。代码和本文件覆盖的原创材料均禁止未经授权的商业使用。
+程序源代码和随代码使用所必需的技术接口文件采用仓库根目录 [LICENSE](LICENSE) 中的 GNU GPL-2.0。代码遵循 GPL-2.0 的使用、修改和分发条件；本文件覆盖的原创文档与视觉材料仍受 CC BY-NC-SA 4.0 约束。
 
 第三方商标、名称、图标和其他材料不因本文件而获得再授权，详见 [NOTICE](NOTICE)。
