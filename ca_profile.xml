@@ -1,0 +1,5 @@
+<CommunityApplications>
+  <Profile>Theme Music is an Unraid WebGUI music player maintained by deltrivx. It supports three configurable sources: local music directories, Navidrome/OpenSubsonic, and the FnOS music HTTP API. The repository contains the plugin, release snapshots, documentation, security notes, and support information.</Profile>
+  <WebPage>https://github.com/deltrivx/ThemeMusic</WebPage>
+  <Forum>https://github.com/deltrivx/ThemeMusic/issues</Forum>
+</CommunityApplications>
