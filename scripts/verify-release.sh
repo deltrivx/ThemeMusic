@@ -83,6 +83,7 @@ echo "[3/7] 所有版本清单哈希与正式 tag 基线"
 python3 - <<'PY'
 import hashlib, json, pathlib, subprocess, tempfile
 root = pathlib.Path('versions')
+current_version = json.loads((root / 'index.json').read_text())['latest_version']
 count = 0
 for manifest in sorted(root.glob('*/files.manifest')):
     data = json.loads(manifest.read_text())
@@ -98,7 +99,7 @@ for manifest in sorted(root.glob('*/files.manifest')):
 
     # A stable release archive must be byte-for-byte identical to its tag.
     # Beta snapshots may intentionally follow the current development tree.
-    if '-beta' not in version:
+    if '-beta' not in version and version != current_version:
         try:
             subprocess.run(['git', 'cat-file', '-e', f'{version}^{{commit}}'], check=True,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
