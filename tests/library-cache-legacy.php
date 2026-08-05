@@ -21,12 +21,14 @@ $path = m_library_cache_path($scope);
 try {
     file_put_contents($path, json_encode(['tracks' => [['id' => 'legacy-track']]]));
     touch($path, time() - 60);
+    clearstatcache(true, $path);
     $recent = m_library_cache_read($scope);
     if (!is_array($recent) || !isset($recent['created_at']) || time() - (int)$recent['created_at'] > 120) {
         throw new RuntimeException('Recent legacy cache did not inherit file mtime');
     }
 
     touch($path, time() - 21601);
+    clearstatcache(true, $path);
     $stale = m_library_cache_read($scope);
     if (!is_array($stale) || time() - (int)$stale['created_at'] <= 21600) {
         throw new RuntimeException('Old legacy cache did not inherit stale file mtime');
