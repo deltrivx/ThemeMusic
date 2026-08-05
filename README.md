@@ -7,7 +7,7 @@
 
 面向 Unraid WebGUI 的独立音乐播放器插件。它把本地目录或 Navidrome/OpenSubsonic 曲库原生融入仪表盘，同时提供可跨页面工作的音乐胶囊、歌词、封面、断点续播和完整的桌面/移动端配置。
 
-> 当前版本：**v1.3.2** · 插件 ID：`theme.music` · 最低 Unraid：**6.12.0**
+> 当前版本：**v1.3.3** · 插件 ID：`theme.music` · 最低 Unraid：**6.12.0**
 
 ## 为什么选择 Theme Music
 
@@ -32,7 +32,7 @@ Theme Music 只有一个状态源。卡片与胶囊是否显示完全由设置�
 | `chip` | — | ✓ | 继续 |
 | `both` | ✓ | ✓ | 继续 |
 
-手机运行模式可选择“和电脑端配置相同”，也可以独立覆盖。全站模式使用内联 `<audio>` 跨页面持续播放，不需要额外的宿主窗口。切换到非 Tower 页面时播放自动暂停，返回 Tower 后自动恢复。浏览器仍可能要求首次播放手势。
+手机运行模式可选择“和电脑端配置相同”，也可以独立覆盖。独立模式会按设备 profile 隔离音量、随机、循环、侧栏、曲目索引、曲库缓存和续播状态，不再复用电脑端浏览器存储。全站模式使用内联 `<audio>` 跨页面持续播放，不需要额外的宿主窗口。切换到非 Tower 页面时播放自动暂停，返回 Tower 后自动恢复。浏览器仍可能要求首次播放手势。
 
 ## 安装
 
@@ -54,7 +54,7 @@ curl -fsSL https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/in
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/install.sh -o /tmp/theme-music-install.sh
-sh /tmp/theme-music-install.sh install v1.3.2 ota
+sh /tmp/theme-music-install.sh install v1.3.3 ota
 ```
 
 ## 快速配置
@@ -85,6 +85,8 @@ sh /tmp/theme-music-install.sh install v1.3.2 ota
 - 本地侧车歌词、Navidrome 结构化歌词、普通歌词和可控的在线歌词匹配。
 - 目录封面、FLAC 内嵌封面、Navidrome 封面和受控的封面补全。
 - HTTP Range 串流、进度拖动、跨页会话恢复和播放失败自恢复。
+- 音源切换只遍历已配置的本地、Navidrome 或 FnOS 音源；未配置音源会跳过并给出明确提示。
+- 正常曲库提示会在“已就绪”、曲目总数和扫描进度之间循环；配置、网络、解码和空曲库异常会持续显示，直到重试或恢复。
 - 卡片位置持久化，兼容 Unraid 重绘、克隆、两栏/三栏与移动布局。
 - 本地大曲库由低优先级单实例后台任务建立完整索引，页面始终复用最后一次完整结果，重复刷新不会叠加扫描。
 - 曲目列表按 300 首分段渲染，完整索引不再因 1200 首前端截断而丢失；歌词可按曲目提前/延后 0.5 秒并手动归零。
@@ -132,7 +134,7 @@ sh /tmp/theme-music-install.sh install v1.3.2 ota
 shasum -a 256 -c SHA256SUMS
 ```
 
-设置页支持稳定版、测试版和历史版本选择。安装器优先一次下载经过总校验的 Release 归档，再按版本清单逐文件核对 SHA256，并只写入变化项；插件列表元数据也会同步到所安装的版本。
+设置页支持稳定版、测试版和历史版本选择。安装器优先一次下载经过总校验的 Release 归档，再按版本清单逐文件核对 SHA256，并只写入变化项；插件列表元数据也会同步到所安装的版本。设置页安装任务会显示后台进程的阶段、重试原因和失败日志尾部，便于区分网络提交失败与实际安装失败。
 
 ## 兼容性与边界
 

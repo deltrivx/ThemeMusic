@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY      version   "v1.3.2">
+<!ENTITY      version   "v1.3.3">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-			<!ENTITY ver       "v1.3.2">
+			<!ENTITY ver       "v1.3.3">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 
@@ -17,6 +17,9 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+### v1.3.3
+- 修复手机端独立配置复用电脑端播放状态、音源循环进入未配置来源的问题
+- 优化安装失败日志反馈和正常/异常状态提示
 ### v1.3.2
 - 修复 GitHub 更新日志 action 响应慢时长时间停留加载状态的问题
 - 增加远程索引与 CHANGELOG 的有限超时、镜像回退和短期缓存
