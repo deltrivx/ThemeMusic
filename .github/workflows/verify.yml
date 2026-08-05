@@ -13,27 +13,54 @@ permissions:
 jobs:
   verify:
     outputs:
-      version: ${{ steps.build.outputs.version }}
+      version: ${{ steps.metadata.outputs.version }}
+      title: ${{ steps.metadata.outputs.title }}
+      prerelease: ${{ steps.metadata.outputs.prerelease }}
     runs-on: ubuntu-latest
     steps:
       - name: 检出仓库（包含正式版本 tags）
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: 构建并校验当前版本
-        id: build
+      - name: 解析发布版本与索引元数据
+        id: metadata
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          version="$(python3 -c 'import json; print(json.load(open("versions/index.json"))["latest_version"])')"
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          import re
+
+          index = json.load(open("versions/index.json", encoding="utf-8"))
+          version = os.environ["REF_NAME"] if os.environ["EVENT_NAME"] == "push" and os.environ["REF_NAME"].startswith("v") else index["latest_version"]
+          item = next((item for item in index["versions"] if item.get("id") == version), None)
+          if item is None:
+              raise SystemExit(f"版本索引缺少目标版本：{version}")
+          print(f"version={version}")
+          print(f"title={item['label']}")
+          print(f"prerelease={'true' if re.search(r'-(?:beta|Beta)[0-9]*$', version) else 'false'}")
+          PY
+      - name: 构建并校验目标版本
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+          IS_TAG: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+        run: |
           ./scripts/verify-release.sh
-          ./scripts/build-release.sh "$version" snapshot
-          git diff --exit-code -- "versions/$version"
-          ./scripts/verify-release.sh "$version"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$IS_TAG" = "true" ]; then
+            ./scripts/verify-release.sh "$VERSION"
+            ./scripts/build-release.sh "$VERSION" existing
+          else
+            ./scripts/build-release.sh "$VERSION" snapshot
+            git diff --exit-code -- "versions/$VERSION"
+          fi
+          ./scripts/verify-release.sh "$VERSION"
       - name: 保存构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: ThemeMusic-${{ steps.build.outputs.version }}
-          path: dist/${{ steps.build.outputs.version }}/
+          name: ThemeMusic-${{ steps.metadata.outputs.version }}
+          path: dist/${{ steps.metadata.outputs.version }}/
           if-no-files-found: error
 
   release:
@@ -52,28 +79,13 @@ jobs:
         with:
           name: ThemeMusic-${{ needs.verify.outputs.version }}
           path: release-assets
-      - name: 创建正式 Release（已存在则跳过）
+      - name: 创建或更新 GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.verify.outputs.version }}
+          TITLE: ${{ needs.verify.outputs.title }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
         run: |
-          title="$(python3 - "$VERSION" <<'PY'
-          import json
-          import sys
-
-          version = sys.argv[1]
-          for item in json.load(open("versions/index.json", encoding="utf-8"))["versions"]:
-              if item.get("id") == version:
-                  print(item["label"])
-                  break
-          else:
-              raise SystemExit(f"版本索引缺少 Release 标题：{version}")
-          PY
-          )"
-          if gh release view "$VERSION" >/dev/null 2>&1; then
-            echo "Release $VERSION 已存在，跳过。"
-            exit 0
-          fi
           awk -v version="$VERSION" '
             $0 ~ "^## " version "([[:space:]]|$)" {capture=1; next}
             capture && /^## / {exit}
@@ -82,8 +94,15 @@ jobs:
           assets=()
           while IFS= read -r -d '' asset; do assets+=("$asset"); done < <(find release-assets -maxdepth 1 -type f -print0)
           test "${#assets[@]}" -gt 0
-          gh release create "$VERSION" "${assets[@]}" \
-            --target "$GITHUB_SHA" \
-            --title "$title" \
-            --notes-file release-notes.md \
-            --latest
+          flags=(--target "$GITHUB_SHA" --title "$TITLE" --notes-file release-notes.md)
+          if [ "$PRERELEASE" = "true" ]; then
+            flags+=(--prerelease)
+          else
+            flags+=(--latest)
+          fi
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            gh release edit "$VERSION" "${flags[@]}"
+            gh release upload "$VERSION" "${assets[@]}" --clobber
+          else
+            gh release create "$VERSION" "${assets[@]}" "${flags[@]}"
+          fi
