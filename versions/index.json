@@ -14,7 +14,7 @@
     {
       "id": "v1.3.8",
       "label": "Theme Music v1.3.8：远端曲库分页加载修复正式版",
-      "channel": "latest",
+      "channel": "stable",
       "released_at": "2026-08-05",
       "music": true,
       "ota": true
