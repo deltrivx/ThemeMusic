@@ -54,7 +54,7 @@ curl -fsSL https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/in
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/install.sh -o /tmp/theme-music-install.sh
-sh /tmp/theme-music-install.sh install v1.3.8 ota
+sh /tmp/theme-music-install.sh install v1.3.9 ota
 ```
 
 ## 快速配置
