@@ -57,6 +57,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.verify.outputs.version }}
         run: |
+          title="$(python3 - "$VERSION" <<'PY'
+          import json
+          import sys
+
+          version = sys.argv[1]
+          for item in json.load(open("versions/index.json", encoding="utf-8"))["versions"]:
+              if item.get("id") == version:
+                  print(item["label"])
+                  break
+          else:
+              raise SystemExit(f"版本索引缺少 Release 标题：{version}")
+          PY
+          )"
           if gh release view "$VERSION" >/dev/null 2>&1; then
             echo "Release $VERSION 已存在，跳过。"
             exit 0
@@ -71,6 +84,6 @@ jobs:
           test "${#assets[@]}" -gt 0
           gh release create "$VERSION" "${assets[@]}" \
             --target "$GITHUB_SHA" \
-            --title "Theme Music $VERSION" \
+            --title "$title" \
             --notes-file release-notes.md \
             --latest
