@@ -412,19 +412,25 @@ install_version() {
   mkdir -p "$tmp/assets" "$PERSIST_DIR/assets" "$RUNTIME_DIR/assets"
 
   progress 22 "拉取清单" "files.manifest（OTA 差异比对）"
+  manifest_ok=0
   if download -o "$tmp/files.manifest" "$release_base/files.manifest" \
-    || download -o "$tmp/files.manifest" "$base/files.manifest?_ts=$(date +%s)"; then
-    if ! validate_manifest "$tmp/files.manifest" "$VERSION"; then
-      echo "无法安装：files.manifest 无效或与版本不匹配。" >&2
-      exit 1
-    fi
-    MANIFEST_JSON=$(cat "$tmp/files.manifest")
-    ucwc_log "已加载并验证文件清单（逐文件 SHA256/大小比对）"
+    && validate_manifest "$tmp/files.manifest" "$VERSION"; then
+    manifest_ok=1
   else
-    ucwc_log "错误：正式版本缺少 files.manifest"
-    echo "无法安装：缺少 files.manifest。" >&2
+    ucwc_log "Release 清单不可用，回退版本快照：$VERSION"
+    rm -f "$tmp/files.manifest"
+    if download -o "$tmp/files.manifest" "$base/files.manifest?_ts=$(date +%s)" \
+      && validate_manifest "$tmp/files.manifest" "$VERSION"; then
+      manifest_ok=1
+    fi
+  fi
+  if [ "$manifest_ok" -ne 1 ]; then
+    ucwc_log "错误：正式版本缺少有效 files.manifest"
+    echo "无法安装：files.manifest 无效或不可访问。" >&2
     exit 1
   fi
+  MANIFEST_JSON=$(cat "$tmp/files.manifest")
+  ucwc_log "已加载并验证文件清单（逐文件 SHA256/大小比对）"
 
   # Prefer one small, checksummed Release archive over a dozen raw GitHub
   # requests. OTA still compares every manifest hash and only writes changed

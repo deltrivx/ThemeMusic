@@ -1,12 +1,20 @@
 {
   "schema": 1,
-  "default": "v1.3.4",
-  "latest_version": "v1.3.4",
+  "default": "v1.3.5",
+  "latest_version": "v1.3.5",
   "versions": [
+    {
+      "id": "v1.3.5",
+      "label": "Theme Music v1.3.5：安装器清单校验与版本快照回退修复正式版",
+      "channel": "latest",
+      "released_at": "2026-08-05",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.3.4",
       "label": "Theme Music v1.3.4：安装器空响应校验与版本快照回退修复正式版",
-      "channel": "latest",
+      "channel": "stable",
       "released_at": "2026-08-05",
       "music": true,
       "ota": true
