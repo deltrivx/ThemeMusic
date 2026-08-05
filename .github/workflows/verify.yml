@@ -47,7 +47,13 @@ jobs:
         run: |
           ./scripts/verify-release.sh
           if [ "$IS_TAG" = "true" ]; then
-            ./scripts/build-release.sh "$VERSION" existing
+            if [ -d "versions/$VERSION" ]; then
+              ./scripts/build-release.sh "$VERSION" existing
+            else
+              # Tags are immutable; build a missing release snapshot from the
+              # tagged runtime tree without rewriting the tag history.
+              ./scripts/build-release.sh "$VERSION" snapshot
+            fi
           else
             ./scripts/build-release.sh "$VERSION" snapshot
             git diff --exit-code -- "versions/$VERSION"
