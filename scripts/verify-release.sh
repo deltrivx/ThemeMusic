@@ -84,10 +84,12 @@ python3 - <<'PY'
 import hashlib, json, pathlib, subprocess, tempfile
 root = pathlib.Path('versions')
 current_version = json.loads((root / 'index.json').read_text())['latest_version']
-# GitHub's published v1.3.7 tag contains a one-byte snapshot README defect.
-# Keep its manifest validation, but do not treat the immutable historical tag
-# as the source for the corrected current snapshot.
-legacy_remote_tag_mismatch_version = 'v1.3.7'
+# These published GitHub tags came from the pre-snapshot release chain. Their
+# immutable tag trees differ from later corrected snapshots. Keep manifest
+# validation for each, but do not use their embedded snapshots as a baseline.
+legacy_remote_tag_mismatch_versions = {
+    'v1.3.3', 'v1.3.4', 'v1.3.5', 'v1.3.6', 'v1.3.7', 'v1.3.8'
+}
 count = 0
 for manifest in sorted(root.glob('*/files.manifest')):
     data = json.loads(manifest.read_text())
@@ -109,7 +111,7 @@ for manifest in sorted(root.glob('*/files.manifest')):
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError:
             raise AssertionError(f'{version}: 缺少对应 Git tag，无法证明正式快照来源')
-        if version == legacy_remote_tag_mismatch_version:
+        if version in legacy_remote_tag_mismatch_versions:
             print(f'{version}: 跳过已记录的远端历史快照字节差异')
             continue
         # Compare each tracked archive file directly through git show.
@@ -161,9 +163,9 @@ if [ -n "$VERSION" ]; then
       cmp -s "$rel" "versions/$VERSION/$rel" || { echo "快照不一致：$rel" >&2; exit 1; }
     else
       git cat-file -e "$VERSION:$rel" 2>/dev/null || { echo "tag 缺少文件：$VERSION:$rel" >&2; exit 1; }
-      if [ "$VERSION" = "v1.3.7" ]; then
-        continue
-      fi
+      case "$VERSION" in
+        v1.3.3|v1.3.4|v1.3.5|v1.3.6|v1.3.7|v1.3.8) continue ;;
+      esac
       cmp -s "versions/$VERSION/$rel" <(git show "$VERSION:$rel") || { echo "正式快照与 tag 不一致：$rel" >&2; exit 1; }
     fi
   done
