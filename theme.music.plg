@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY      version   "v1.3.5">
+<!ENTITY      version   "v1.3.6">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-			<!ENTITY ver       "v1.3.5">
+			<!ENTITY ver       "v1.3.6">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 
@@ -17,6 +17,8 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+### v1.3.6
+- 修复安装器校验版本清单后未保存清单内容，导致后续必需文件检查失败的问题
 ### v1.3.5
 - 修复 Release 清单返回非空错误页时未触发版本快照回退的问题
 - 安装器只接受通过完整清单校验的下载结果

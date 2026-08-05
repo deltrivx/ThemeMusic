@@ -243,6 +243,7 @@ validate_manifest() {
     ucwc_log "错误：files.manifest 校验失败（版本 $_version）"
     return 1
   }
+  MANIFEST_JSON=$(cat "$_manifest")
   for _required in \
     ThemeMusic.page ThemeMusic_Loader.page PLUGIN-README.md \
     assets/theme-music-settings.css assets/theme-music-settings.js \
