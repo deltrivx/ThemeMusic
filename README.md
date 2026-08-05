@@ -2,7 +2,7 @@
 
 [![最新版本](https://img.shields.io/github/v/release/deltrivx/ThemeMusic?display_name=tag&sort=semver&label=最新版本)](https://github.com/deltrivx/ThemeMusic/releases/latest)
 [![Unraid](https://img.shields.io/badge/Unraid-6.12%2B-F15A2C?logo=unraid&logoColor=white)](https://unraid.net/)
-[![代码许可](https://img.shields.io/badge/代码许可-PolyForm%20Noncommercial%201.0.0-8a2be2)](LICENSE)
+[![代码许可](https://img.shields.io/badge/代码许可-GPL--2.0-8a2be2)](LICENSE)
 [![文档与视觉资产](https://img.shields.io/badge/文档与视觉资产-CC%20BY--NC--SA%204.0-8a2be2)](LICENSE-ASSETS.md)
 
 面向 Unraid WebGUI 的独立音乐播放器插件。它把本地目录或 Navidrome/OpenSubsonic 曲库原生融入仪表盘，同时提供可跨页面工作的音乐胶囊、歌词、封面、断点续播和完整的桌面/移动端配置。
@@ -153,11 +153,9 @@ shasum -a 256 -c SHA256SUMS
 
 ## 许可证
 
-- 程序源代码采用 [PolyForm Noncommercial License 1.0.0](LICENSE)：允许个人与非商业组织在非商业目的下使用、修改和分发；任何商业使用均须事先取得作者书面授权。
+- 程序源代码采用 [GNU General Public License v2.0](LICENSE)。
 - 仓库原创文档与视觉资产采用 [CC BY-NC-SA 4.0](LICENSE-ASSETS.md)，要求署名、非商业使用并以相同方式共享。
 - 第三方名称、商标、图标及服务分别归其权利人所有，详见 [NOTICE](NOTICE)。
-
-两套许可适用于不同材料，互不覆盖；程序代码、原创文档和原创视觉资产均禁止未经授权的商业使用。
 
 ## 致谢
 
