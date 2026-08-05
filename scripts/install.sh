@@ -382,11 +382,20 @@ install_version() {
   esac
 
   index=$(fetch_index)
-  printf '%s' "$index" | jq -e --arg version "$VERSION" \
-    '.versions[] | select(.id == $version)' >/dev/null || {
-    echo "未知版本：$VERSION" >&2
-    exit 64
-  }
+  if ! printf '%s' "$index" | jq -e --arg version "$VERSION" \
+    '.versions[] | select(.id == $version)' >/dev/null; then
+    # GitHub raw mirrors can lag behind a freshly published index. For an
+    # explicit version, accept it only when its signed manifest is reachable.
+    _probe=$(mktemp)
+    if ! download -o "$_probe" "$REPO_RAW/versions/$VERSION/files.manifest?_ts=$(date +%s)" \
+      || ! validate_manifest "$_probe" "$VERSION"; then
+      rm -f "$_probe"
+      echo "未知版本：$VERSION" >&2
+      exit 64
+    fi
+    rm -f "$_probe"
+    index=$(printf '{"latest_version":"%s","default":"%s","versions":[{"id":"%s"}]}' "$VERSION" "$VERSION" "$VERSION")
+  fi
 
   latest=$(printf '%s' "$index" | jq -r '.latest_version // .default // empty')
   if [ "$VERSION" = "$latest" ]; then
