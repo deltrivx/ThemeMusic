@@ -406,6 +406,61 @@ function m_fnos_token_cache_file() {
     return sys_get_temp_dir() . "/theme-music-fnos-token.json";
 }
 
+function m_library_cache_path($scope) {
+    return sys_get_temp_dir() . "/theme-music-library-v4-" . sha1((string)$scope) . ".json";
+}
+
+function m_atomic_json_write($path, array $data) {
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) return false;
+    $tmp = $path . ".tmp." . getmypid() . "." . bin2hex(random_bytes(4));
+    if (@file_put_contents($tmp, $json, LOCK_EX) === false) return false;
+    if (!@rename($tmp, $path)) {
+        @unlink($tmp);
+        return false;
+    }
+    @chmod($path, 0600);
+    return true;
+}
+
+function m_library_cache_read($scope) {
+    $path = m_library_cache_path($scope);
+    if (!is_file($path)) return null;
+    $data = @json_decode((string)@file_get_contents($path), true);
+    return is_array($data) && isset($data["tracks"]) && is_array($data["tracks"]) ? $data : null;
+}
+
+function m_library_cache_write($scope, array $tracks, array $scan) {
+    return m_atomic_json_write(m_library_cache_path($scope), [
+        "tracks" => $tracks,
+        "scan" => $scan,
+        "created_at" => time(),
+    ]);
+}
+
+function m_library_scan_paths($scope) {
+    $base = sys_get_temp_dir() . "/theme-music-library-scan-" . sha1((string)$scope);
+    return ["state" => $base . ".json", "lock" => $base . ".lock", "start_lock" => $base . ".start.lock"];
+}
+
+function m_library_scan_state($scope) {
+    $paths = m_library_scan_paths($scope);
+    $state = is_file($paths["state"]) ? @json_decode((string)@file_get_contents($paths["state"]), true) : null;
+    return is_array($state) ? $state : [];
+}
+
+function m_library_scan_state_write($scope, array $state) {
+    $state["updated_at"] = time();
+    return m_atomic_json_write(m_library_scan_paths($scope)["state"], $state);
+}
+
+function m_library_scan_active(array $state) {
+    if (!in_array((string)($state["status"] ?? ""), ["queued", "running"], true)) return false;
+    $pid = (int)($state["pid"] ?? 0);
+    if ($pid > 1 && function_exists("posix_kill") && @posix_kill($pid, 0)) return true;
+    return time() - (int)($state["updated_at"] ?? 0) < 30;
+}
+
 function m_fnos_cached_token($base, $user, $password, $timeout = 12, $force = false) {
     if ($base === "" || $user === "" || $password === "") return "";
     $file = m_fnos_token_cache_file();
@@ -927,6 +982,117 @@ if ($action === "storage_status") {
     mjson(["ok" => true, "detected" => $st["label"] ?? "等待播放自动检测", "status" => $st["label"] ?? "等待播放", "strategy" => $st["strategy"] ?? "invalid", "label" => $st["label"] ?? "", "path" => $st["path"] ?? ""]);
 }
 
+function m_remote_library_scope(array $cfg, $strategy) {
+    if ($strategy === "navidrome") {
+        return "navidrome|" . rtrim((string)m_cfg_get($cfg, "MUSIC_NAVIDROME_URL", ""), "/") . "|" . (string)m_cfg_get($cfg, "MUSIC_NAVIDROME_USER", "");
+    }
+    return "fnos|" . rtrim((string)m_cfg_get($cfg, "MUSIC_FNOS_URL", ""), "/") . "|" . (string)m_cfg_get($cfg, "MUSIC_FNOS_USER", "");
+}
+
+function m_remote_library_fetch(array $cfg, $strategy, $progress = null) {
+    $maxTracks = 100000;
+    $tracks = [];
+    $seen = [];
+    $truncated = false;
+    $stopReason = "";
+    $reportedTotal = 0;
+    if ($strategy === "fnos") {
+        $pageSize = 200;
+        for ($page = 1; count($tracks) < $maxTracks; $page++) {
+            [$resp, $err] = m_fnos_response($cfg, "track/list", ["page" => $page, "pageSize" => $pageSize], 20);
+            if (!is_array($resp)) return [null, $err, []];
+            $data = $resp["data"] ?? $resp;
+            $items = is_array($data) && array_is_list($data) ? $data : (is_array($data) ? ($data["list"] ?? $data["items"] ?? $data["tracks"] ?? []) : []);
+            if (!is_array($items) || !$items) break;
+            $before = count($tracks);
+            foreach ($items as $item) {
+                if (!is_array($item)) continue;
+                $id = (string)($item["id"] ?? $item["path"] ?? $item["url"] ?? "");
+                if ($id === "" || isset($seen[$id])) continue;
+                $seen[$id] = true;
+                $tracks[] = m_track_normalize($item, "fnos", $id);
+                if (count($tracks) >= $maxTracks) break;
+            }
+            $reportedTotal = max($reportedTotal, (int)(is_array($data) ? ($data["total"] ?? $data["totalCount"] ?? $data["count"] ?? 0) : 0));
+            if (is_callable($progress)) $progress(count($tracks), $page, $reportedTotal);
+            if (count($tracks) >= $maxTracks) { $truncated = true; $stopReason = "emergency_track_limit"; break; }
+            if (count($items) < $pageSize || count($tracks) === $before || ($reportedTotal > 0 && count($tracks) >= $reportedTotal)) break;
+        }
+    } elseif ($strategy === "navidrome") {
+        $pageSize = 500;
+        for ($offset = 0; count($tracks) < $maxTracks;) {
+            [$resp, $err] = m_navidrome_request($cfg, "rest/search3", ["query" => "", "songOffset" => $offset, "songCount" => $pageSize], "GET", "", 20);
+            if (!is_array($resp)) return [null, $err, []];
+            $data = $resp["subsonic-response"] ?? $resp;
+            $search = $data["searchResult3"] ?? $data["searchResult"] ?? $data;
+            $items = $search["song"] ?? [];
+            if (!is_array($items) || !$items) break;
+            $before = count($tracks);
+            foreach ($items as $item) {
+                if (!is_array($item)) continue;
+                $id = (string)($item["id"] ?? $item["path"] ?? "");
+                if ($id === "" || isset($seen[$id])) continue;
+                $seen[$id] = true;
+                $tracks[] = m_track_normalize($item, "navidrome");
+                if (count($tracks) >= $maxTracks) break;
+            }
+            if (is_callable($progress)) $progress(count($tracks), $offset + count($items), 0);
+            if (count($tracks) >= $maxTracks) { $truncated = true; $stopReason = "emergency_track_limit"; break; }
+            if (count($items) < $pageSize || count($tracks) === $before) break;
+            $offset += count($items);
+        }
+    } else return [null, "非远端音源策略", []];
+    return [$tracks, "", ["truncated" => $truncated, "limit" => $maxTracks, "count" => count($tracks), "reported_total" => $reportedTotal, "stop_reason" => $stopReason]];
+}
+
+function m_remote_library_worker($strategy, $scope, array $cfg) {
+    $paths = m_library_scan_paths($scope);
+    $lock = @fopen($paths["lock"], "c");
+    if (!$lock || !@flock($lock, LOCK_EX | LOCK_NB)) return;
+    $state = ["status" => "running", "pid" => getmypid(), "count" => 0, "started_at" => time(), "error" => ""];
+    m_library_scan_state_write($scope, $state);
+    [$tracks, $err, $scan] = m_remote_library_fetch($cfg, $strategy, function ($count, $entries, $total) use (&$state, $scope) {
+        $state = array_merge($state, ["status" => "running", "pid" => getmypid(), "count" => $count, "entries_scanned" => $entries, "reported_total" => $total]);
+        m_library_scan_state_write($scope, $state);
+    });
+    if (!is_array($tracks)) $state = array_merge($state, ["status" => "error", "error" => $err ?: "远端曲库索引失败", "finished_at" => time()]);
+    elseif (!m_library_cache_write($scope, $tracks, $scan)) $state = array_merge($state, ["status" => "error", "error" => "曲库索引写入失败", "finished_at" => time()]);
+    else $state = array_merge($state, $scan, ["status" => "done", "count" => count($tracks), "finished_at" => time(), "error" => ""]);
+    m_library_scan_state_write($scope, $state);
+    @flock($lock, LOCK_UN); @fclose($lock);
+}
+
+function m_start_remote_library_worker($strategy, $scope) {
+    $state = m_library_scan_state($scope);
+    if (m_library_scan_active($state)) return $state;
+    $paths = m_library_scan_paths($scope);
+    $startLock = @fopen($paths["start_lock"], "c");
+    if (!$startLock || !@flock($startLock, LOCK_EX | LOCK_NB)) return $state;
+    $state = m_library_scan_state($scope);
+    if (!m_library_scan_active($state)) {
+        $state = ["status" => "queued", "pid" => 0, "count" => (int)($state["count"] ?? 0), "error" => ""];
+        m_library_scan_state_write($scope, $state);
+        $cmd = "nohup nice -n 10 php " . escapeshellarg(__FILE__) . " theme-music-remote-index " . escapeshellarg($strategy) . " " . escapeshellarg(base64_encode($scope)) . " >/dev/null 2>&1 & echo $!";
+        $pid = function_exists("shell_exec") ? trim((string)@shell_exec($cmd)) : "";
+        if ($pid !== "" && ctype_digit($pid)) {
+            $state["pid"] = (int)$pid;
+            m_library_scan_state_write($scope, $state);
+        } else {
+            $state = ["status" => "error", "pid" => 0, "count" => 0, "error" => "无法启动低优先级曲库索引任务"];
+            m_library_scan_state_write($scope, $state);
+        }
+    }
+    @flock($startLock, LOCK_UN); @fclose($startLock);
+    return m_library_scan_state($scope);
+}
+
+if (PHP_SAPI === "cli" && (string)($argv[1] ?? "") === "theme-music-remote-index") {
+    $workerStrategy = strtolower((string)($argv[2] ?? ""));
+    $workerScope = base64_decode((string)($argv[3] ?? ""), true);
+    if (in_array($workerStrategy, ["fnos", "navidrome"], true) && is_string($workerScope) && $workerScope !== "") m_remote_library_worker($workerStrategy, $workerScope, $cfg);
+    exit;
+}
+
 if ($action === "list") {
     $auto = m_detect_storage_source($cfg);
     $selected = strtolower(trim((string)m_cfg_get($cfg, "MUSIC_SOURCE", "local")));
@@ -945,15 +1111,36 @@ if ($action === "list") {
         mjson(["ok" => false, "source_configured" => false, "source" => "fnos", "error" => "飞牛音乐音源未配置完整"], 200);
     }
     $strat = (string)($auto["strategy"] ?? "");
+    $scope = $strat === "fnos" || $strat === "navidrome" ? m_remote_library_scope($cfg, $strat) : m_local_music_root($cfg);
+    if ($scope === "") mjson(["ok" => false, "error" => "本地音乐目录不可访问", "tracks" => []], 200);
+    $cached = m_library_cache_read($scope);
+    $refresh = (string)($_GET["refresh"] ?? "") === "1";
+    $stale = !is_array($cached) || time() - (int)($cached["created_at"] ?? 0) > 21600;
+    $job = ($refresh || $stale) && ($strat === "fnos" || $strat === "navidrome") ? m_start_remote_library_worker($strat, $scope) : m_library_scan_state($scope);
     if ($strat !== "fnos" && $strat !== "navidrome") {
         $root = m_local_music_root($cfg);
-        $files = $root !== "" ? m_local_scan_files($root, 6) : [];
+        $files = $root !== "" ? m_local_scan_files($root, 32) : [];
         $tracks = [];
         foreach ($files as $path) {
             $tracks[] = m_track_normalize(["id" => $path, "path" => $path, "_root" => $root, "size" => @filesize($path)], "local", $path);
         }
-        mjson(["ok" => true, "tracks" => $tracks, "count" => count($tracks), "source" => "local"]);
+        mjson(["ok" => true, "source" => "local", "tracks" => $tracks, "items" => $tracks, "count" => count($tracks), "truncated" => false, "limit" => count($tracks), "tip" => ""]);
     }
+    $cached = m_library_cache_read($scope);
+    $tracks = is_array($cached) ? $cached["tracks"] : [];
+    $scan = is_array($cached) ? ($cached["scan"] ?? []) : [];
+    $scanning = m_library_scan_active($job);
+    if (!$tracks && !$scanning && ($job["status"] ?? "") === "error") {
+        mjson(["ok" => false, "error" => "远端曲库索引失败：" . ($job["error"] ?? "未知错误"), "tracks" => []], 503);
+    }
+    $truncated = !empty($scan["truncated"]);
+    $limit = (int)($scan["limit"] ?? 100000);
+    mjson([
+        "ok" => true, "source" => $strat, "count" => count($tracks), "tracks" => $tracks,
+        "items" => $tracks, "truncated" => $truncated, "limit" => $limit,
+        "cached" => is_array($cached), "scanning" => $scanning, "scan" => $job,
+        "tip" => $truncated ? "远端曲库达到 100000 首紧急保护上限，当前列表不完整。" : "",
+    ]);
 }
 
 if ($action === "library") {
@@ -986,75 +1173,25 @@ if ($action === "library") {
     ]);
 }
 
-if ($action === "list" && (m_detect_storage_source($cfg)["strategy"] ?? "") === "fnos") $action = "library_remote";
-if ($action === "list" && (m_detect_storage_source($cfg)["strategy"] ?? "") === "navidrome") $action = "library_remote";
-
 if ($action === "library_remote") {
+    // Compatibility endpoint: the player uses action=list, but callers that
+    // still use this action receive the same cached full-index contract.
     $auto = m_detect_storage_source($cfg);
     $strat = (string)($auto["strategy"] ?? "");
-    if ($strat === "fnos") {
-        $pageSize = 200;
-        $page = 1;
-        $total = 0;
-        $tracks = [];
-        $seen = [];
-        while ($page <= 100) {
-            [$resp, $err] = m_fnos_response($cfg, "track/list", ["page" => $page, "pageSize" => $pageSize], 20);
-            if (!is_array($resp)) {
-                if ($page === 1) mjson(["ok" => false, "error" => $err], 502);
-                break;
-            }
-            $data = $resp["data"] ?? $resp;
-            if (is_array($data) && array_is_list($data)) $items = $data;
-            else $items = is_array($data) ? ($data["list"] ?? $data["items"] ?? $data["tracks"] ?? []) : [];
-            if (!is_array($items) || !$items) break;
-            $before = count($tracks);
-            foreach ($items as $item) {
-                if (!is_array($item)) continue;
-                $id = (string)($item["id"] ?? $item["path"] ?? $item["url"] ?? "");
-                if ($id === "" || isset($seen[$id])) continue;
-                $seen[$id] = true;
-                $tracks[] = m_track_normalize($item, "fnos", $id);
-            }
-            if (is_array($data)) {
-                $reported = (int)($data["total"] ?? $data["totalCount"] ?? $data["count"] ?? 0);
-                if ($reported > $total) $total = $reported;
-            }
-            if (count($items) < $pageSize || count($tracks) === $before || ($total > 0 && count($tracks) >= $total)) break;
-            $page++;
-        }
-        if ($total < count($tracks)) $total = count($tracks);
-        mjson(["ok" => true, "strategy" => "fnos", "items" => $tracks, "tracks" => $tracks, "count" => $total, "truncated" => false, "limit" => count($tracks), "tip" => ""]);
-    }
-    if ($strat === "navidrome") {
-        $pageSize = 500;
-        $offset = 0;
-        $tracks = [];
-        $seen = [];
-        while ($offset < 100000) {
-            [$resp, $err] = m_navidrome_request($cfg, "rest/search3", ["query" => "", "songOffset" => $offset, "songCount" => $pageSize], "GET", "", 20);
-            if (!is_array($resp)) {
-                if ($offset === 0) mjson(["ok" => false, "error" => $err], 502);
-                break;
-            }
-            $data = $resp["subsonic-response"] ?? $resp;
-            $search = $data["searchResult3"] ?? $data["searchResult"] ?? $data;
-            $items = $search["song"] ?? [];
-            if (!is_array($items) || !$items) break;
-            $before = count($tracks);
-            foreach ($items as $item) {
-                if (!is_array($item)) continue;
-                $id = (string)($item["id"] ?? $item["path"] ?? "");
-                if ($id === "" || isset($seen[$id])) continue;
-                $seen[$id] = true;
-                $tracks[] = m_track_normalize($item, "navidrome");
-            }
-            if (count($items) < $pageSize || count($tracks) === $before) break;
-            $offset += count($items);
-        }
-        mjson(["ok" => true, "strategy" => "navidrome", "tracks" => $tracks, "items" => $tracks, "count" => count($tracks), "truncated" => false, "limit" => count($tracks), "tip" => ""]);
-    }
-    mjson(["ok" => false, "error" => "非远端音源策略"], 400);
+    if (!in_array($strat, ["fnos", "navidrome"], true)) mjson(["ok" => false, "error" => "非远端音源策略"], 400);
+    $scope = m_remote_library_scope($cfg, $strat);
+    $cached = m_library_cache_read($scope);
+    $job = !is_array($cached) ? m_start_remote_library_worker($strat, $scope) : m_library_scan_state($scope);
+    $cached = m_library_cache_read($scope);
+    $tracks = is_array($cached) ? $cached["tracks"] : [];
+    $scan = is_array($cached) ? ($cached["scan"] ?? []) : [];
+    $truncated = !empty($scan["truncated"]);
+    mjson([
+        "ok" => true, "strategy" => $strat, "tracks" => $tracks, "items" => $tracks,
+        "count" => count($tracks), "truncated" => $truncated, "limit" => (int)($scan["limit"] ?? 100000),
+        "scanning" => m_library_scan_active($job), "scan" => $job,
+        "tip" => $truncated ? "远端曲库达到 100000 首紧急保护上限，当前列表不完整。" : "",
+    ]);
 }
 
 if ($action === "stream") {
