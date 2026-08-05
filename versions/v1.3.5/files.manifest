@@ -34,8 +34,8 @@
     },
     {
       "path": "assets/ucwc-music.js",
-      "sha256": "0f211bd760f477f010b0eb47f2ea914419184ff278e9b62aa1b162962d926e3c",
-      "size": 214514
+      "sha256": "c89f77380305a1c2c6d02f825c37521e8fbf5ba56f4a88180fece0fb24727fbf",
+      "size": 214513
     },
     {
       "path": "theme-music-save.php",
