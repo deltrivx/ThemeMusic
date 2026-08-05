@@ -26,6 +26,11 @@ PY
 sh -n scripts/install.sh
 bash -n scripts/build-release.sh
 bash -n scripts/verify-release.sh
+if command -v php >/dev/null 2>&1; then
+  php tests/library-cache-legacy.php
+else
+  echo "本机无 PHP，旧缓存兼容回归留给 Unraid 实机校验"
+fi
 
 echo "[2/7] JSON 与版本索引"
 python3 -m json.tool versions/index.json >/dev/null

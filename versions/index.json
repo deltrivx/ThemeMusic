@@ -1,12 +1,20 @@
 {
   "schema": 1,
-  "default": "v1.3.9",
-  "latest_version": "v1.3.9",
+  "default": "v1.3.10",
+  "latest_version": "v1.3.10",
   "versions": [
+    {
+      "id": "v1.3.10",
+      "label": "Theme Music v1.3.10：远端曲库索引循环修复正式版",
+      "channel": "latest",
+      "released_at": "2026-08-05",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.3.9",
       "label": "Theme Music v1.3.9：远端完整曲库后台索引修复正式版",
-      "channel": "latest",
+      "channel": "stable",
       "released_at": "2026-08-05",
       "music": true,
       "ota": true

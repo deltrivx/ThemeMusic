@@ -427,7 +427,13 @@ function m_library_cache_read($scope) {
     $path = m_library_cache_path($scope);
     if (!is_file($path)) return null;
     $data = @json_decode((string)@file_get_contents($path), true);
-    return is_array($data) && isset($data["tracks"]) && is_array($data["tracks"]) ? $data : null;
+    if (!is_array($data) || !isset($data["tracks"]) || !is_array($data["tracks"])) return null;
+    // v1.3.9 cache files did not record their creation time. Use mtime so a
+    // valid legacy cache is not considered stale on every player poll.
+    if (!isset($data["created_at"]) || !is_numeric($data["created_at"])) {
+        $data["created_at"] = (int)@filemtime($path);
+    }
+    return $data;
 }
 
 function m_library_cache_write($scope, array $tracks, array $scan) {

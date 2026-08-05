@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY      version   "v1.3.9">
+<!ENTITY      version   "v1.3.10">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-			<!ENTITY ver       "v1.3.9">
+			<!ENTITY ver       "v1.3.10">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 
@@ -17,6 +17,8 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+### v1.3.10
+- 修复旧格式远端曲库缓存缺少创建时间时循环触发 Navidrome/FnOS 后台索引；旧缓存回退使用文件修改时间
 ### v1.3.9
 - 远端曲库改为低优先级后台完整索引，按页读取 Navidrome/FnOS，避免大曲库单页截断和 PHP 请求超时
 - 300 首仅为前端分批渲染，达到紧急保护上限时明确报告曲库不完整
