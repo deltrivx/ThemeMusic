@@ -28,6 +28,7 @@ bash -n scripts/build-release.sh
 bash -n scripts/verify-release.sh
 if command -v php >/dev/null 2>&1; then
   php tests/library-cache-legacy.php
+  php tests/fnos-regression.php
 else
   echo "本机无 PHP，旧缓存兼容回归留给 Unraid 实机校验"
 fi
@@ -89,6 +90,9 @@ assert 'library_remote' in api and 'fnos' in api and 'navidrome' in api, '远端
 assert 'listRenderLimit: 300' in player and 'ucwc-music-list-more' in player, '大曲库缺少分段渲染'
 assert 'LYRIC_DRIFT_KEY' in player and 'adjustLyricDrift(500)' in player and 'adjustLyricDrift(-500)' in player, '歌词时间校准不完整'
 assert 'tm-fnos-url' in page and 'fnos_test' in api, 'FnOS 音源设置或连接测试缺失'
+assert 'function m_fnos_url_normalize(' in api and 'function m_fnos_response_error(' in api, 'FnOS URL/业务错误处理缺失'
+assert 'function m_fnos_media_url(' in api and 'CURLOPT_FOLLOWLOCATION, false' in api, 'FnOS 媒体代理缺少同源跳转约束'
+assert 'function reconcileDeviceProfile(' in player and 'detectedProfileSuffix' in player, '移动端 profile 生命周期切换缺失'
 assert 'in_array($src, ["local", "navidrome", "fnos"]' in page, '设置页未保留 FnOS source'
 assert 'data-tm-source-row="local"' in page and 'data-tm-source-row="navidrome"' in page and 'data-tm-source-row="fnos"' in page, '设置页三套音源行不完整'
 assert 'class="tm-source-config"' not in page and 'class="tm-source-row"' not in page, '设置页仍包含会造成二次偏移的 source wrapper/grid'

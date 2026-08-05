@@ -4,13 +4,14 @@
 
 This page is the canonical version index for Theme Music. GitHub's Releases sidebar is ordered by publication date; this page is ordered by semantic version so later backfilled releases do not make version order look inconsistent.
 
-**Current stable release:** [v1.3.11](https://github.com/deltrivx/ThemeMusic/releases/tag/v1.3.11)
+**Current stable release:** [v1.3.12](https://github.com/deltrivx/ThemeMusic/releases/tag/v1.3.12)
 
 ## Stable Releases
 
 | Version | Published | Status |
 |---|---|---|
-| [v1.3.11](https://github.com/deltrivx/ThemeMusic/releases/tag/v1.3.11) | 2026-08-05 | Current stable |
+| [v1.3.12](https://github.com/deltrivx/ThemeMusic/releases/tag/v1.3.12) | 2026-08-04 | Current stable |
+| [v1.3.11](https://github.com/deltrivx/ThemeMusic/releases/tag/v1.3.11) | 2026-08-05 |  |
 | [v1.3.10](https://github.com/deltrivx/ThemeMusic/releases/tag/v1.3.10) | 2026-08-05 |  |
 | [v1.3.9](https://github.com/deltrivx/ThemeMusic/releases/tag/v1.3.9) | 2026-08-05 |  |
 | [v1.3.8](https://github.com/deltrivx/ThemeMusic/releases/tag/v1.3.8) | 2026-08-05 |  |

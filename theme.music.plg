@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY      version   "v1.3.11">
+<!ENTITY      version   "v1.3.12">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-			<!ENTITY ver       "v1.3.11">
+			<!ENTITY ver       "v1.3.12">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 
@@ -17,6 +17,9 @@
 		<CHANGES>
 		<![CDATA[
 		## Theme Music
+### v1.3.12
+- 修复 FnOS 地址校验、错误响应、GUID 分页去重与跨源媒体跳转
+- 修复移动端窄视口 profile 切换及“和电脑端相同”的偏好继承
 ### v1.3.11
 - 修复旧格式远端曲库缓存缺少创建时间时循环触发 Navidrome/FnOS 后台索引；旧缓存回退使用文件修改时间
 ### v1.3.9

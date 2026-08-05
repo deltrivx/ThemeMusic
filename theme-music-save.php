@@ -78,6 +78,19 @@ function tm_navidrome_url_ok($v) {
     return $v;
 }
 
+function tm_fnos_url_ok($v) {
+    $v = trim((string)$v);
+    if ($v === "" || strlen($v) > 512) return "";
+    $parts = @parse_url($v);
+    if (!is_array($parts) || !in_array(strtolower((string)($parts["scheme"] ?? "")), ["http", "https"], true) || empty($parts["host"])) return "";
+    if (isset($parts["user"]) || isset($parts["pass"]) || isset($parts["query"]) || isset($parts["fragment"])) return "";
+    $host = strtolower((string)$parts["host"]);
+    if (strpos($host, ":") !== false && $host[0] !== "[") $host = "[" . $host . "]";
+    $port = isset($parts["port"]) ? ":" . (int)$parts["port"] : "";
+    $path = rtrim((string)($parts["path"] ?? ""), "/");
+    return strtolower((string)$parts["scheme"]) . "://" . $host . $port . $path;
+}
+
 function tm_navidrome_user_ok($v) {
     $v = trim(str_replace(["\0", "\r", "\n"], "", (string)$v));
     return substr($v, 0, 128);
@@ -146,6 +159,7 @@ function tm_normalize(&$fx) {
     $fx["MUSIC_LOCAL_DIR"] = tm_music_dir_ok($fx["MUSIC_LOCAL_DIR"] ?? "");
     $fx["MUSIC_NAVIDROME_URL"] = tm_navidrome_url_ok($fx["MUSIC_NAVIDROME_URL"] ?? "");
     if ($fx["MUSIC_NAVIDROME_URL"] === "") $fx["MUSIC_NAVIDROME_URL"] = "http://127.0.0.1:4533";
+    $fx["MUSIC_FNOS_URL"] = tm_fnos_url_ok($fx["MUSIC_FNOS_URL"] ?? "");
     $fx["MUSIC_NAVIDROME_USER"] = tm_navidrome_user_ok($fx["MUSIC_NAVIDROME_USER"] ?? "");
     $fx["MUSIC_VOLUME"] = tm_clamp_vol($fx["MUSIC_VOLUME"] ?? 70);
     $fx["MUSIC_AUTOPLAY"] = tm_yn($fx["MUSIC_AUTOPLAY"] ?? "no");
@@ -244,7 +258,7 @@ if (isset($_POST["MUSIC_NAVIDROME_PASSWORD"]) && !tm_save_navidrome_password($na
     tm_json(["ok" => false, "error" => "Navidrome password write failed", "message" => "无法保存 Navidrome 密码"], 500);
 }
 if (isset($_POST["MUSIC_FNOS_URL"])) {
-    $fx["MUSIC_FNOS_URL"] = trim((string)($_POST["MUSIC_FNOS_URL"] ?? "http://192.168.31.5/music"));
+    $fx["MUSIC_FNOS_URL"] = tm_fnos_url_ok($_POST["MUSIC_FNOS_URL"] ?? "");
 }
 if (isset($_POST["MUSIC_FNOS_USER"])) {
     $fx["MUSIC_FNOS_USER"] = trim((string)($_POST["MUSIC_FNOS_USER"] ?? ""));
@@ -335,11 +349,13 @@ $payload = [
         "shuffle" => $fx["MUSIC_SHUFFLE"] === "yes",
         "repeat" => $fx["MUSIC_REPEAT"],
         "dash_only" => $fx["MUSIC_DASH_ONLY"] !== "no",
-        "run_mode_mobile" => $fx["MUSIC_RUN_MODE_MOBILE"],
-        "volume_mobile" => intval($fx["MUSIC_VOLUME_MOBILE"]),
-        "autoplay_mobile" => $fx["MUSIC_AUTOPLAY_MOBILE"] === "yes",
-        "shuffle_mobile" => $fx["MUSIC_SHUFFLE_MOBILE"] === "yes",
-        "repeat_mobile" => $fx["MUSIC_REPEAT_MOBILE"],
+        "mobile" => [
+            "run_mode" => $fx["MUSIC_RUN_MODE_MOBILE"],
+            "volume" => intval($fx["MUSIC_VOLUME_MOBILE"]),
+            "autoplay" => $fx["MUSIC_AUTOPLAY_MOBILE"] === "yes",
+            "shuffle" => $fx["MUSIC_SHUFFLE_MOBILE"] === "yes",
+            "repeat" => $fx["MUSIC_REPEAT_MOBILE"],
+        ],
     ],
 ];
 if ($svc_out !== null) $payload["service"] = $svc_out;

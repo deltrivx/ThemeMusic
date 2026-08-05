@@ -362,6 +362,43 @@ function m_fnos_authx($method, $pathQ, $body = "", $query = "") {
     return "nonce=" . $nonce . "&timestamp=" . $timestamp . "&sign=" . hash("sha256", $raw);
 }
 
+function m_fnos_url_normalize($value) {
+    $value = trim((string)$value);
+    if ($value === "" || strlen($value) > 512) return "";
+    $parts = @parse_url($value);
+    if (!is_array($parts)) return "";
+    $scheme = strtolower((string)($parts["scheme"] ?? ""));
+    if (!in_array($scheme, ["http", "https"], true) || empty($parts["host"])) return "";
+    if (isset($parts["user"]) || isset($parts["pass"]) || isset($parts["query"]) || isset($parts["fragment"])) return "";
+    $host = strtolower((string)$parts["host"]);
+    if (strpos($host, ":") !== false && $host[0] !== "[") $host = "[" . $host . "]";
+    $port = isset($parts["port"]) ? ":" . (int)$parts["port"] : "";
+    return $scheme . "://" . $host . $port . rtrim((string)($parts["path"] ?? ""), "/");
+}
+
+function m_fnos_origin($url) {
+    $parts = @parse_url((string)$url);
+    if (!is_array($parts) || empty($parts["host"])) return "";
+    $scheme = strtolower((string)($parts["scheme"] ?? ""));
+    $host = strtolower((string)$parts["host"]);
+    $port = isset($parts["port"]) ? (int)$parts["port"] : ($scheme === "https" ? 443 : 80);
+    return $scheme . "://" . $host . ":" . $port;
+}
+
+function m_fnos_url_is_same_origin(array $cfg, $url) {
+    $parts = @parse_url((string)$url);
+    if (!is_array($parts) || !in_array(strtolower((string)($parts["scheme"] ?? "")), ["http", "https"], true) || empty($parts["host"])) return false;
+    if (isset($parts["user"]) || isset($parts["pass"])) return false;
+    return m_fnos_origin($url) === m_fnos_origin(m_fnos_base_url($cfg));
+}
+
+function m_fnos_response_error(array $payload) {
+    if (($payload["ok"] ?? true) === false || ($payload["success"] ?? true) === false) return (string)($payload["message"] ?? $payload["error"] ?? "飞牛音乐请求失败");
+    if (isset($payload["code"]) && is_numeric($payload["code"]) && (int)$payload["code"] !== 0 && (int)$payload["code"] !== 200) return (string)($payload["message"] ?? $payload["error"] ?? ("飞牛音乐错误 " . (int)$payload["code"]));
+    if (in_array(strtolower((string)($payload["status"] ?? "")), ["error", "failed", "fail"], true)) return (string)($payload["message"] ?? $payload["error"] ?? "飞牛音乐请求失败");
+    return "";
+}
+
 function m_fnos_login($base, $user, $password, $timeout = 12) {
     if ($user === "" || $password === "" || !function_exists("curl_init")) return "";
     $url = rtrim($base, "/") . "/user/password-login";
@@ -504,15 +541,8 @@ function m_fnos_request_once($url, $method, $body, $headers, $timeout) {
 }
 
 function m_fnos_request(array $cfg, $pathQ, $params = [], $method = "GET", $body = "", $timeout = 15) {
-    $url = trim((string)m_cfg_get($cfg, "MUSIC_FNOS_URL", ""));
-    if ($url === "") return [null, "未配置飞牛音乐地址"];
-    $url = rtrim($url, "/");
-    /* FnOS Music exposes its JSON API below /music/api/v1. Accept either
-     * the service root or a URL already ending in /music or /api/v1. */
-    if (!preg_match('#/api/v[0-9]+$#i', $url)) {
-        $url .= preg_match('#/music$#i', $url) ? "/api/v1" : "/music/api/v1";
-    }
-    $apiBase = $url;
+    $apiBase = m_fnos_base_url($cfg);
+    if ($apiBase === "") return [null, "未配置飞牛音乐地址"];
     $user = trim((string)m_cfg_get($cfg, "MUSIC_FNOS_USER", ""));
     $pwd = m_fnos_password($cfg);
     if (strtolower($method) === "get" && !empty($params)) {
@@ -522,20 +552,20 @@ function m_fnos_request(array $cfg, $pathQ, $params = [], $method = "GET", $body
         $query = "";
     }
     $fullPath = "/" . ltrim($pathQ, "/") . ($query !== "" ? "?" . $query : "");
-    $fullUrl = $url . $fullPath;
+    $fullUrl = $apiBase . $fullPath;
     $headers = [
         "Accept: application/json",
         "User-Agent: ThemeMusic/1.3.0",
         "authx: " . m_fnos_authx($method, "/" . ltrim($pathQ, "/"), $body, $query),
     ];
-    $token = ($user !== "" && $pwd !== "") ? m_fnos_cached_token($url, $user, $pwd, $timeout) : "";
+    $token = ($user !== "" && $pwd !== "") ? m_fnos_cached_token($apiBase, $user, $pwd, $timeout) : "";
     if ($user !== "" && $pwd !== "" && $token === "") return [null, "飞牛音乐认证失败"];
     if ($token !== "") $headers[] = "Cookie: music-token=" . $token;
     [$resp, $code, $errno, $errStr] = m_fnos_request_once($fullUrl, $method, $body, $headers, $timeout);
     if ((int)$code === 401 && $user !== "" && $pwd !== "") {
-        m_fnos_invalidate_token($url, $user, $pwd);
+        m_fnos_invalidate_token($apiBase, $user, $pwd);
         $headers = array_values(array_filter($headers, function ($h) { return stripos($h, "Cookie: music-token=") !== 0; }));
-        $fresh = m_fnos_cached_token($url, $user, $pwd, $timeout, true);
+        $fresh = m_fnos_cached_token($apiBase, $user, $pwd, $timeout, true);
         if ($fresh === "") return [null, "飞牛音乐认证失败（HTTP 401）"];
         $headers[] = "Cookie: music-token=" . $fresh;
         [$resp, $code, $errno, $errStr] = m_fnos_request_once($fullUrl, $method, $body, $headers, $timeout);
@@ -543,7 +573,9 @@ function m_fnos_request(array $cfg, $pathQ, $params = [], $method = "GET", $body
     if ($errno !== 0 || $resp === false) return [null, "网络错误：" . ($errStr ?: ("errno=" . $errno))];
     if ((int)$code >= 400) return [null, "HTTP " . (int)$code];
     $j = json_decode((string)$resp, true);
-    if (!is_array($j)) return [null, "响应非 JSON"]; 
+    if (!is_array($j)) return [null, "响应非 JSON"];
+    $responseError = m_fnos_response_error($j);
+    if ($responseError !== "") return [null, $responseError];
     return [$j, ""];
 }
 
@@ -552,13 +584,23 @@ function m_fnos_response(array $cfg, $pathQ, $params = [], $timeout = 15) {
 }
 
 function m_fnos_base_url(array $cfg) {
-    $url = rtrim(trim((string)m_cfg_get($cfg, "MUSIC_FNOS_URL", "")), "/");
+    $url = m_fnos_url_normalize(m_cfg_get($cfg, "MUSIC_FNOS_URL", ""));
     if ($url === "") return "";
     $url = preg_replace('#(/api/v[0-9]+).*$#i', '$1', $url);
     if (!preg_match('#/api/v[0-9]+$#i', $url)) {
         $url .= preg_match('#/music$#i', $url) ? "/api/v1" : "/music/api/v1";
     }
     return rtrim($url, "/");
+}
+
+function m_fnos_media_url(array $cfg, $value, $baseUrl = "") {
+    $value = trim((string)$value);
+    if ($value === "") return "";
+    if (!preg_match('#^https?://#i', $value)) {
+        if ($value[0] === "/") $value = m_fnos_origin(m_fnos_base_url($cfg)) . $value;
+        else $value = rtrim($baseUrl !== "" ? $baseUrl : m_fnos_base_url($cfg), "/") . "/" . ltrim($value, "/");
+    }
+    return m_fnos_url_is_same_origin($cfg, $value) ? $value : "";
 }
 
 function m_fnos_api_url(array $cfg, $pathQ, array $params = []) {
@@ -579,8 +621,8 @@ function m_fnos_auth_path($url) {
     return "/" . ltrim($path, "/");
 }
 
-function m_fnos_fetch_binary(array $cfg, $url, $accept = "image/*,*/*;q=0.2", $timeout = 12) {
-    $url = (string)$url;
+function m_fnos_fetch_binary(array $cfg, $url, $accept = "image/*,*/*;q=0.2", $timeout = 12, $redirects = 0) {
+    $url = m_fnos_media_url($cfg, $url);
     if ($url === "") return ["", "", 0];
     $apiBase = m_fnos_base_url($cfg);
     $user = trim((string)m_cfg_get($cfg, "MUSIC_FNOS_USER", ""));
@@ -591,18 +633,26 @@ function m_fnos_fetch_binary(array $cfg, $url, $accept = "image/*,*/*;q=0.2", $t
     $path = m_fnos_auth_path($url);
     $headers = ["Accept: " . $accept, "User-Agent: ThemeMusic/1.3.0", "authx: " . m_fnos_authx("GET", $path, "", $query)];
     if ($token !== "") $headers[] = "Cookie: music-token=" . $token;
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-    curl_setopt($ch, CURLOPT_TIMEOUT, (int)$timeout);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-    $bin = curl_exec($ch);
-    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $ct = (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-    curl_close($ch);
+    $request = function ($requestHeaders) use ($url, $timeout) {
+        $location = "";
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [CURLOPT_HTTPHEADER => $requestHeaders, CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => false, CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => max(5, (int)$timeout), CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => 0, CURLOPT_HEADERFUNCTION => function ($curl, $line) use (&$location) {
+            if (preg_match('/^Location:\s*(.+)$/i', trim((string)$line), $m)) $location = trim((string)$m[1]);
+            return strlen((string)$line);
+        }]);
+        $bin = curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $ct = (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+        curl_close($ch);
+        return [$bin, $ct, $code, $location];
+    };
+    [$bin, $ct, $code, $location] = $request($headers);
+    if ($code >= 300 && $code < 400 && $location !== "") {
+        if ($redirects >= 2) return ["", "", $code];
+        $next = m_fnos_media_url($cfg, $location, $url);
+        if ($next === "") return ["", "", 0];
+        return m_fnos_fetch_binary($cfg, $next, $accept, $timeout, $redirects + 1);
+    }
     if ($code === 401 && $user !== "" && $pwd !== "") {
         m_fnos_invalidate_token($apiBase, $user, $pwd);
         $fresh = m_fnos_cached_token($apiBase, $user, $pwd, $timeout, true);
@@ -611,12 +661,7 @@ function m_fnos_fetch_binary(array $cfg, $url, $accept = "image/*,*/*;q=0.2", $t
                 return stripos($h, "Cookie: music-token=") !== 0;
             }));
             $headers[] = "Cookie: music-token=" . $fresh;
-            $ch = curl_init($url);
-            curl_setopt_array($ch, [CURLOPT_HTTPHEADER => $headers, CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => max(5, (int)$timeout), CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => 0]);
-            $bin = curl_exec($ch);
-            $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $ct = (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-            curl_close($ch);
+            [$bin, $ct, $code, $location] = $request($headers);
         }
     }
     return [is_string($bin) ? $bin : "", $ct, $code];
@@ -624,8 +669,8 @@ function m_fnos_fetch_binary(array $cfg, $url, $accept = "image/*,*/*;q=0.2", $t
 
 function m_fnos_media_proxy(array $cfg, $pathQ, array $params, $timeout = 0, $retry = 0) {
     $isAbsolute = preg_match('#^https?://#i', (string)$pathQ);
-    $url = $isAbsolute ? (string)$pathQ : m_fnos_api_url($cfg, $pathQ, $params);
-    if ($url === "") mjson(["ok" => false, "error" => "未配置飞牛音乐地址"], 502);
+    $url = $isAbsolute ? m_fnos_media_url($cfg, $pathQ) : m_fnos_api_url($cfg, $pathQ, $params);
+    if ($url === "") mjson(["ok" => false, "error" => $isAbsolute ? "飞牛音乐媒体地址不受信任" : "未配置飞牛音乐地址"], 502);
     $requestMethod = "GET";
     $requestBody = "";
     $user = trim((string)m_cfg_get($cfg, "MUSIC_FNOS_USER", ""));
@@ -645,21 +690,24 @@ function m_fnos_media_proxy(array $cfg, $pathQ, array $params, $timeout = 0, $re
     if ($range !== "") $headers[] = "Range: " . $range;
     $sent = false;
     $contentType = "";
+    $redirectUrl = "";
     $body = "";
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
     curl_setopt($ch, CURLOPT_TIMEOUT, (int)$timeout);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-    curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($curl, $line) use (&$contentType) {
+    curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($curl, $line) use (&$contentType, &$redirectUrl) {
         $rawLine = (string)$line;
         $line = trim($rawLine);
         if (preg_match('/^HTTP\\/[^ ]+\\s+(\\d+)/i', $line, $m)) {
             $code = (int)$m[1];
             if ($code >= 200 && $code < 400) http_response_code($code);
+        } elseif (preg_match('/^Location:\\s*(.+)$/i', $line, $m)) {
+            $redirectUrl = trim((string)$m[1]);
         } elseif (preg_match('/^Content-Type:\\s*(.+)$/i', $line, $m)) {
             $contentType = trim((string)$m[1]);
             if (stripos($contentType, "json") === false && stripos($contentType, "text/") !== 0) {
@@ -687,6 +735,12 @@ function m_fnos_media_proxy(array $cfg, $pathQ, array $params, $timeout = 0, $re
     $ct = $contentType !== "" ? $contentType : (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
     $bodyIsJson = $body !== "" && stripos($ct, "json") !== false;
     curl_close($ch);
+    if ($code >= 300 && $code < 400 && $redirectUrl !== "") {
+        $nextUrl = m_fnos_media_url($cfg, $redirectUrl, $url);
+        if ($nextUrl === "") mjson(["ok" => false, "error" => "飞牛音乐跨域媒体跳转已拒绝"], 502);
+        if ($retry >= 2) mjson(["ok" => false, "error" => "飞牛音乐媒体跳转过多"], 502);
+        m_fnos_media_proxy($cfg, $nextUrl, [], $timeout, $retry + 1);
+    }
     if ($code === 401 && $retry < 1 && $user !== "" && $pwd !== "") {
         m_fnos_invalidate_token($apiBase, $user, $pwd);
         return m_fnos_media_proxy($cfg, $pathQ, $params, $timeout, $retry + 1);
@@ -696,11 +750,9 @@ function m_fnos_media_proxy(array $cfg, $pathQ, array $params, $timeout = 0, $re
         $mediaRoot = is_array($json) ? ($json["data"] ?? $json) : [];
         $mediaUrl = is_array($mediaRoot) ? (string)($mediaRoot["url"] ?? $mediaRoot["streamUrl"] ?? $mediaRoot["audioUrl"] ?? "") : "";
         if ($mediaUrl !== "") {
-            if (!preg_match('#^https?://#i', $mediaUrl)) {
-                $base = m_fnos_base_url($cfg);
-                $mediaUrl = $base . "/" . ltrim($mediaUrl, "/");
-            }
-            m_fnos_media_proxy($cfg, $mediaUrl, [], $timeout);
+            $mediaUrl = m_fnos_media_url($cfg, $mediaUrl, $url);
+            if ($mediaUrl === "") mjson(["ok" => false, "error" => "飞牛音乐返回了跨域媒体地址"], 502);
+            m_fnos_media_proxy($cfg, $mediaUrl, [], $timeout, $retry);
         }
         mjson(["ok" => false, "error" => "飞牛音乐未返回可播放音频"], 502);
     }
@@ -1013,10 +1065,11 @@ function m_remote_library_fetch(array $cfg, $strategy, $progress = null) {
             $before = count($tracks);
             foreach ($items as $item) {
                 if (!is_array($item)) continue;
-                $id = (string)($item["id"] ?? $item["path"] ?? $item["url"] ?? "");
+                $track = m_track_normalize($item, "fnos");
+                $id = (string)($track["id"] ?? "");
                 if ($id === "" || isset($seen[$id])) continue;
                 $seen[$id] = true;
-                $tracks[] = m_track_normalize($item, "fnos", $id);
+                $tracks[] = $track;
                 if (count($tracks) >= $maxTracks) break;
             }
             $reportedTotal = max($reportedTotal, (int)(is_array($data) ? ($data["total"] ?? $data["totalCount"] ?? $data["count"] ?? 0) : 0));
@@ -1549,8 +1602,8 @@ if ($action === "cover") {
             }
         }
         if ($url !== "" && !isset($_GET["fetch"])) {
-            if (!preg_match('#^https?://#i', $url)) $url = m_fnos_base_url($cfg) . "/" . ltrim($url, "/");
-            mjson(["ok" => true, "url" => $url, "source" => "remote"]);
+            $url = m_fnos_media_url($cfg, $url);
+            if ($url !== "") mjson(["ok" => true, "url" => $url, "source" => "remote"]);
         }
     }
     $strat = (string)($auto["strategy"] ?? "");
@@ -1625,13 +1678,13 @@ if ($action === "navidrome_test") {
 
 if ($action === "fnos_test") {
     $testCfg = $cfg;
-    $urlInput = rtrim(trim((string)($_POST["url"] ?? "")), "/");
+    $urlInput = m_fnos_url_normalize($_POST["url"] ?? "");
     $userInput = trim(str_replace(["\0", "\r", "\n"], "", (string)($_POST["user"] ?? "")));
     $passwordInput = substr(str_replace(["\0", "\r", "\n"], "", (string)($_POST["password"] ?? "")), 0, 256);
     if ($urlInput === "") {
         mjson(["ok" => false, "error" => "飞牛音乐地址无效"], 400);
     }
-    if (!preg_match('#^https?://#i', $urlInput) || !is_array(@parse_url($urlInput)) || empty(parse_url($urlInput)["host"])) {
+    if ($urlInput === "") {
         mjson(["ok" => false, "error" => "飞牛音乐地址无效"], 400);
     }
     $testCfg["MUSIC_FNOS_URL"] = substr($urlInput, 0, 512);

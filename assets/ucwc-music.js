@@ -109,6 +109,8 @@
   var unlockCtx = null;
   var stallRecoverAt = 0;
   var stallZeroSince = 0;
+  var activeDeviceProfile = "";
+  var profileResizeTimer = 0;
   function rawCfg() {
     // ThemeMusic owns __UCWC_MUSIC__ so ThemeEffects (music.enable=false) cannot
     // clobber sitewide play when both plugins are installed.
@@ -125,20 +127,35 @@
       var narrow = w > 0 && w <= 900;
       var ua = String(navigator.userAgent || "").toLowerCase();
       var mobileUa = /android|iphone|ipad|ipod|mobile|tablet|silk|kindle/.test(ua);
-      // WebViews often expose no coarse pointer; UA and narrow viewport are
-      // fallback signals while a wide desktop viewport remains desktop.
-      if (mobileUa && narrow) return true;
-      if (coarse && narrow) return true;
+      // A narrow responsive viewport is sufficient for the mobile profile.
+      // UA/coarse-pointer signals still cover devices whose viewport reports late.
+      if (narrow) return true;
+      if (mobileUa || coarse) return narrow;
     } catch (e0) {}
     return false;
   }
 
-  function profileSuffix() {
+  function detectedProfileSuffix() {
     return isMobileDevice() ? "mobile" : "desktop";
   }
 
+  function profileSuffix() {
+    return activeDeviceProfile || detectedProfileSuffix();
+  }
+
+  function mobileConfigIsIndependent() {
+    var c = rawCfg() || {};
+    var mob = c.mobile && typeof c.mobile === "object" ? c.mobile : null;
+    var mm = String((mob && mob.run_mode) || "same").toLowerCase();
+    return mm !== "same" && mm !== "";
+  }
+
+  function storageProfileSuffix() {
+    return profileSuffix() === "mobile" && !mobileConfigIsIndependent() ? "desktop" : profileSuffix();
+  }
+
   function scopedStorageKey(base) {
-    return base + "_" + profileSuffix();
+    return base + "_" + storageProfileSuffix();
   }
 
   function sourceScope() {
@@ -161,7 +178,7 @@
   /** Effective playback profile: PC flat fields, or mobile overrides when not "same". */
   function cfg() {
     var c = rawCfg() || {};
-    if (!isMobileDevice()) return c;
+    if (profileSuffix() !== "mobile") return c;
     var mob = c.mobile && typeof c.mobile === "object" ? c.mobile : null;
     if (!mob) return c;
     var mm = String(mob.run_mode || "same").toLowerCase();
@@ -5779,6 +5796,26 @@
     }
   }
 
+  function reconcileDeviceProfile() {
+    var nextProfile = detectedProfileSuffix();
+    if (nextProfile === profileSuffix()) return;
+    try {
+      saveLsNow();
+      savePlaySession(false);
+    } catch (eSave) {}
+    activeDeviceProfile = nextProfile;
+    destroy();
+    mount();
+  }
+
+  function scheduleDeviceProfileReconcile() {
+    if (profileResizeTimer) clearTimeout(profileResizeTimer);
+    profileResizeTimer = setTimeout(function () {
+      profileResizeTimer = 0;
+      reconcileDeviceProfile();
+    }, 180);
+  }
+
   function destroy() {
     stopEngine(true);
     if (libraryPollTimer) {
@@ -5802,6 +5839,7 @@
   }
 
   function boot() {
+    if (!activeDeviceProfile) activeDeviceProfile = detectedProfileSuffix();
     if (bootDone) {
       // Soft remount only — do not re-trigger resume stack.
       // Still rebuild card/chip if the previous document's DOM was discarded.
@@ -5829,6 +5867,7 @@
         "resize",
         function () {
           scheduleMarqueeRefresh();
+          scheduleDeviceProfileReconcile();
         },
         { passive: true }
       ); // ucwc-music-marquee-resize

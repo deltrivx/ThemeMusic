@@ -23,6 +23,12 @@
   <script>
     var fixtureParams = new URLSearchParams(location.search);
     if (fixtureParams.get("reset") === "1") {
+      ["desktop", "mobile"].forEach(function (profile) {
+        sessionStorage.removeItem("ucwc_music_library_v2_" + profile + "_local:default");
+        sessionStorage.removeItem("ucwc_music_play_v1_" + profile + "_local:default");
+        localStorage.removeItem("ucwc_music_play_v1_" + profile + "_local:default");
+        localStorage.removeItem("ucwc_music_v1_" + profile);
+      });
       sessionStorage.removeItem("ucwc_music_library_v2");
       sessionStorage.removeItem("ucwc_music_play_v1");
       localStorage.removeItem("ucwc_music_play_v1");
