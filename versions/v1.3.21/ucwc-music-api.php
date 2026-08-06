@@ -1106,46 +1106,27 @@ function m_remote_library_fetch(array $cfg, $strategy, $progress = null) {
             if (count($items) < $pageSize || count($tracks) === $before || ($reportedTotal > 0 && count($tracks) >= $reportedTotal)) break;
         }
     } elseif ($strategy === "navidrome") {
+        // Keep the v1.2.2 Navidrome contract: search3 accepts songOffset and
+        // songCount, and the only reliable page boundary is the returned size.
         $pageSize = 500;
-        $lastPageSignature = "";
-        $endpoint = "rest/getSongs";
         for ($offset = 0; count($tracks) < $maxTracks;) {
-            [$resp, $err] = m_navidrome_request($cfg, $endpoint, ["offset" => $offset, "count" => $pageSize, "orderBy" => "title", "order" => "asc"], "GET", "", 30);
-            if (!is_array($resp)) {
-                if ($endpoint !== "rest/search3") {
-                    $endpoint = "rest/search3";
-                    [$resp, $err] = m_navidrome_request($cfg, $endpoint, ["query" => "", "songOffset" => $offset, "songCount" => $pageSize], "GET", "", 30);
-                }
-            }
+            $requestCount = min($pageSize, $maxTracks - count($tracks));
+            [$resp, $err] = m_navidrome_request($cfg, "rest/search3", [
+                "query" => "",
+                "artistCount" => 0,
+                "albumCount" => 0,
+                "songCount" => $requestCount,
+                "songOffset" => $offset,
+            ], "GET", "", 30);
             if (!is_array($resp)) return [null, $err, []];
             $data = $resp["subsonic-response"] ?? $resp;
             $status = strtolower((string)($data["status"] ?? $resp["status"] ?? "ok"));
             if (in_array($status, ["failed", "error"], true)) {
-                if ($endpoint !== "rest/search3") {
-                    $endpoint = "rest/search3";
-                    [$resp, $err] = m_navidrome_request($cfg, $endpoint, ["query" => "", "songOffset" => $offset, "songCount" => $pageSize], "GET", "", 30);
-                    if (!is_array($resp)) return [null, $err, []];
-                    $data = $resp["subsonic-response"] ?? $resp;
-                } else {
-                    return [null, (string)($data["error"]["message"] ?? $data["message"] ?? "Navidrome 曲库请求失败"), []];
-                }
+                return [null, (string)($data["error"]["message"] ?? $data["message"] ?? "Navidrome 曲库请求失败"), []];
             }
-            $search = $endpoint === "rest/getSongs" ? ($data["songs"] ?? $data) : ($data["searchResult3"] ?? $data["searchResult"] ?? $data);
+            $search = $data["searchResult3"] ?? $data["searchResult"] ?? $data;
             $items = $search["song"] ?? [];
             if (!is_array($items) || !$items) break;
-            // getSongs may expose `total` as the current page size. Only use
-            // explicit full-library counters for its stop condition.
-            $pageTotal = $endpoint === "rest/getSongs"
-                ? ($search["totalCount"] ?? $search["totalHits"] ?? $data["totalCount"] ?? $data["totalHits"] ?? 0)
-                : ($search["totalHits"] ?? $search["total"] ?? $search["totalCount"] ?? $data["totalHits"] ?? $data["total"] ?? 0);
-            $reportedTotal = max($reportedTotal, (int)$pageTotal);
-            $pageIds = [];
-            foreach ($items as $item) {
-                if (is_array($item)) $pageIds[] = (string)($item["id"] ?? $item["path"] ?? "");
-            }
-            $pageSignature = sha1(implode("\n", $pageIds));
-            if ($pageSignature !== "" && $pageSignature === $lastPageSignature) break;
-            $lastPageSignature = $pageSignature;
             $before = count($tracks);
             foreach ($items as $item) {
                 if (!is_array($item)) continue;
@@ -1155,11 +1136,13 @@ function m_remote_library_fetch(array $cfg, $strategy, $progress = null) {
                 $tracks[] = m_track_normalize($item, "navidrome");
                 if (count($tracks) >= $maxTracks) break;
             }
-            $nextOffset = $offset + count($items);
-            if (is_callable($progress)) $progress(count($tracks), $nextOffset, $reportedTotal);
+            $got = count($items);
+            $offset += $got;
+            if (is_callable($progress)) $progress(count($tracks), $offset, 0);
             if (count($tracks) >= $maxTracks) { $truncated = true; $stopReason = "emergency_track_limit"; break; }
-            if (count($items) < $pageSize || count($tracks) === $before || ($reportedTotal > 0 && $nextOffset >= $reportedTotal)) break;
-            $offset = $nextOffset;
+            // Do not use total/totalHits here: some Navidrome builds return
+            // the page count (500), which caused the regression.
+            if ($got < $requestCount || count($tracks) === $before) break;
         }
     } else return [null, "非远端音源策略", []];
     return [$tracks, "", ["truncated" => $truncated, "limit" => $maxTracks, "count" => count($tracks), "reported_total" => $reportedTotal, "stop_reason" => $stopReason]];
