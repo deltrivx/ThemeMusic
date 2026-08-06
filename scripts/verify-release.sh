@@ -90,7 +90,7 @@ assert 'function m_local_library_worker(' in api and 'theme-music-local-index' i
 assert 'm_start_local_library_worker($scope, $root)' in api, '本地 list/library 未接入后台索引'
 assert 'library_remote' in api and 'fnos' in api and 'navidrome' in api, '远端音源路由缺失'
 assert '"entries_scanned"' in api and '"reported_total"' in api, '远端索引进度字段缺失'
-assert 'function libraryScanStatusText()' in player and '正在后台重建曲库：已处理' in player, '前端缺少曲库重建进度提示'
+assert 'function libraryScanStatusText()' in player and '已扫描 " + entries + " 个文件，发现 " + tracks + " 首' in player and '已读取 " + tracks + " 首' in player, '前端缺少准确的曲库重建进度提示'
 assert 'listRenderLimit: 300' in player and 'ucwc-music-list-more' in player, '大曲库缺少分段渲染'
 assert 'LYRIC_DRIFT_KEY' in player and 'adjustLyricDrift(500)' in player and 'adjustLyricDrift(-500)' in player, '歌词时间校准不完整'
 assert 'tm-fnos-url' in page and 'fnos_test' in api, 'FnOS 音源设置或连接测试缺失'
