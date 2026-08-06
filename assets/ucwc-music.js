@@ -36,6 +36,7 @@
     statusKind: "normal",
     listRenderLimit: 300,
     libraryScanning: false,
+    libraryScan: null,
     lyrics: {
       id: "",
       lines: [],
@@ -1758,9 +1759,9 @@
     var n = state.tracks.length;
     var total = Number(state.libraryCount);
     if (!isFinite(total) || total < n) total = n;
-    if (!total) return state.libraryScanning ? "正在后台建立曲库索引…" : (state.loaded ? "目录内无支持的音频" : "");
+    if (state.libraryScanning) return libraryScanStatusText();
+    if (!total) return state.loaded ? "目录内无支持的音频" : "";
     var base = "共 " + total + " 首";
-    if (state.libraryScanning) base += " · 后台更新中";
     if (state.listTruncated) {
       base += "（已截断" + (state.listLimit ? "·上限 " + state.listLimit : "") + "）";
     }
@@ -1776,12 +1777,25 @@
     return base;
   }
 
+  function libraryScanStatusText() {
+    var scan = state.libraryScan || {};
+    var done = Number(scan.entries_scanned);
+    if (!isFinite(done) || done < 0) done = Number(scan.count);
+    if (!isFinite(done) || done < 0) done = 0;
+    var total = Number(scan.reported_total);
+    if (isFinite(total) && total > 0) {
+      var percent = Math.max(0, Math.min(100, Math.floor((done * 100) / total)));
+      return "正在后台重建曲库：已处理 " + done + " / " + total + " 首（" + percent + "%）";
+    }
+    return done > 0 ? "正在后台重建曲库：已处理 " + done + " 首" : "正在后台建立曲库索引…";
+  }
+
   function normalStatusMessages() {
     var total = Number(state.libraryCount);
     if (!isFinite(total) || total < state.tracks.length) total = state.tracks.length;
     if (!total) return [libraryStatusText()];
     var messages = ["已就绪", "曲库共 " + total + " 首"];
-    if (state.libraryScanning) messages.push("曲库后台更新中");
+    if (state.libraryScanning) messages.push(libraryScanStatusText());
     if (state.listTruncated) messages.push("已加载前 " + (state.listLimit || state.tracks.length) + " 首");
     if ((state.listFilter || "").trim()) messages.push(libraryStatusText());
     return messages;
@@ -2023,6 +2037,7 @@
       state.index = 0;
       state.loaded = false;
       state.libraryScanning = false;
+      state.libraryScan = null;
       state.lyrics = {
         id: "", lines: [], offsetMs: 0, driftMs: 0, active: -1,
         loading: false, empty: true, unsynced: false, seq: Number(state.lyrics.seq) || 0
@@ -5449,6 +5464,7 @@
           return;
         }
         state.libraryScanning = !!j.scanning;
+        state.libraryScan = j.scan && typeof j.scan === "object" ? j.scan : null;
         state.libraryCount = Number(j.count) || (Array.isArray(j.tracks) ? j.tracks.length : state.libraryCount);
         if (Array.isArray(j.tracks) && (j.tracks.length || !state.tracks.length || !j.scanning)) {
           state.tracks = j.tracks;
