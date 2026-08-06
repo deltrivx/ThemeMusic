@@ -1,12 +1,20 @@
 {
   "schema": 1,
-  "default": "v1.3.14",
-  "latest_version": "v1.3.14",
+  "default": "v1.3.15",
+  "latest_version": "v1.3.15",
   "versions": [
+    {
+      "id": "v1.3.15",
+      "label": "Theme Music v1.3.15：曲库重建进度语义修复正式版",
+      "channel": "latest",
+      "released_at": "2026-08-06",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.3.14",
       "label": "Theme Music v1.3.14：本地大曲库后台索引正式版",
-      "channel": "latest",
+      "channel": "stable",
       "released_at": "2026-08-06",
       "music": true,
       "ota": true
