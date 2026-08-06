@@ -86,6 +86,8 @@ page = pathlib.Path('ThemeMusic.page').read_text()
 loader = pathlib.Path('ThemeMusic_Loader.page').read_text()
 css = pathlib.Path('assets/theme-music-settings.css').read_text()
 assert 'function m_local_scan_files(' in api and 'function m_local_music_root(' in api, '本地曲库扫描器缺失'
+assert 'function m_local_library_worker(' in api and 'theme-music-local-index' in api, '本地曲库未使用后台索引任务'
+assert 'm_start_local_library_worker($scope, $root)' in api, '本地 list/library 未接入后台索引'
 assert 'library_remote' in api and 'fnos' in api and 'navidrome' in api, '远端音源路由缺失'
 assert '"entries_scanned"' in api and '"reported_total"' in api, '远端索引进度字段缺失'
 assert 'function libraryScanStatusText()' in player and '正在后台重建曲库：已处理' in player, '前端缺少曲库重建进度提示'
