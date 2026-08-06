@@ -856,6 +856,34 @@ function m_local_scan_files($root, $maxDepth = 6) {
     return $out;
 }
 
+function m_local_library_fetch($root, $progress = null) {
+    $root = rtrim((string)$root, "/");
+    if ($root === "" || !is_dir($root)) return [null, "本地音乐目录不可访问", []];
+    $audio = ["mp3","flac","m4a","aac","ogg","wav","opus","wma"];
+    $tracks = [];
+    $entries = 0;
+    try {
+        $it = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::LEAVES_ONLY
+        );
+        $it->setMaxDepth(32);
+        foreach ($it as $info) {
+            $entries++;
+            $name = (string)$info->getFilename();
+            if (m_match_ext($name, $audio)) {
+                $path = (string)$info->getPathname();
+                $tracks[] = m_track_normalize(["id" => $path, "path" => $path, "_root" => $root, "size" => @filesize($path)], "local", $path);
+            }
+            if ($entries % 100 === 0 && is_callable($progress)) $progress(count($tracks), $entries, 0);
+        }
+    } catch (Throwable $e) {
+        return [null, "本地曲库扫描失败：" . $e->getMessage(), []];
+    }
+    if (is_callable($progress)) $progress(count($tracks), $entries, 0);
+    return [$tracks, "", ["truncated" => false, "limit" => count($tracks), "count" => count($tracks), "reported_total" => 0, "entries_scanned" => $entries, "stop_reason" => ""]];
+}
+
 function m_track_text($value) {
     $value = trim((string)$value);
     return preg_replace('/\\s+/u', ' ', $value);
@@ -1125,6 +1153,23 @@ function m_remote_library_worker($strategy, $scope, array $cfg) {
     @flock($lock, LOCK_UN); @fclose($lock);
 }
 
+function m_local_library_worker($scope, $root) {
+    $paths = m_library_scan_paths($scope);
+    $lock = @fopen($paths["lock"], "c");
+    if (!$lock || !@flock($lock, LOCK_EX | LOCK_NB)) return;
+    $state = ["status" => "running", "pid" => getmypid(), "count" => 0, "entries_scanned" => 0, "reported_total" => 0, "started_at" => time(), "error" => ""];
+    m_library_scan_state_write($scope, $state);
+    [$tracks, $err, $scan] = m_local_library_fetch($root, function ($count, $entries, $total) use (&$state, $scope) {
+        $state = array_merge($state, ["status" => "running", "pid" => getmypid(), "count" => $count, "entries_scanned" => $entries, "reported_total" => $total]);
+        m_library_scan_state_write($scope, $state);
+    });
+    if (!is_array($tracks)) $state = array_merge($state, ["status" => "error", "error" => $err ?: "本地曲库索引失败", "finished_at" => time()]);
+    elseif (!m_library_cache_write($scope, $tracks, $scan)) $state = array_merge($state, ["status" => "error", "error" => "曲库索引写入失败", "finished_at" => time()]);
+    else $state = array_merge($state, $scan, ["status" => "done", "count" => count($tracks), "finished_at" => time(), "error" => ""]);
+    m_library_scan_state_write($scope, $state);
+    @flock($lock, LOCK_UN); @fclose($lock);
+}
+
 function m_start_remote_library_worker($strategy, $scope) {
     $state = m_library_scan_state($scope);
     if (m_library_scan_active($state)) return $state;
@@ -1153,10 +1198,41 @@ function m_start_remote_library_worker($strategy, $scope) {
     return m_library_scan_state($scope);
 }
 
+function m_start_local_library_worker($scope, $root) {
+    $state = m_library_scan_state($scope);
+    if (m_library_scan_active($state)) return $state;
+    $paths = m_library_scan_paths($scope);
+    $startLock = @fopen($paths["start_lock"], "c");
+    if (!$startLock || !@flock($startLock, LOCK_EX | LOCK_NB)) return $state;
+    $state = m_library_scan_state($scope);
+    if (!m_library_scan_active($state)) {
+        $state = ["status" => "queued", "pid" => 0, "count" => 0, "entries_scanned" => 0, "reported_total" => 0, "error" => ""];
+        m_library_scan_state_write($scope, $state);
+        $cmd = "nohup nice -n 10 php " . escapeshellarg(__FILE__) . " theme-music-local-index " . escapeshellarg(base64_encode($scope)) . " " . escapeshellarg(base64_encode($root)) . " >/dev/null 2>&1 & echo $!";
+        $pid = function_exists("shell_exec") ? trim((string)@shell_exec($cmd)) : "";
+        if ($pid !== "" && ctype_digit($pid)) {
+            $state["pid"] = (int)$pid;
+            m_library_scan_state_write($scope, $state);
+        } else {
+            $state = ["status" => "error", "pid" => 0, "count" => 0, "error" => "无法启动低优先级本地曲库索引任务"];
+            m_library_scan_state_write($scope, $state);
+        }
+    }
+    @flock($startLock, LOCK_UN); @fclose($startLock);
+    return m_library_scan_state($scope);
+}
+
 if (PHP_SAPI === "cli" && (string)($argv[1] ?? "") === "theme-music-remote-index") {
     $workerStrategy = strtolower((string)($argv[2] ?? ""));
     $workerScope = base64_decode((string)($argv[3] ?? ""), true);
     if (in_array($workerStrategy, ["fnos", "navidrome"], true) && is_string($workerScope) && $workerScope !== "") m_remote_library_worker($workerStrategy, $workerScope, $cfg);
+    exit;
+}
+
+if (PHP_SAPI === "cli" && (string)($argv[1] ?? "") === "theme-music-local-index") {
+    $workerScope = base64_decode((string)($argv[2] ?? ""), true);
+    $workerRoot = base64_decode((string)($argv[3] ?? ""), true);
+    if (is_string($workerScope) && $workerScope !== "" && is_string($workerRoot) && $workerRoot !== "") m_local_library_worker($workerScope, $workerRoot);
     exit;
 }
 
@@ -1178,27 +1254,21 @@ if ($action === "list") {
         mjson(["ok" => false, "source_configured" => false, "source" => "fnos", "error" => "飞牛音乐音源未配置完整"], 200);
     }
     $strat = (string)($auto["strategy"] ?? "");
-    $scope = $strat === "fnos" || $strat === "navidrome" ? m_remote_library_scope($cfg, $strat) : m_local_music_root($cfg);
+    $root = $strat === "fnos" || $strat === "navidrome" ? "" : m_local_music_root($cfg);
+    $scope = $strat === "fnos" || $strat === "navidrome" ? m_remote_library_scope($cfg, $strat) : $root;
     if ($scope === "") mjson(["ok" => false, "error" => "本地音乐目录不可访问", "tracks" => []], 200);
     $cached = m_library_cache_read($scope);
     $refresh = (string)($_GET["refresh"] ?? "") === "1";
     $stale = !is_array($cached) || time() - (int)($cached["created_at"] ?? 0) > 21600;
-    $job = ($refresh || $stale) && ($strat === "fnos" || $strat === "navidrome") ? m_start_remote_library_worker($strat, $scope) : m_library_scan_state($scope);
-    if ($strat !== "fnos" && $strat !== "navidrome") {
-        $root = m_local_music_root($cfg);
-        $files = $root !== "" ? m_local_scan_files($root, 32) : [];
-        $tracks = [];
-        foreach ($files as $path) {
-            $tracks[] = m_track_normalize(["id" => $path, "path" => $path, "_root" => $root, "size" => @filesize($path)], "local", $path);
-        }
-        mjson(["ok" => true, "source" => "local", "tracks" => $tracks, "items" => $tracks, "count" => count($tracks), "truncated" => false, "limit" => count($tracks), "tip" => ""]);
-    }
+    if ($refresh || $stale) {
+        $job = ($strat === "fnos" || $strat === "navidrome") ? m_start_remote_library_worker($strat, $scope) : m_start_local_library_worker($scope, $root);
+    } else $job = m_library_scan_state($scope);
     $cached = m_library_cache_read($scope);
     $tracks = is_array($cached) ? $cached["tracks"] : [];
     $scan = is_array($cached) ? ($cached["scan"] ?? []) : [];
     $scanning = m_library_scan_active($job);
     if (!$tracks && !$scanning && ($job["status"] ?? "") === "error") {
-        mjson(["ok" => false, "error" => "远端曲库索引失败：" . ($job["error"] ?? "未知错误"), "tracks" => []], 503);
+        mjson(["ok" => false, "error" => "曲库索引失败：" . ($job["error"] ?? "未知错误"), "tracks" => []], 503);
     }
     $truncated = !empty($scan["truncated"]);
     $limit = (int)($scan["limit"] ?? 100000);
@@ -1228,15 +1298,25 @@ if ($action === "library") {
     if ($root === "") {
         mjson(["ok" => false, "strategy" => $strat, "label" => $auto["label"] ?? "", "error" => "无可用本地音乐目录"], 200);
     }
-    $files = m_local_scan_files($root, 6);
+    $scope = $root;
+    $cached = m_library_cache_read($scope);
+    $job = m_start_local_library_worker($scope, $root);
+    $cached = m_library_cache_read($scope);
+    $tracks = is_array($cached) ? ($cached["tracks"] ?? []) : [];
+    $files = [];
+    foreach (array_slice($tracks, 0, 5000) as $track) {
+        if (is_array($track)) $files[] = (string)($track["path"] ?? $track["id"] ?? "");
+    }
     $source = $root;
     mjson([
         "ok" => true,
         "strategy" => $strat,
         "label" => $auto["label"] ?? "",
         "source" => $source,
-        "count" => count($files),
-        "files" => array_slice($files, 0, 5000),
+        "count" => count($tracks),
+        "files" => $files,
+        "scanning" => m_library_scan_active($job),
+        "scan" => $job,
     ]);
 }
 
