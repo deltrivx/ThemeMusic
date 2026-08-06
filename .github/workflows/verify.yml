@@ -55,8 +55,14 @@ jobs:
               ./scripts/build-release.sh "$VERSION" snapshot
             fi
           else
-            ./scripts/build-release.sh "$VERSION" snapshot
-            git diff --exit-code -- "versions/$VERSION"
+            if [ -d "versions/$VERSION" ]; then
+              # Keep the checked-in current snapshot authoritative. A released
+              # tag may contain an older immutable tree after a hotfix.
+              ./scripts/build-release.sh "$VERSION" existing
+            else
+              ./scripts/build-release.sh "$VERSION" snapshot
+              git diff --exit-code -- "versions/$VERSION"
+            fi
           fi
           ./scripts/verify-release.sh "$VERSION"
       - name: 保存构建产物
