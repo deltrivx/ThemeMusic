@@ -567,9 +567,10 @@ install_version() {
     install -m 0644 "$tmp/theme.music.cfg" "$SERVICE_CFG"
   fi
 
-  sync_plugin_metadata "$tmp/theme.music-$VERSION.plg"
+  # The boot PLG was installed before this updater ran. Do not overwrite its
+  # verified offline bootstrap with a potentially stale CDN or immutable release asset.
 
-  # Publish installed version only after the boot PLG has been verified and synced.
+  # Publish installed version only after all runtime files have been verified and written.
   write_options
   {
     printf 'version=%s\n' "$VERSION"
