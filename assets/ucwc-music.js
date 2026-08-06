@@ -1779,15 +1779,20 @@
 
   function libraryScanStatusText() {
     var scan = state.libraryScan || {};
-    var done = Number(scan.entries_scanned);
-    if (!isFinite(done) || done < 0) done = Number(scan.count);
-    if (!isFinite(done) || done < 0) done = 0;
+    var source = String((cfg() && cfg().source) || "local").toLowerCase();
+    var tracks = Number(scan.count);
+    if (!isFinite(tracks) || tracks < 0) tracks = 0;
+    var entries = Number(scan.entries_scanned);
+    if (!isFinite(entries) || entries < 0) entries = tracks;
     var total = Number(scan.reported_total);
     if (isFinite(total) && total > 0) {
-      var percent = Math.max(0, Math.min(100, Math.floor((done * 100) / total)));
-      return "正在后台重建曲库：已处理 " + done + " / " + total + " 首（" + percent + "%）";
+      var percent = Math.max(0, Math.min(100, Math.floor((tracks * 100) / total)));
+      return "正在后台重建曲库：" + tracks + " / " + total + " 首（" + percent + "%）";
     }
-    return done > 0 ? "正在后台重建曲库：已处理 " + done + " 首" : "正在后台建立曲库索引…";
+    if (source === "local") {
+      return entries > 0 ? "正在后台重建曲库：已扫描 " + entries + " 个文件，发现 " + tracks + " 首" : "正在后台建立本地曲库索引…";
+    }
+    return tracks > 0 ? "正在后台重建曲库：已读取 " + tracks + " 首" : "正在后台建立曲库索引…";
   }
 
   function normalStatusMessages() {
