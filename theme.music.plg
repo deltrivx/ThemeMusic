@@ -210,8 +210,8 @@ https://github.com/deltrivx/ThemeMusic
 # Never hard-fail boot when flash already has a package (reboot offline / GitHub timeout).
 set +e
 export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
-FLASH="&flash;"
-PLUG="&plugdir;"
+FLASH="/boot/config/plugins/theme.music"
+PLUG="/usr/local/emhttp/plugins/theme.music"
 mkdir -p "$FLASH/assets" "$PLUG/assets"
 
 restore_from_flash() {
@@ -243,7 +243,7 @@ else
   echo "Theme Music: no complete flash package yet; will need network install"
 fi
 
-URL="&installSH;"
+URL="https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/install.sh"
 OUT="/tmp/theme-music-install-run.sh"
 echo "Theme Music: fetching install.sh for OTA &ver;…"
 ok=0
@@ -251,10 +251,10 @@ if curl -4 -fsSL --http1.1 --connect-timeout 12 --max-time 45 --retry 2 -o "$OUT
   ok=1
 else
   for m in \
-    "https://cdn.jsdelivr.net/gh/&github;@main/scripts/install.sh" \
-    "https://fastly.jsdelivr.net/gh/&github;@main/scripts/install.sh" \
-    "https://raw.gitmirror.com/&github;/main/scripts/install.sh" \
-    "https://ghfast.top/https://raw.githubusercontent.com/&github;/main/scripts/install.sh"
+    "https://cdn.jsdelivr.net/gh/deltrivx/ThemeMusic@main/scripts/install.sh" \
+    "https://fastly.jsdelivr.net/gh/deltrivx/ThemeMusic@main/scripts/install.sh" \
+    "https://raw.gitmirror.com/deltrivx/ThemeMusic/main/scripts/install.sh" \
+    "https://ghfast.top/https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/scripts/install.sh"
   do
     if curl -4 -fsSL --http1.1 --connect-timeout 12 --max-time 45 --retry 1 -o "$OUT" "$m"; then ok=1; break; fi
   done
@@ -265,13 +265,13 @@ if [ "$ok" = "1" ] && [ -s "$OUT" ]; then
   export UCWC_PLUGIN_INSTALL=1
   # Prefer line-buffered progress for plugin manager
   if command -v stdbuf >/dev/null 2>&1; then
-    stdbuf -oL -eL sh "$OUT" install "&ver;" ota
+    stdbuf -oL -eL sh "$OUT" install "v1.3.12" ota
   else
-    sh "$OUT" install "&ver;" ota
+    sh "$OUT" install "v1.3.12" ota
   fi
   rc=$?
   if [ "$rc" -eq 0 ]; then
-    echo "Theme Music: OTA install OK (&ver;)"
+    echo "Theme Music: OTA install OK (v1.3.12)"
     exit 0
   fi
   echo "Theme Music: OTA returned $rc — falling back to flash restore"
