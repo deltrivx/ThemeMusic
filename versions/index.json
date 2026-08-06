@@ -1,12 +1,20 @@
 {
   "schema": 1,
-  "default": "v1.3.17",
-  "latest_version": "v1.3.17",
+  "default": "v1.3.18",
+  "latest_version": "v1.3.18",
   "versions": [
+    {
+      "id": "v1.3.18",
+      "label": "Theme Music v1.3.18：Navidrome 500 首分页终止修复正式版",
+      "channel": "latest",
+      "released_at": "2026-08-06",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.3.17",
       "label": "Theme Music v1.3.17：Navidrome 大曲库分页修复正式版",
-      "channel": "latest",
+      "channel": "stable",
       "released_at": "2026-08-06",
       "music": true,
       "ota": true
