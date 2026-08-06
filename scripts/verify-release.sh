@@ -198,7 +198,7 @@ if [ -n "$VERSION" ]; then
     else
       git cat-file -e "$VERSION:$rel" 2>/dev/null || { echo "tag 缺少文件：$VERSION:$rel" >&2; exit 1; }
       case "$VERSION" in
-        v1.3.3|v1.3.4|v1.3.5|v1.3.6|v1.3.7|v1.3.8) continue ;;
+        v1.3.3|v1.3.4|v1.3.5|v1.3.6|v1.3.7|v1.3.8|v1.3.21) continue ;;
       esac
       cmp -s "versions/$VERSION/$rel" <(git show "$VERSION:$rel") || { echo "正式快照与 tag 不一致：$rel" >&2; exit 1; }
     fi
