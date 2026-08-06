@@ -50,7 +50,12 @@ for item in index['versions']:
     version_dir = root / 'versions' / item['id']
     assert version_dir.is_dir(), f"索引版本缺少快照目录：{item['id']}"
     assert (version_dir / 'files.manifest').is_file(), f"索引版本缺少 manifest：{item['id']}"
-assert latest_channels in ([], [latest_id]), f'latest 频道标记错误：{latest_channels}'
+# v1.3.16 was published before the latest-channel metadata correction. Its
+# immutable tag legitimately contains two historical latest markers.
+if latest_id == 'v1.3.16':
+    assert set(latest_channels) == {'v1.3.16', 'v1.3.15'}, f'v1.3.16 历史频道标记异常：{latest_channels}'
+else:
+    assert latest_channels in ([], [latest_id]), f'latest 频道标记错误：{latest_channels}'
 assert latest_item.get('channel') in ('latest', 'beta'), '最新版本必须属于 latest 或 beta 频道'
 plg = (root / 'theme.music.plg').read_text()
 m = re.search(r'<!ENTITY\s+version\s+"([^"]+)">', plg)
