@@ -282,7 +282,6 @@ fetch_pkg() {
   mkdir -p "$(dirname "$_dest")"
 
   _expect_sha=$(manifest_get "$_rel" sha256)
-  _expect_sz=$(manifest_get "$_rel" size)
   _local=$(local_path_for "$_rel")
 
   if [ "$INSTALL_MODE" = "ota" ] && [ -n "$_local" ] && [ -f "$_local" ]; then
@@ -292,17 +291,6 @@ fetch_pkg() {
       if [ -n "$_cur" ] && [ "$_cur" = "$_expect_sha" ]; then
         _skip=1
       fi
-    else
-      if [ -z "$_expect_sz" ] || [ "$_expect_sz" = "0" ] || [ "$_expect_sz" = "null" ]; then
-        _expect_sz=$(ucwc_curl --max-time 20 -I "$_url" 2>/dev/null \
-          | tr -d '\r' | awk 'BEGIN{IGNORECASE=1} /^Content-Length:/ {print $2; exit}')
-      fi
-      if [ -n "$_expect_sz" ] && [ "$_expect_sz" != "0" ]; then
-        _csz=$(file_size "$_local")
-        if [ "$_csz" = "$_expect_sz" ]; then
-          _skip=1
-        fi
-      fi
     fi
     if [ "$_skip" = "1" ]; then
       ucwc_log "OTA 跳过（未变）：$_label"
@@ -310,6 +298,7 @@ fetch_pkg() {
       cp -a "$_local" "$_dest"
       return 0
     fi
+    ucwc_log "OTA 重新安装（哈希不匹配或缺少清单）：$_label"
   fi
 
   OTA_FETCHED=$(( ${OTA_FETCHED:-0} + 1 ))
