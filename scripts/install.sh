@@ -565,6 +565,9 @@ install_version() {
     install -m 0644 "$tmp/theme.music.cfg" "$SERVICE_CFG"
   fi
 
+  sync_plugin_metadata "$tmp/theme.music-$VERSION.plg"
+
+  # Publish installed version only after the boot PLG has been verified and synced.
   write_options
   {
     printf 'version=%s\n' "$VERSION"
@@ -572,8 +575,6 @@ install_version() {
     printf 'updated_at=%s\n' "$(date +%Y%m%d-%H%M%S)"
     printf 'source=deltrivx/ThemeMusic\n'
   } > "$STATE_FILE"
-
-  sync_plugin_metadata "$tmp/theme.music-$VERSION.plg"
 
   progress 95 "收尾" "写入状态"
   echo "已安装：ThemeMusic $VERSION（模式：$INSTALL_MODE）"
