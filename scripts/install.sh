@@ -350,14 +350,16 @@ write_options() {
 
 sync_plugin_metadata() {
   _dst="$1"
-  _url="https://github.com/deltrivx/ThemeMusic/releases/download/$VERSION/theme.music-$VERSION.plg"
+  # The boot PLG must include the current offline-recovery bootstrap. Release
+  # assets are immutable and may predate a bootstrap-only hotfix.
+  _url="$REPO_RAW/theme.music.plg"
   if ! download -o "$_dst" "$_url"; then
     ucwc_log "错误：PLG 元数据下载失败"
     return 1
   fi
   _plg_ver=$(sed -n 's/.*<!ENTITY[[:space:]]\+version[[:space:]]\+"\([^"]*\)".*/\1/p' "$_dst" | head -1)
-  if [ "$_plg_ver" != "$VERSION" ] || ! grep -q '<PLUGIN name="&name;"' "$_dst"; then
-    ucwc_log "错误：PLG 元数据校验失败（期望 $VERSION，得到 ${_plg_ver:-空}）"
+  if [ -z "$_plg_ver" ] || ! grep -q '<PLUGIN name="&name;"' "$_dst"; then
+    ucwc_log "错误：PLG 元数据校验失败（得到 ${_plg_ver:-空}）"
     return 1
   fi
   install -m 0644 "$_dst" "$PLUGIN_BOOT"
