@@ -2142,7 +2142,7 @@
     if (!kind) {
       if (!text) kind = "normal";
       else if (/失败|错误|未配置|不可访问|无可用|请求失败|无法加载|格式或路径|暂无曲目/.test(text)) kind = "persistent";
-      else if (/共 \d+ 首|曲库共|已就绪|后台更新中|筛选|排序|目录内无|已截断/.test(text)) kind = "normal";
+      else if (/共 \d+ 首|曲库共|已就绪|后台更新中|后台重建|后台建立|筛选|排序|目录内无|已截断/.test(text)) kind = "normal";
       else kind = "transient";
     }
     // Keep the library status visible after transient playback messages clear.
