@@ -1108,7 +1108,11 @@ function m_remote_library_worker($strategy, $scope, array $cfg) {
     $paths = m_library_scan_paths($scope);
     $lock = @fopen($paths["lock"], "c");
     if (!$lock || !@flock($lock, LOCK_EX | LOCK_NB)) return;
-    $state = ["status" => "running", "pid" => getmypid(), "count" => 0, "started_at" => time(), "error" => ""];
+    $state = [
+        "status" => "running", "pid" => getmypid(), "count" => 0,
+        "entries_scanned" => 0, "reported_total" => 0,
+        "started_at" => time(), "error" => ""
+    ];
     m_library_scan_state_write($scope, $state);
     [$tracks, $err, $scan] = m_remote_library_fetch($cfg, $strategy, function ($count, $entries, $total) use (&$state, $scope) {
         $state = array_merge($state, ["status" => "running", "pid" => getmypid(), "count" => $count, "entries_scanned" => $entries, "reported_total" => $total]);
@@ -1129,7 +1133,11 @@ function m_start_remote_library_worker($strategy, $scope) {
     if (!$startLock || !@flock($startLock, LOCK_EX | LOCK_NB)) return $state;
     $state = m_library_scan_state($scope);
     if (!m_library_scan_active($state)) {
-        $state = ["status" => "queued", "pid" => 0, "count" => (int)($state["count"] ?? 0), "error" => ""];
+        $state = [
+            "status" => "queued", "pid" => 0, "count" => (int)($state["count"] ?? 0),
+            "entries_scanned" => (int)($state["entries_scanned"] ?? 0),
+            "reported_total" => (int)($state["reported_total"] ?? 0), "error" => ""
+        ];
         m_library_scan_state_write($scope, $state);
         $cmd = "nohup nice -n 10 php " . escapeshellarg(__FILE__) . " theme-music-remote-index " . escapeshellarg($strategy) . " " . escapeshellarg(base64_encode($scope)) . " >/dev/null 2>&1 & echo $!";
         $pid = function_exists("shell_exec") ? trim((string)@shell_exec($cmd)) : "";
