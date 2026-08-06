@@ -215,11 +215,20 @@ PLUG="&plugdir;"
 mkdir -p "$FLASH/assets" "$PLUG/assets"
 
 restore_from_flash() {
-  [ -f "$FLASH/ThemeMusic.page" ] || return 1
-  [ -f "$FLASH/ucwc-music-api.php" ] || return 1
+  for f in \
+    ThemeMusic.page ThemeMusic_Loader.page ucwc-music-api.php \
+    theme-music-save.php theme-music-update.php \
+    assets/ucwc-music.js assets/ucwc-music.css \
+    assets/theme-music-settings.js assets/theme-music-settings.css
+  do
+    [ -s "$FLASH/$f" ] || {
+      echo "Theme Music: flash package incomplete: $f"
+      return 1
+    }
+  done
   echo "Theme Music: restoring runtime from flash…"
   for f in ThemeMusic.page ThemeMusic_Loader.page ucwc-music-api.php theme-music-save.php theme-music-update.php; do
-    [ -f "$FLASH/$f" ] && install -m 0644 "$FLASH/$f" "$PLUG/$f"
+    install -m 0644 "$FLASH/$f" "$PLUG/$f"
   done
   [ -f "$FLASH/README.md" ] && install -m 0644 "$FLASH/README.md" "$PLUG/README.md"
   for f in ucwc-music.js ucwc-music.css ucwc-music-host.html theme-music-settings.js theme-music-settings.css; do
