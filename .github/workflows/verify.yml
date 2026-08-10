@@ -17,7 +17,7 @@ jobs:
       prerelease: ${{ steps.metadata.outputs.prerelease }}
     runs-on: ubuntu-latest
     steps:
-      - name: 检出仓库（包含正式版本 tags）
+      - name: 检出仓库
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -28,14 +28,10 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          import os
-          import re
-
+          import json, os, re
           index = json.load(open("versions/index.json", encoding="utf-8"))
           version = os.environ["REF_NAME"] if os.environ["EVENT_NAME"] == "push" and os.environ["REF_NAME"].startswith("v") else index["latest_version"]
-          item = next((item for item in index["versions"] if item.get("id") == version), None)
-          if item is None:
+          if not any(item.get("id") == version for item in index["versions"]):
               raise SystemExit(f"版本索引缺少目标版本：{version}")
           print(f"version={version}")
           print(f"prerelease={'true' if re.search(r'-(?:beta|Beta)[0-9]*$', version) else 'false'}")
@@ -47,22 +43,12 @@ jobs:
         run: |
           ./scripts/verify-release.sh
           if [ "$IS_TAG" = "true" ]; then
-            if [ -d "versions/$VERSION" ]; then
-              ./scripts/build-release.sh "$VERSION" existing
-            else
-              # Tags are immutable; build a missing release snapshot from the
-              # tagged runtime tree without rewriting the tag history.
-              ./scripts/build-release.sh "$VERSION" snapshot
-            fi
+            if [ -d "versions/$VERSION" ]; then ./scripts/build-release.sh "$VERSION" existing; else ./scripts/build-release.sh "$VERSION" snapshot; fi
+          elif [ -d "versions/$VERSION" ]; then
+            ./scripts/build-release.sh "$VERSION" existing
           else
-            if [ -d "versions/$VERSION" ]; then
-              # Keep the checked-in current snapshot authoritative. A released
-              # tag may contain an older immutable tree after a hotfix.
-              ./scripts/build-release.sh "$VERSION" existing
-            else
-              ./scripts/build-release.sh "$VERSION" snapshot
-              git diff --exit-code -- "versions/$VERSION"
-            fi
+            ./scripts/build-release.sh "$VERSION" snapshot
+            git diff --exit-code -- "versions/$VERSION"
           fi
           ./scripts/verify-release.sh "$VERSION"
       - name: 保存构建产物
@@ -73,7 +59,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     needs: verify
     runs-on: ubuntu-latest
     permissions:
@@ -94,22 +80,24 @@ jobs:
           VERSION: ${{ needs.verify.outputs.version }}
           PRERELEASE: ${{ needs.verify.outputs.prerelease }}
         run: |
-          if gh release view "$VERSION" >/dev/null 2>&1; then
-            echo "Release $VERSION 已存在，保留既有标题、正文与资产。"
-            exit 0
-          fi
-          awk -v version="$VERSION" '
-            $0 ~ "^## " version "([[:space:]]|$)" {capture=1; next}
-            capture && /^## / {exit}
-            capture {print}
-          ' CHANGELOG.md > release-notes.md
+          awk -v version="$VERSION" '$0 ~ "^## " version "([[:space:]]|$)" {capture=1; next} capture && /^## / {exit} capture {print}' CHANGELOG.md > release-notes.md
           assets=()
           while IFS= read -r -d '' asset; do assets+=("$asset"); done < <(find release-assets -maxdepth 1 -type f -print0)
           test "${#assets[@]}" -gt 0
-          flags=(--target "$GITHUB_SHA" --title "$VERSION" --notes-file release-notes.md)
-          if [ "$PRERELEASE" = "true" ]; then
-            flags+=(--prerelease)
-          else
-            flags+=(--latest)
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            existing=$(gh release view "$VERSION" --json assets --jq '.assets[].name')
+            missing=()
+            for asset in "${assets[@]}"; do
+              name=${asset##*/}
+              if ! printf '%s\\n' "$existing" | grep -Fxq "$name"; then missing+=("$asset"); fi
+            done
+            if [ "${#missing[@]}" -gt 0 ]; then
+              gh release upload "$VERSION" "${missing[@]}"
+            else
+              echo "Release $VERSION 资产已完整。"
+            fi
+            exit 0
           fi
+          flags=(--target "$GITHUB_SHA" --title "$VERSION" --notes-file release-notes.md)
+          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); else flags+=(--latest); fi
           gh release create "$VERSION" "${assets[@]}" "${flags[@]}"
