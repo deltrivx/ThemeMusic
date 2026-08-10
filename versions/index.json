@@ -1,12 +1,20 @@
 {
   "schema": 1,
-  "default": "v1.3.22",
-  "latest_version": "v1.3.22",
+  "default": "v1.3.23",
+  "latest_version": "v1.3.23",
   "versions": [
+    {
+      "id": "v1.3.23",
+      "label": "Theme Music v1.3.23：安装器与发布资产修复正式版",
+      "channel": "latest",
+      "released_at": "2026-08-10",
+      "music": true,
+      "ota": true
+    },
     {
       "id": "v1.3.22",
       "label": "Theme Music v1.3.22：歌词匹配与回退修复正式版",
-      "channel": "latest",
+      "channel": "stable",
       "released_at": "2026-08-10",
       "music": true,
       "ota": true

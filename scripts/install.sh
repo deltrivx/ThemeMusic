@@ -83,47 +83,47 @@ ucwc_url_candidates() {
 }
 
 download() {
-  _dest=""
-  _url=""
-  _prev=""
-  _extra=""
-  for _a in "$@"; do
-    if [ "$_prev" = "-o" ]; then
-      _dest="$_a"
-      _prev=""
+  dl_dest=""
+  dl_url=""
+  dl_prev=""
+  dl_extra=""
+  for dl_arg in "$@"; do
+    if [ "$dl_prev" = "-o" ]; then
+      dl_dest="$dl_arg"
+      dl_prev=""
       continue
     fi
-    case "$_a" in
-      -o) _prev="-o" ;;
-      http://*|https://*) _url="$_a" ;;
-      *) _extra="$_extra $_a" ;;
+    case "$dl_arg" in
+      -o) dl_prev="-o" ;;
+      http://*|https://*) dl_url="$dl_arg" ;;
+      *) dl_extra="$dl_extra $dl_arg" ;;
     esac
   done
-  if [ -z "$_url" ]; then
+  if [ -z "$dl_url" ]; then
     echo "download: missing URL" >&2
     return 1
   fi
-  _bn=$(basename "$_url" | sed 's/[?].*$//')
-  ucwc_log "下载文件：$_bn"
-  _ok=1
+  dl_name=$(basename "$dl_url" | sed 's/[?].*$//')
+  ucwc_log "下载文件：$dl_name"
+  dl_status=1
   # shellcheck disable=SC2086
-  for _try in $(ucwc_url_candidates "$_url" | tr '\n' ' '); do
-    [ -n "$_try" ] || continue
-    if [ -n "$_dest" ]; then
-      if ucwc_curl --max-time 30 -o "$_dest" $_extra "$_try" && [ -s "$_dest" ]; then
-        _ok=0
+  for dl_candidate in $(ucwc_url_candidates "$dl_url" | tr '\n' ' '); do
+    [ -n "$dl_candidate" ] || continue
+    if [ -n "$dl_dest" ]; then
+      if ucwc_curl --max-time 30 -o "$dl_dest" $dl_extra "$dl_candidate" && [ -s "$dl_dest" ]; then
+        dl_status=0
         break
       fi
-      [ -e "$_dest" ] && rm -f "$_dest"
+      [ -e "$dl_dest" ] && rm -f "$dl_dest"
     else
-      if ucwc_curl --max-time 30 $_extra "$_try"; then
-        _ok=0
+      if ucwc_curl --max-time 30 $dl_extra "$dl_candidate"; then
+        dl_status=0
         break
       fi
     fi
-    ucwc_log "镜像重试：$_bn"
+    ucwc_log "镜像重试：$dl_name"
   done
-  return $_ok
+  return "$dl_status"
 }
 
 fetch_index() {

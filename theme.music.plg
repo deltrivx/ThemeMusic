@@ -2,14 +2,14 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY      version   "v1.3.22">
+<!ENTITY      version   "v1.3.23">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-			<!ENTITY ver       "v1.3.22">
+			<!ENTITY ver       "v1.3.23">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 
@@ -17,7 +17,10 @@
 		<CHANGES>
 			<![CDATA[
 			## Theme Music
-	### v1.3.22
+		### v1.3.23
+		- 修复逐文件镜像下载时安装器临时目标变量被覆盖导致的同文件 mv 错误
+		- 增加安装器下载回归测试并补齐 v1.3.22 Release 正式资产
+		### v1.3.22
 	- 修复文件名、歌手和版本信息差异导致的在线歌词无法匹配
 	- 增加多候选歌词搜索、结果评分、纯文本歌词回退与本地近似文件匹配
 	- 修复空歌词结果长期缓存；保留强制重新匹配并区分服务错误

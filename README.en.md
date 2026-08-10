@@ -9,7 +9,7 @@
 
 Theme Music is a native Unraid WebGUI music player that brings three configurable sources into the dashboard and site-wide playback experience: local music directories, Navidrome/OpenSubsonic, and the FnOS music HTTP API.
 
-> Current release: **v1.3.22** · Plugin ID: `theme.music` · Minimum Unraid version: **6.12.0**
+> Current release: **v1.3.23** · Plugin ID: `theme.music` · Minimum Unraid version: **6.12.0**
 
 ## Features
 

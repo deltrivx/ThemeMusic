@@ -24,6 +24,7 @@ assert 'clear_legacy_boot_caches' in installer and 'rm -rf -- "$_legacy"' in ins
 print('JS 语法与无弹窗约束通过')
 PY
 sh -n scripts/install.sh
+sh tests/install-fetch-regression.sh
 bash -n scripts/build-release.sh
 bash -n scripts/verify-release.sh
 if command -v php >/dev/null 2>&1; then
