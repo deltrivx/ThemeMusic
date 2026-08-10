@@ -441,7 +441,7 @@ install_version() {
   sums="$tmp/SHA256SUMS"
   if download -o "$sums" "$release_base/SHA256SUMS" \
     && download -o "$archive" "$release_base/ThemeMusic-$VERSION.tar.gz"; then
-    archive_expect=$(awk -v n="ThemeMusic-$VERSION.tar.gz" '$1 == n || $2 == n || $2 == "*" n {print $1; exit}' "$sums" 2>/dev/null || true)
+    archive_expect=$(awk -v n="ThemeMusic-$VERSION.tar.gz" '{name=$2; sub(/^\*/, "", name); if ($1 == n || name == n) {print $1; exit}}' "$sums" 2>/dev/null || true)
     archive_actual=$(file_sha256 "$archive")
     archive_root="ThemeMusic-$VERSION"
     if [ -n "$archive_expect" ] && [ "$archive_actual" = "$archive_expect" ] \
