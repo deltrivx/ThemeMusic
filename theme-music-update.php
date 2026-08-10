@@ -417,6 +417,8 @@ function ucwc_prepare_install($repo_raw, $upd_log, $mode, $version = "", $instal
     $script = "/tmp/theme-music-install-web.sh";
     [$body, $err] = ucwc_http_get($repo_raw . "/scripts/install.sh?_ts=" . time(), 60);
     if ($body === false) return [false, "下载 install.sh 失败：$err", $version, $has_fx, ""];
+    // Raw/CDN mirrors may preserve Windows line endings; dash on Unraid cannot parse them.
+    $body = str_replace(["\r\n", "\r"], "\n", (string)$body);
     if (@file_put_contents($script, $body) === false) return [false, "写入临时脚本失败。", $version, $has_fx, ""];
     @chmod($script, 0755);
 
