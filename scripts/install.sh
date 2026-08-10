@@ -48,29 +48,26 @@ ucwc_url_candidates() {
   _u=$1
   _rel=""
   case "$_u" in
-    https://github.com/deltrivx/ThemeMusic/releases/download/*)
+    https://github.com/deltrivx/ThemeMusic/releases/download/??*)
       printf '%s\n' "$_u"
       printf '%s%s\n' "https://ghfast.top/" "$_u"
       return 0
       ;;
   esac
-  case "$_u" in
-    https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/*)
-      _rel=${_u#https://raw.githubusercontent.com/deltrivx/ThemeMusic/main}
-      ;;
-    https://cdn.jsdelivr.net/gh/deltrivx/ThemeMusic@main/*)
-      _rel=${_u#https://cdn.jsdelivr.net/gh/deltrivx/ThemeMusic@main}
-      ;;
-    https://fastly.jsdelivr.net/gh/deltrivx/ThemeMusic@main/*)
-      _rel=${_u#https://fastly.jsdelivr.net/gh/deltrivx/ThemeMusic@main}
-      ;;
-    https://raw.gitmirror.com/deltrivx/ThemeMusic/main/*)
-      _rel=${_u#https://raw.gitmirror.com/deltrivx/ThemeMusic/main}
-      ;;
-    https://ghfast.top/https://raw.githubusercontent.com/deltrivx/ThemeMusic/main/*)
-      _rel=${_u#https://ghfast.top/https://raw.githubusercontent.com/deltrivx/ThemeMusic/main}
-      ;;
-  esac
+  for _base in \
+    "https://raw.githubusercontent.com/deltrivx/ThemeMusic/main" \
+    "https://cdn.jsdelivr.net/gh/deltrivx/ThemeMusic@main" \
+    "https://fastly.jsdelivr.net/gh/deltrivx/ThemeMusic@main" \
+    "https://raw.gitmirror.com/deltrivx/ThemeMusic/main" \
+    "https://ghfast.top/https://raw.githubusercontent.com/deltrivx/ThemeMusic/main"
+  do
+    case "$_u" in
+      "$_base"/*)
+        _rel=${_u#"$_base"}
+        break
+        ;;
+    esac
+  done
   if [ -z "$_rel" ]; then
     printf '%s\n' "$_u"
     return 0
