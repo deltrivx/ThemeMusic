@@ -2,22 +2,26 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "theme.music">
 <!ENTITY author    "deltrivx">
-<!ENTITY      version   "v1.3.21">
+<!ENTITY      version   "v1.3.22">
 		<!ENTITY launch    "Settings/ThemeMusic">
 		<!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
 		<!ENTITY flash     "/boot/config/plugins/&name;">
 		<!ENTITY github    "deltrivx/ThemeMusic">
 		<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/theme.music.plg">
 		<!ENTITY installSH "https://raw.githubusercontent.com/&github;/main/scripts/install.sh">
-			<!ENTITY ver       "v1.3.21">
+			<!ENTITY ver       "v1.3.22">
 		]>
 		<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="music" support="https://github.com/&github;">
 
 		<!-- CHANGES in CDATA: bare & in notes must not break simplexml_load_file -->
 		<CHANGES>
-		<![CDATA[
-		## Theme Music
-### v1.3.12
+			<![CDATA[
+			## Theme Music
+	### v1.3.22
+	- 修复文件名、歌手和版本信息差异导致的在线歌词无法匹配
+	- 增加多候选歌词搜索、结果评分、纯文本歌词回退与本地近似文件匹配
+	- 修复空歌词结果长期缓存；保留强制重新匹配并区分服务错误
+	### v1.3.12
 - 修复 FnOS 地址校验、错误响应、GUID 分页去重与跨源媒体跳转
 - 修复移动端窄视口 profile 切换及“和电脑端相同”的偏好继承
 ### v1.3.11
