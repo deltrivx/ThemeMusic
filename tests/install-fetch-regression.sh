@@ -32,7 +32,7 @@ verify_download() {
 INSTALL_MODE=full
 OTA_FETCHED=0
 OTA_SKIPPED=0
-. "$TMP/functions.sh"
+. "$FUNCTIONS"
 fetch_pkg "$TARGET" https://example.invalid/ThemeMusic.page ThemeMusic.page
 [ -s "$TARGET" ]
 [ ! -e "$TARGET.download.$$" ]
@@ -41,6 +41,6 @@ EOF
 printf 'Theme Music installer regression fixture\n' > "$TMP/fixture"
 EXPECTED_SHA=$(sha256sum "$TMP/fixture" | awk '{print $1}')
 EXPECTED_SIZE=$(wc -c < "$TMP/fixture" | tr -d ' ')
-FIXTURE="$TMP/fixture" TARGET="$TMP/result" EXPECTED_SHA="$EXPECTED_SHA" EXPECTED_SIZE="$EXPECTED_SIZE" \
+FIXTURE="$TMP/fixture" TARGET="$TMP/result" FUNCTIONS="$TMP/functions.sh" EXPECTED_SHA="$EXPECTED_SHA" EXPECTED_SIZE="$EXPECTED_SIZE" \
   sh "$TMP/harness.sh"
 printf '%s\n' 'installer fetch regression passed'
