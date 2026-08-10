@@ -264,7 +264,7 @@ verify_download() {
   _actual_sha=$(file_sha256 "$_path")
   _actual_sz=$(file_size "$_path")
   [ "$_actual_sha" = "$_expect_sha" ] && [ "$_actual_sz" = "$_expect_sz" ] || {
-    ucwc_log "错误：文件校验失败：$_rel"
+    ucwc_log "错误：文件校验失败：$_rel（期望 sha=$_expect_sha size=$_expect_sz，实际 sha=$_actual_sha size=$_actual_sz）"
     rm -f -- "$_path"
     return 1
   }
