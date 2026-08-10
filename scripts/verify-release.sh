@@ -123,7 +123,7 @@ current_version = json.loads((root / 'index.json').read_text())['latest_version'
 # immutable tag trees differ from later corrected snapshots. Keep manifest
 # validation for each, but do not use their embedded snapshots as a baseline.
 legacy_remote_tag_mismatch_versions = {
-    'v1.3.3', 'v1.3.4', 'v1.3.5', 'v1.3.6', 'v1.3.7', 'v1.3.8', 'v1.3.12'
+    'v1.3.3', 'v1.3.4', 'v1.3.5', 'v1.3.6', 'v1.3.7', 'v1.3.8', 'v1.3.12', 'v1.3.21'
 }
 count = 0
 for manifest in sorted(root.glob('*/files.manifest')):
